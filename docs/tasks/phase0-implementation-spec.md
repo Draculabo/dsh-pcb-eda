@@ -567,3 +567,35 @@ Build-time adjustments made during Phase 0 that change nothing in the contract:
   `ctx.effect(() => ctx.webServer.register(...))` — `effect` takes a callback
   returning the disposer. `ctx.webServer` typing comes from importing
   `@deepseek-ai/dsh-host-webserver` (its `declare module` augmentation).
+
+Post-boot verification fixes (2026-08-28, verified green on a real `dsh web` in
+both an all-5-package scratch profile and the user's 3-package default profile):
+
+4. **Client bundle must be a self-registering classic script, not ESM.** The DSH
+   client-modules host loads `/plugins/<id>/client.js?rev=<sha1>…` as a classic
+   `<script>` and asserts the bundle called
+   `window.__ModuleLoader__.load({ id, factory })` with a CJS
+   `module.exports` — an ESM `.mjs` bundle executes but does not register
+   (error: `loaded without registering "<pkg>" via __ModuleLoader__.load`).
+   Fix: the three dual-face `tsdown.config.ts` use a `defineConfig([…])` array —
+   node half `esm`+`dts`, client half `format:'cjs'`, `platform:'browser'`,
+   `entryFileNames:'client.js'`, `dts:false`, with
+   `outputOptions.banner = window.__ModuleLoader__.load({ id: <json>, factory: (require) => {`,
+   `intro = var module = { exports: {} }; var exports = module.exports;`,
+   `footer = return module.exports; } });`. Manifests' `exports["./client"]`
+   → `{ "default": "./lib/client.js" }` (no `types` — no `.d.ts` for the bundle).
+5. **The client module's exported `inject` must be REAL service names, not
+   package names.** The loader turns the module's `export const inject` into
+   cordis `ctx.inject([…])` dependencies. Injecting the package
+   `@deepseek-ai/dsh-client-runtime` (fine in `dsh.client.inject` for graph
+   ordering) made the entry wait forever on a non-existent service
+   (`pending (waiting for service: @deepseek-ai/dsh-client-runtime)` →
+   `web boot: 1 entry did not activate`). Stock modules inject real services
+   (`slots`, `theme`, `sessions`, …). Phase 0 clients consume no service →
+   `export const inject: string[] = []`.
+6. **Probe tool names must be unique across the tool packages.** All three
+   Phase-0 skeletons registered `huaqiu_phase0_probe`, so installing more than
+   one tool package failed the boot with
+   `tool "huaqiu_phase0_probe" is already registered`. Renamed to
+   `huaqiu_part_search_probe` / `huaqiu_symbol_footprint_probe` /
+   `huaqiu_schematic_gen_probe` (sources, tests, READMEs).

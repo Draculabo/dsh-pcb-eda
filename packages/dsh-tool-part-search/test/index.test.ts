@@ -21,7 +21,7 @@ describe('@huaqiu/dsh-tool-part-search skeleton', () => {
     apply(ctx as never)
     expect(registered).toHaveLength(1)
     const tool = registered[0] as { name: string }
-    expect(tool.name).toBe('huaqiu_phase0_probe')
+    expect(tool.name).toBe('huaqiu_part_search_probe')
   })
 
   it('does not reference @hqedge anywhere', async () => {

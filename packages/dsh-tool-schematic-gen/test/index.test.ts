@@ -12,11 +12,12 @@ describe('@huaqiu/dsh-tool-schematic-gen skeleton', () => {
   it('registers the probe tool', () => {
     const registered: unknown[] = []
     apply({ tools: { register: (d: unknown) => (registered.push(d), () => undefined) } } as never)
-    expect((registered[0] as { name: string }).name).toBe('huaqiu_phase0_probe')
+    expect((registered[0] as { name: string }).name).toBe('huaqiu_schematic_gen_probe')
   })
 
   it('client stub exports the DSH client-module shape', () => {
-    expect(client.inject).toContain('@deepseek-ai/dsh-client-runtime')
+    // The module's inject must be REAL service names; Phase 0 consumes none.
+    expect(client.inject).toEqual([])
     expect(typeof client.apply).toBe('function')
   })
 })

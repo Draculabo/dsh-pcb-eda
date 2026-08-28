@@ -10,7 +10,14 @@ import { createAuthStorage } from './storage.js'
 import { createWebServerAuthTransport } from './transport.js'
 import { createAuthClient, type AuthClient } from './client.js'
 
-export const inject = ['@deepseek-ai/dsh-client-runtime']
+/**
+ * Client cordis inject: REAL service names only (the loader maps these to
+ * `ctx.inject([...])` dependencies). This plugin provides `huaqiuAuth` and
+ * consumes no service, so the list is empty. The PACKAGE-level
+ * `dsh.client.inject` in package.json (graph ordering) stays as-is and is NOT
+ * this export.
+ */
+export const inject: string[] = []
 
 /** Minimal structural client context (dsh-client-runtime provides this). */
 export interface ClientContext {

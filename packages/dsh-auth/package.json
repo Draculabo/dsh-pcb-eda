@@ -6,7 +6,7 @@
   "types": "./lib/index.d.mts",
   "exports": {
     ".": { "types": "./lib/index.d.mts", "default": "./lib/index.mjs" },
-    "./client": { "types": "./lib/client/index.d.mts", "default": "./lib/client/index.mjs" },
+    "./client": { "default": "./lib/client.js" },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },

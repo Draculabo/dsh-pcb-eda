@@ -10,7 +10,7 @@ export const inject = ['tools'] as const
  */
 export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
-    name: 'huaqiu_phase0_probe',
+    name: 'huaqiu_schematic_gen_probe',
     description: 'Phase 0 probe for the Huaqiu schematic-gen plugin: proves the package loads and a tool registers on stock DSH.',
     parameters: {},
     output: {
