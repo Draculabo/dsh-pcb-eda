@@ -45,10 +45,6 @@ function normalizeUserInfo(data: Record<string, unknown>): HuaqiuUserInfo | null
 }
 
 export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
-  const log = (method: string | undefined, pathname: string, detail: unknown): void => {
-    // eslint-disable-next-line no-console
-    console.info(`[huaqiu-auth:node] ${method} ${pathname}`, detail === undefined ? '' : JSON.stringify(detail))
-  }
   return async (req, res) => {
     try {
       const url = req.url ?? ''
@@ -58,7 +54,6 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
       if (req.method === 'POST' && pathname === `${AUTH_ROUTE_PREFIX}/session`) {
         const body = JSON.parse(await readBody(req) || '{}') as Record<string, unknown>
         const info = normalizeUserInfo(body)
-        log('POST', pathname, { ok: Boolean(info), id: info?.id ?? null })
         if (!info) {
           sendJson(res, 400, { error: 'token and userId are required' })
           return
@@ -69,7 +64,6 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
       }
 
       if (req.method === 'POST' && pathname === `${AUTH_ROUTE_PREFIX}/logout`) {
-        log('POST', pathname, {})
         service.invalidate()
         sendJson(res, 200, { ok: true })
         return
@@ -78,15 +72,12 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
       if (req.method === 'GET' && pathname === `${AUTH_ROUTE_PREFIX}/session`) {
         const user = await service.auth.getUserInfo()
         const authenticated = service.auth.isAuthenticated()
-        log('GET', pathname, { authenticated, id: user?.id ?? null })
         sendJson(res, 200, { authenticated, user })
         return
       }
 
-      log(req.method, pathname, { unmatched: true })
       sendJson(res, 404, { error: 'not found' })
     } catch (err) {
-      log(req.method, (req.url ?? '').split('?')[0] ?? '', { error: String(err) })
       sendJson(res, 500, { error: 'internal error', detail: String(err) })
     }
   }

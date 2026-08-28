@@ -19,10 +19,10 @@ const realAuthEdaCnEnvelope = {
   data: {
     type: 'update_access_token',
     data: {
-      userId: 6216935,
+      userId: 6215935,
       expires_at: 1788359214,
       agreeCollectIP: false,
-      token: '0494009e-edbc-5f52-99e3-ae5544f051e-6a919aad',
+      token: '0494009e-edbc-5f52-99e3-ae4ef00f051e-6a919aad',
       id: 6215935,
       username: 'jf_66463080',
       nickname: '老铁',

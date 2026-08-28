@@ -13,7 +13,6 @@
  */
 import { memo, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { getAuthState, subscribeAuth, syncAuthNow } from '../auth-state.js'
-import { dbg } from '../debug.js'
 import {
   AUTH_ORIGIN,
   CARD_STYLE,
@@ -50,23 +49,7 @@ function LoginCard({ toolName }: { toolName: string }): React.JSX.Element {
   // reset by a server restart), push it again the moment the login card
   // mounts so the tool gate flips to authenticated without a manual re-login.
   useEffect(() => {
-    dbg('login-card-mount', { toolName })
     syncAuthNow()
-  }, [toolName])
-  // Observe the embedded login iframe's load/error lifecycle — a failure here
-  // (e.g. auth.eda.cn unreachable from the offline deployment) is a separate
-  // failure mode from the postMessage handshake.
-  useEffect(() => {
-    const el = iframeRef.current
-    if (!el) return
-    const onLoad = (): void => dbg('card-iframe-loaded', { toolName, src: el.src })
-    const onError = (): void => dbg('card-iframe-error', { toolName, src: el.src })
-    el.addEventListener('load', onLoad)
-    el.addEventListener('error', onError)
-    return () => {
-      el.removeEventListener('load', onLoad)
-      el.removeEventListener('error', onError)
-    }
   }, [toolName])
   return (
     <div style={CARD_STYLE}>

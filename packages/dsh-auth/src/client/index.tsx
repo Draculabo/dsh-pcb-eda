@@ -18,7 +18,6 @@
 import { createAuthStorage } from './storage.js'
 import { createWebServerAuthTransport } from './transport.js'
 import { createAuthClient, type AuthClient } from './client.js'
-import { attachDebugGlobal, dbg } from './debug.js'
 import { disposeAuth, registerAuth, registerAuthSync } from './auth-state.js'
 import { HuaqiuToolView } from './ui/needs-auth-toolview.jsx'
 import { HuaqiuAuthSidebarAction } from './ui/sidebar-action.jsx'
@@ -32,11 +31,16 @@ import { HuaqiuAuthSidebarAction } from './ui/sidebar-action.jsx'
  */
 export const inject: string[] = ['slots']
 
-/** The Huaqiu tools whose `needs_auth` results surface the login card. */
+/**
+ * The Huaqiu tools whose `needs_auth` results surface the login card.
+ *
+ * Only the schematic/system tools remain here. The three symbol/footprint
+ * generation tools are owned by `@huaqiu/dsh-tool-symbol-footprint`'s GenHit
+ * card (which renders its own inline login for `needs_auth`), so their keys
+ * must NOT be claimed here — otherwise both plugins register the same
+ * `tool.call.toolview` key and the winner is ambiguous.
+ */
 export const AUTH_TOOL_NAMES = [
-  'generate_symbol_from_image',
-  'generate_footprint_from_image',
-  'generate_footprint_from_dimensions',
   'generate_schematic_from_description',
   'generate_system_module_graph',
 ] as const
@@ -51,8 +55,6 @@ export interface ClientContext {
 }
 
 export function apply(ctx: ClientContext): () => void {
-  attachDebugGlobal(window)
-  dbg('plugin-apply')
   const client: AuthClient = createAuthClient({
     storage: createAuthStorage(localStorage),
     transport: createWebServerAuthTransport(),
@@ -65,11 +67,7 @@ export function apply(ctx: ClientContext): () => void {
   registerAuth(client.auth)
   registerAuthSync(() => { void client.syncNow() })
   void client.restore()
-  const logState = (info: { nickname?: string } | null): void => {
-    console.info('[huaqiu-auth] state:', info ? `authenticated${info.nickname ? ` (${info.nickname})` : ''}` : 'anonymous')
-  }
   disposers.push(client.auth.onAuthStateChanged((info) => {
-    logState(info)
     void client.syncNow()
   }))
 
