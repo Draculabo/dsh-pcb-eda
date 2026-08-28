@@ -100,8 +100,19 @@ export const STATUS_STYLE: CSSProperties = {
 }
 
 /**
- * The embedded login iframe: ALWAYS transparent so the card's own surface
- * shows through and the login box sits on the host palette in both schemes.
+ * The embedded login iframe: painted with the same surface as the wrapping
+ * card so the login box blends in both schemes.
+ *
+ * Why not `background: transparent`? Blink's `BaseBackgroundColor()` falls
+ * back to WHITE whenever the embedded doc's root element has a transparent
+ * background (and auth.eda.cn's `data-iframe-mode` page is exactly that).
+ * That white canvas shows through wherever the document doesn't paint, which
+ * reads as a glaring white "frame" around the login card in dark mode. Light
+ * mode hid the bug because the white canvas happened to match the light
+ * host. Painting the iframe ELEMENT with the card's surface (DSH alias
+ * `--dsw-alias-bg-layer-1` with a per-scheme fallback) puts a dark sheet in
+ * dark mode and a light sheet in light mode, so the login card sits on a
+ * surface that blends with the host in both schemes.
  */
 export function iframeStyle(palette: CardPalette): CSSProperties {
   return {
@@ -109,7 +120,7 @@ export function iframeStyle(palette: CardPalette): CSSProperties {
     height: 520,
     border: `1px solid ${palette.border}`,
     borderRadius: 8,
-    background: 'transparent',
+    background: palette.surface,
     display: 'block',
   }
 }

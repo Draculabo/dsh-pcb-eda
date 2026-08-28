@@ -126,9 +126,29 @@ export function buildLoginUrl(options: LoginOptions & { baseUrl?: string } = {})
   return url.toString()
 }
 
-/** Inline style of the always-transparent overlay iframe (`auth.login()`). */
-export const LOGIN_OVERLAY_STYLE =
-  'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent;'
+/**
+ * Color the iframe element itself, not just the embedded document.
+ *
+ * The embedded `data-iframe-mode` page sets its html/body to `background:
+ * transparent`, but Blink's `BaseBackgroundColor()` falls back to WHITE
+ * whenever the root element's background is transparent — that white shows
+ * through wherever the document doesn't paint, producing an obvious white
+ * "frame" around the login card in dark mode. Light mode hid this because
+ * the white canvas happened to match the light host.
+ *
+ * Painting the iframe ELEMENT with the host's app surface (DSH's
+ * `--dsw-alias-bg-layer-1` token, with a per-scheme fallback) puts a dark
+ * sheet in dark mode and a light sheet in light mode, so the login card
+ * sits on a surface that blends with the host in both schemes.
+ */
+export const HOST_SURFACE = {
+  light: 'var(--dsw-alias-bg-layer-1, #ffffff)',
+  dark: 'var(--dsw-alias-bg-layer-1, #20242c)',
+} as const
+
+/** Base style of the full-viewport overlay iframe, WITHOUT the background. */
+export const LOGIN_OVERLAY_BASE_STYLE =
+  'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;'
 
 export type ParsedAuthMessage =
   | { kind: 'token'; info: AuthTokenPayload }

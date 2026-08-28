@@ -105,9 +105,9 @@ const COPY: Record<string, Record<string, string>> = {
     'card.editor.issueOutOfRange': 'outside allowed range',
     'card.editor.issueMinGtMax': 'min is greater than max',
     'card.auth.title': 'Huaqiu EDA (eda.cn) login',
-    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA login. Complete the login below (or use the 华秋EDA login button in the sidebar); then reply "已登录，请重试" so the assistant can retry the tool.',
+    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA login. Complete the login below (or use the 华秋EDA AI login button in the sidebar); then reply "已登录，请重试" so the assistant can retry the tool.',
     'card.auth.loggedIn': '✓ Logged in{nickname} — reply "已登录，请重试" and the assistant will retry.',
-    'card.auth.loggedOut': 'Not logged in — complete the login above, or use the 华秋EDA sidebar button.',
+    'card.auth.loggedOut': 'Not logged in — complete the login above, or use the 华秋EDA AI sidebar button.',
   },
 }
 

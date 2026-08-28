@@ -28,10 +28,10 @@ const COPY: Record<string, Record<string, string>> = {
     'card.action.inspect': '详情',
     'card.regeneratePrompt.schematic': '请重新生成刚才的原理图',
     'card.regeneratePrompt.system': '请重新生成刚才的系统设计',
-    'card.auth.title': '华秋 EDA（eda.cn）登录',
-    'card.auth.desc': '工具「{tool}」需要登录华秋 EDA 账号才能继续。请在下方的登录框完成登录（或点击左侧「华秋EDA登录」按钮）；登录完成后，回复助手「已登录，请重试」，助手会自动重新调用该工具。',
+    'card.auth.title': '华秋 EDA AI（eda.cn）登录',
+    'card.auth.desc': '工具「{tool}」需要登录华秋 EDA AI 账号才能继续。请在下方的登录框完成登录（或点击左侧「华秋EDA AI登录」按钮）；登录完成后，回复助手「已登录，请重试」，助手会自动重新调用该工具。',
     'card.auth.loggedIn': '✓ 已登录{nickname}—— 现在可以回复助手「已登录，请重试」，助手会重新调用工具。',
-    'card.auth.loggedOut': '未登录 —— 请在上方登录华秋 EDA（eda.cn）账号，或点击左侧「华秋EDA登录」按钮；登录完成后让助手重试。',
+    'card.auth.loggedOut': '未登录 —— 请在上方登录华秋 EDA AI（eda.cn）账号，或点击左侧「华秋EDA AI 登录」按钮；登录完成后让助手重试。',
   },
   en: {
     'card.title.schematic': 'Generated schematic',
@@ -58,10 +58,10 @@ const COPY: Record<string, Record<string, string>> = {
     'card.action.inspect': 'Inspect',
     'card.regeneratePrompt.schematic': 'Please regenerate the schematic above',
     'card.regeneratePrompt.system': 'Please regenerate the system design above',
-    'card.auth.title': 'Huaqiu EDA (eda.cn) login',
-    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA login. Complete the login below (or use the 华秋EDA sidebar button); then reply "已登录，请重试" so the assistant can retry the tool.',
+    'card.auth.title': 'Huaqiu EDA AI (eda.cn) login',
+    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA AI login. Complete the login below (or use the 华秋EDA AI sidebar button); then reply "已登录，请重试" so the assistant can retry the tool.',
     'card.auth.loggedIn': '✓ Logged in{nickname} — reply "已登录，请重试" and the assistant will retry.',
-    'card.auth.loggedOut': 'Not logged in — complete the login above, or use the 华秋EDA sidebar button.',
+    'card.auth.loggedOut': 'Not logged in — complete the login above, or use the 华秋EDA AI sidebar button.',
   },
 }
 

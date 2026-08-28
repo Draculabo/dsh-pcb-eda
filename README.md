@@ -258,7 +258,7 @@ npx @deepseek-ai/dsh web --no-open   # then open http://127.0.0.1:3080
 
 ### Login (required for eda.cn-backed tools)
 
-The generation tools require a Huaqiu EDA (eda.cn) account. Log in via the **华秋EDA**
+The generation tools require a Huaqiu EDA (eda.cn) account. Log in via the **华秋EDA AI**
 button in the sidebar, or let the agent trigger a login HIT — a card with an embedded
 `auth.eda.cn` iframe appears and the agent waits for you to finish before retrying.
 Part search does not require login.

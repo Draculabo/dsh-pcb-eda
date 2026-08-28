@@ -123,6 +123,20 @@ function subscribe(callback: () => void): () => void {
 const getDark = (): boolean => dark
 const getLocale = (): AuthLocale => locale
 
+/**
+ * Synchronous read of the current dark-palette state. Safe outside React
+ * (the auth client uses it when appending the overlay iframe, before any
+ * component has a chance to subscribe).
+ */
+export function getCurrentDark(): boolean {
+  return dark
+}
+
+/** Synchronous read of the current host surface color (matches the palette). */
+export function getCurrentSurfaceColor(): string {
+  return dark ? 'var(--dsw-alias-bg-layer-1, #20242c)' : 'var(--dsw-alias-bg-layer-1, #ffffff)'
+}
+
 /** `true` while the host renders the dark palette. */
 export function useIsDark(): boolean {
   return useSyncExternalStore(subscribe, getDark, getDark)

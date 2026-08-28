@@ -609,7 +609,7 @@ function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
         </p>
         <iframe
           src="https://auth.eda.cn/"
-          title="华秋EDA登录"
+          title="华秋EDA AI 登录"
           className="hq-genhit__login-iframe"
           allow="clipboard-write"
         />

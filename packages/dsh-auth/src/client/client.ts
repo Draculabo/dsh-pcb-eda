@@ -6,11 +6,13 @@ import {
   AUTH_ORIGIN,
   buildLoginUrl,
   handleAuthMessage,
-  LOGIN_OVERLAY_STYLE,
+  HOST_SURFACE,
+  LOGIN_OVERLAY_BASE_STYLE,
   type AuthMessageEventLike,
   type AuthTokenPayload,
   type LoginOptions,
 } from './lib.js'
+import { getCurrentDark } from './ui-env.js'
 import type { AuthStorage } from './storage.js'
 import type { AuthTransport } from './transport.js'
 
@@ -59,16 +61,18 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   /**
    * Open the full-viewport auth.eda.cn overlay.
    *
-   * The embed is ALWAYS transparent: the login card floats over the app
-   * instead of blanking it. `closeOnOutsideClick` asks auth.eda.cn to post
-   * `close_dialog` on an outside click; `lang`/`theme` follow the host UI so
-   * the card matches it. `loginUrl` (deps) overrides the base URL only.
+   * The iframe ELEMENT is painted with the host's app surface (DSH alias
+   * `--dsw-alias-bg-layer-1` with a per-scheme fallback). The embedded doc
+   * itself stays transparent (`fill=full` omitted, `data-iframe-mode` set
+   * there), so the login card paints on the host surface. The two together
+   * avoid Blink's white `BaseBackgroundColor()` default that would otherwise
+   * show as a white "frame" around the card in dark mode.
    */
   const openIframe = (options: LoginOptions = {}): void => {
     if (iframe) return
     const el = deps.documentLike.createElement('iframe')
     el.src = buildLoginUrl({ baseUrl: loginUrl, ...options })
-    el.style.cssText = LOGIN_OVERLAY_STYLE
+    el.style.cssText = `${LOGIN_OVERLAY_BASE_STYLE}background:${HOST_SURFACE[getCurrentDark() ? 'dark' : 'light']};`
     deps.documentLike.body.appendChild(el)
     iframe = el
   }
