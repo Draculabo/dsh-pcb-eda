@@ -12,17 +12,18 @@
  * Preview: a single `.kicad_sch` sheet renders via `renderSchematic`; a system
  * design zip renders via `renderProjectFromZip` (root sheet auto-selected).
  */
-import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import {
   projectToolCall, formatBytes, downloadFilenameFor,
   type SchResult, type ToolBlockLike,
 } from './parse.js'
-import { defaultT, type Translate } from './i18n.js'
+import { type Translate, useT } from './i18n.js'
 import {
   resolveArtifactText, resolveArtifactBytes, renderSheetToCanvas,
   renderProjectZipToCanvas, sizeCanvasFor, downloadText, downloadBytes,
 } from './ecad.js'
-import { useTheme } from './theme.js'
+import { useLocale, useTheme } from './theme.js'
+import { buildLoginUrl, loginIframeBackground } from './login-url.js'
 
 /** Login-state view used by the needs_auth card (from the auth plugin's shared localStorage). */
 export interface AuthStateLike {
@@ -169,6 +170,21 @@ function PreviewStage({ payload, t }: { payload: PreviewPayload; t: Translate })
 // ── needs_auth login card ───────────────────────────────────────────────────
 
 function LoginCard({ toolName, authState, t }: { toolName: string; authState?: AuthStateLike; t: Translate }): ReactElement {
+  const dark = useTheme()
+  const locale = useLocale()
+  // FILL mode (`fill=full`): this card IS the surface, so let the embed paint
+  // it edge-to-edge with its own `bg-background`. Without it the embed's
+  // `grid-rows-[20px_1fr_20px]` wrapper leaves two transparent strips above
+  // and below the form, which read as white gaps in dark theme.
+  const src = useMemo(
+    () => buildLoginUrl({ lang: locale, theme: dark ? 'dark' : 'light' }),
+    [locale, dark],
+  )
+  // Force a full remount on a theme/locale flip: Chrome keeps the old embed
+  // loaded when only `src` changes (the embed is a Next.js page that reads
+  // its URL params once on mount), silently ignoring the new `fill`/`theme`.
+  const remountKey = `${locale}|${dark ? 'd' : 'l'}`
+
   return (
     <div className="hq-sch">
       <div className="hq-sch__header">
@@ -182,7 +198,14 @@ function LoginCard({ toolName, authState, t }: { toolName: string; authState?: A
             ? t('card.auth.loggedIn', { nickname: authState.nickname ? `：${authState.nickname}` : '' })
             : t('card.auth.loggedOut')}
         </p>
-        <iframe src="https://auth.eda.cn/" title="华秋EDA登录" className="hq-sch__login-iframe" allow="clipboard-write" />
+        <iframe
+          key={remountKey}
+          src={src}
+          title={t('card.auth.title')}
+          className="hq-sch__login-iframe"
+          style={{ background: loginIframeBackground(dark) }}
+          allow="clipboard-write"
+        />
       </div>
     </div>
   )
@@ -191,7 +214,7 @@ function LoginCard({ toolName, authState, t }: { toolName: string; authState?: A
 // ── main card ──────────────────────────────────────────────────────────────
 
 export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
-  const t = defaultT
+  const t = useT()
   const state = projectToolCall(props.block)
   const result = state.phase === 'completed' ? state.result : null
   const artifactKey = result?.artifact?.id ?? null

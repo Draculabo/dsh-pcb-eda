@@ -71,17 +71,28 @@ export const AUTH_LOCALE_ID: Record<AuthLocale, string> = { zh: 'cn', en: 'en' }
 /**
  * Options for the auth.eda.cn overlay iframe opened by `auth.login()`.
  *
- * The embed is ALWAYS transparent — that is not per-call negotiable. Two
- * things make it work and neither is optional:
- *   1. the URL omits `fill=full` (auth.eda.cn's own transparent mode: the
- *      page then sets `data-iframe-mode` and paints
- *      `background: transparent`);
- *   2. the iframe sits inside a host-painted card in the login dialog
- *      (`ui/login-dialog.ts`), which masks Blink's white base canvas.
- * Confirmed against `hq-eda-ai` (`LoginDialog.tsx`): it sends
- * `?v=20260409&clickOutsideToClose=true` with no `fill` at all and its
- * dialog content is `bg-transparent!` — transparency there likewise comes
- * from the ABSENCE of `fill=full`.
+ * The embed has TWO rendering modes, and which one is right depends on the
+ * surface that hosts the iframe:
+ *
+ * - **Transparent card mode** (default, no `fill`): the embedded page sets
+ *   `html[data-iframe-mode="true"]` and the root paints
+ *   `background: transparent` (see `eda-cn-login/app/page.tsx` — the wrapper
+ *   only gets the `bg-transparent` class when `fill !== 'full'`). The host
+ *   then paints a card around the iframe (e.g. the login dialog's backdrop
+ *   + centered card) so Blink's white `BaseBackgroundColor()` canvas never
+ *   shows. This is the right mode when the iframe sits inside a host-painted
+ *   card with its own visual edge — e.g. the sidebar-triggered login dialog.
+ *
+ * - **Fill mode** (`fill: 'full'`): the embed's `DialogContent` becomes
+ *   `w-full h-full max-w-none max-h-none left-0 top-0 rounded-none border-none`
+ *   (see `eda-cn-login/components/LoginDialog.tsx` — `fillFull` branch at
+ *   line 61) and the wrapper drops `bg-transparent` so the page paints its
+ *   own `bg-background` edge-to-edge. This is the right mode when the iframe
+ *   fills its host container (e.g. the toolview card) and there is no
+ *   surrounding card to mask the embed's rounded corners or transparent
+ *   20px grid strips.
+ *
+ * The `lang` and `theme` params follow the host UI in both modes.
  */
 export interface LoginOptions {
   /** Ask auth.eda.cn to self-close on an outside click (default `true`). */
@@ -90,6 +101,13 @@ export interface LoginOptions {
   lang?: AuthLocale
   /** Embed color scheme (default `light`). */
   theme?: AuthTheme
+  /**
+   * Set to `'full'` to make the embed fill its iframe viewport edge-to-edge
+   * (no rounded corners, no transparent grid strips, embed paints its own
+   * `bg-background`). Omit for the transparent card mode described above.
+   * `true` is accepted as a shorthand for `'full'`.
+   */
+  fill?: 'full' | 'transparent' | true
 }
 
 export interface AuthTokenPayload {
@@ -107,19 +125,21 @@ export interface AuthTokenPayload {
 /**
  * Build the auth.eda.cn embed URL.
  *
- * `fill=full` is deliberately NEVER sent: that is what keeps the embedded
- * page's own background transparent (the deployed page sets
- * `data-iframe-mode` on `<html>` and the CSS rule
- * `html[data-iframe-mode=true], html[data-iframe-mode=true] body
- * { background: 0 0 !important }` makes its root transparent — confirmed by
- * fetching the deployed chunks). The login dialog (`ui/login-dialog.ts`)
- * then paints a host-colored card around the iframe so Blink's white base
- * canvas never reaches the user.
+ * The URL switches between two rendering modes based on `options.fill`:
+ *  - `fill: 'full'` (or `true`) → `fill=full` is sent; the embed's
+ *    `DialogContent` becomes `w-full h-full … rounded-none` and the wrapper
+ *    drops `bg-transparent`, so the embed fills the iframe viewport with
+ *    its own `bg-background`. Use this when the iframe is the surface (e.g.
+ *    the toolview card).
+ *  - any other value (including unset) → no `fill` is sent; the embed stays
+ *    in transparent card mode. The host is responsible for painting a card
+ *    around the iframe so Blink's white base canvas never reaches the user.
  */
 export function buildLoginUrl(options: LoginOptions & { baseUrl?: string } = {}): string {
   const url = new URL(options.baseUrl ?? `${AUTH_ORIGIN}/`)
   url.searchParams.set('v', AUTH_IFRAME_VERSION)
   if (options.closeOnOutsideClick !== false) url.searchParams.set('clickOutsideToClose', 'true')
+  if (options.fill === 'full' || options.fill === true) url.searchParams.set('fill', 'full')
   url.searchParams.set('transparent', 'true')
   const lang = options.lang ?? 'zh'
   // `locale` is the param auth.eda.cn reads; `lang` keeps parity with

@@ -59,26 +59,42 @@ afterEach(() => {
 })
 
 describe('HuaqiuToolView login card', () => {
-  it('embeds the always-transparent login iframe in the host language and scheme', () => {
+  it('embeds the login iframe in FILL mode so the card has no top/bottom gaps', () => {
     const container = render(needsAuthBlock())
     const src = new URL(iframe(container).src)
     expect(`${src.origin}${src.pathname}`).toBe('https://auth.eda.cn/')
-    expect(src.searchParams.get('transparent')).toBe('true')
-    // `fill=full` is what repaints the embedded page's own background.
-    expect(src.searchParams.get('fill')).toBeNull()
+    // The toolview card IS the surface — the iframe fills it edge-to-edge
+    // and the embed paints its own `bg-background`. That kills the white
+    // gaps that the transparent mode's 20px grid strips would otherwise
+    // leave above and below the form. The sidebar dialog is the other
+    // surface and does NOT pass `fill` (see client.test.ts).
+    expect(src.searchParams.get('fill')).toBe('full')
     expect(src.searchParams.get('locale')).toBe('cn')
     expect(src.searchParams.get('lang')).toBe('zh')
     expect(src.searchParams.get('theme')).toBe('light')
-    // The embedded doc is transparent, but the iframe ELEMENT is painted
-    // with the card surface — that is what masks Blink's white base
-    // canvas behind the embedded doc's transparent grid strips so the
-    // card looks at home in both themes (a "transparent" element bg would
-    // let that white show as a glaring frame in dark mode).
+    // The iframe element background still matches the card surface — a
+    // safety net for the brief loading flash before the embed paints.
     expect(iframe(container).style.background).toBe('var(--dsw-alias-bg-layer-1, #ffffff)')
-    // The iframe is 440px tall — sized to the embed's actual painted height
-    // (~390px) + a small buffer for error states. Without this trim the card
-    // would show its own surface as a ~250px gap above and below the form.
+    // Same 440px height as the dialog (the "previous" value that shows
+    // the agreement checkbox perfectly). With `fill=full` the embed scales
+    // to fill this height — no gaps.
     expect(iframe(container).style.height).toBe('440px')
+  })
+
+  it('remounts the iframe when theme or locale flips (Chrome src= quirk)', () => {
+    const first = render(needsAuthBlock())
+    const firstNode = iframe(first)
+    expect(firstNode.isConnected).toBe(true)
+
+    setHostEnv({ dark: true, lang: 'en' })
+    const second = render(needsAuthBlock())
+    const secondNode = iframe(second)
+    // A fresh iframe node (not the same DOM element), which is what
+    // forces Chrome to re-evaluate the embed's `fill` / `theme` params.
+    expect(secondNode).not.toBe(firstNode)
+    const src = new URL(secondNode.src)
+    expect(src.searchParams.get('theme')).toBe('dark')
+    expect(src.searchParams.get('fill')).toBe('full')
   })
 
   it('follows the dark palette and the English locale', () => {

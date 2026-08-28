@@ -71,12 +71,23 @@ function LoginCard({ toolName }: { toolName: string }): React.JSX.Element {
     syncAuthNow()
   }, [toolName])
 
-  // Same contract as the sidebar overlay: always transparent, host language,
-  // host color scheme. Rebuilt on change so a mid-session switch is picked up.
+  // Toolview is the second of the two FULL login surfaces (the other is the
+  // sidebar-triggered login dialog). Unlike the dialog — which sits inside a
+  // host-painted card with its own visual edge and therefore wants the embed
+  // in TRANSPARENT card mode — the toolview card IS the surface: the iframe
+  // fills it edge-to-edge. So we pass `fill: 'full'` and let the embed paint
+  // its own `bg-background` (dark in dark theme, light in light theme). This
+  // eliminates the white gaps that the transparent mode's 20px grid strips
+  // would otherwise leave above and below the form.
   const src = useMemo(
-    () => buildLoginUrl({ lang: locale, theme: dark ? 'dark' : 'light' }),
+    () => buildLoginUrl({ fill: 'full', lang: locale, theme: dark ? 'dark' : 'light' }),
     [locale, dark],
   )
+  // Force a full iframe remount when theme/locale flips. Chrome's
+  // `iframe.src =` update keeps the old embed loaded and ignores the new
+  // `fill`/`theme` params (the embed is a single Next.js page that reads
+  // params once on mount); only a remount picks them up.
+  const remountKey = `${locale}|${dark ? 'd' : 'l'}`
 
   return (
     <div style={cardStyle(palette)}>
@@ -86,6 +97,7 @@ function LoginCard({ toolName }: { toolName: string }): React.JSX.Element {
       </p>
       <StatusLine authenticated={authState.authenticated} nickname={authState.nickname} palette={palette} t={t} />
       <iframe
+        key={remountKey}
         ref={iframeRef}
         src={src}
         title={t('card.title')}

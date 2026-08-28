@@ -3,6 +3,8 @@
  * (not the DSH `locale` service) so the card works without registering a
  * namespace; the default is zh.
  */
+import { useCallback } from 'react'
+import { useLocale } from './theme.js'
 
 const COPY: Record<string, Record<string, string>> = {
   zh: {
@@ -128,3 +130,19 @@ export function translate(lang: 'zh' | 'en', key: string, params?: Record<string
 
 /** Fallback translate used when the slot's locale `t` is unavailable. */
 export const defaultT: Translate = (key, params) => translate('zh', key, params)
+
+/**
+ * Translate bound to the HOST UI language.
+ *
+ * The card used to hard-pin `const t = defaultT`, which silently froze every
+ * string to zh and left the `en` dictionary above as dead code. `useT()`
+ * follows the locale store in `theme.js` instead, so the card switches
+ * language with the app.
+ */
+export function useT(): Translate {
+  const lang = useLocale()
+  return useCallback(
+    (key: string, params?: Record<string, unknown>) => translate(lang, key, params),
+    [lang],
+  )
+}

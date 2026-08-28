@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { AUTH_ORIGIN, parseAuthMessage, handleAuthMessage, type AuthTokenPayload } from '../src/client/lib.js'
+import { AUTH_ORIGIN, buildLoginUrl, parseAuthMessage, handleAuthMessage, type AuthTokenPayload } from '../src/client/lib.js'
 import { createAuthStorage } from '../src/client/storage.js'
 import { createAuthClient } from '../src/client/client.js'
 import {
@@ -117,6 +117,26 @@ describe('parseAuthMessage / handleAuthMessage', () => {
   it('recognizes logout and close_dialog', () => {
     expect(parseAuthMessage({ category: 1, data: { type: 'logout', data: null } })).toEqual({ kind: 'logout' })
     expect(parseAuthMessage({ category: 1, data: { type: 'close_dialog', data: null } })).toEqual({ kind: 'close' })
+  })
+
+  it('buildLoginUrl switches between transparent-card and fill modes', () => {
+    const transparent = new URL(buildLoginUrl({ lang: 'zh', theme: 'dark' }))
+    // Default: no `fill` — the embed stays in transparent card mode and the
+    // host must paint a card around the iframe (the sidebar dialog does).
+    expect(transparent.searchParams.get('fill')).toBeNull()
+    expect(transparent.searchParams.get('locale')).toBe('cn')
+    expect(transparent.searchParams.get('lang')).toBe('zh')
+    expect(transparent.searchParams.get('theme')).toBe('dark')
+
+    const full = new URL(buildLoginUrl({ fill: 'full', lang: 'en', theme: 'light' }))
+    expect(full.searchParams.get('fill')).toBe('full')
+    expect(full.searchParams.get('locale')).toBe('en')
+    expect(full.searchParams.get('lang')).toBe('en')
+    expect(full.searchParams.get('theme')).toBe('light')
+
+    // `true` is accepted as a shorthand for `'full'`.
+    const fullShort = new URL(buildLoginUrl({ fill: true }))
+    expect(fullShort.searchParams.get('fill')).toBe('full')
   })
 
   it('rejects malformed / unknown envelopes', () => {
@@ -244,6 +264,21 @@ describe('login dialog DOM (auth client surface)', () => {
     expect(iframe.style.background).toContain('#20242c')
     // Border stays empty after a theme flip (see the previous test).
     expect(card.style.border).toBe('')
+  })
+
+  it('sidebar dialog embeds the auth card in TRANSPARENT mode (no fill=full)', () => {
+    const { client } = makeClient()
+    client.auth.login()
+    const iframe = findIframe()!
+    const src = new URL(iframe.src)
+    // The dialog sits inside a host-painted card with its own edge, so it
+    // stays in the embed's transparent card mode. Sending `fill=full` here
+    // would tell the embed to paint its own background edge-to-edge AND
+    // drop the rounded corners — both wrong for the dialog.
+    expect(src.searchParams.get('fill')).toBeNull()
+    // The 440px iframe height is the "previous" value that shows the
+    // agreement checkbox perfectly (see LOGIN_IFRAME_HEIGHT in common.tsx).
+    expect(iframe.style.height).toBe('440px')
   })
 
   it('clicking the backdrop closes the dialog; clicking the card does NOT', () => {

@@ -21,9 +21,10 @@ import {
   pickGeometry, pinCountOf, pkgFamilyLabel, rectFromValues, summaryOf, toleranceOf,
   validateDimensions, type DimensionValues,
 } from './dims.js'
-import { defaultT, type Translate } from './i18n.js'
+import { type Translate, useT } from './i18n.js'
 import { resolveArtifact, renderArtifactToCanvas, sizeCanvasFor, triggerDownload } from './ecad.js'
-import { useTheme } from './theme.js'
+import { useLocale, useTheme } from './theme.js'
+import { buildLoginUrl, loginIframeBackground } from './login-url.js'
 import type { AuthStateLike, PromptSender } from './index.js'
 
 const TOOL_SYMBOL = 'generate_symbol_from_image'
@@ -594,6 +595,21 @@ interface LoginCardProps {
 }
 
 function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
+  const dark = useTheme()
+  const locale = useLocale()
+  // FILL mode (`fill=full`): this card IS the surface, so let the embed paint
+  // it edge-to-edge with its own `bg-background`. Without it the embed's
+  // `grid-rows-[20px_1fr_20px]` wrapper leaves two transparent strips above
+  // and below the form, which read as white gaps in dark theme.
+  const src = useMemo(
+    () => buildLoginUrl({ lang: locale, theme: dark ? 'dark' : 'light' }),
+    [locale, dark],
+  )
+  // Force a full remount on a theme/locale flip: Chrome keeps the old embed
+  // loaded when only `src` changes (the embed is a Next.js page that reads
+  // its URL params once on mount), silently ignoring the new `fill`/`theme`.
+  const remountKey = `${locale}|${dark ? 'd' : 'l'}`
+
   return (
     <div className="hq-genhit">
       <div className="hq-genhit__header">
@@ -608,9 +624,11 @@ function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
             : t('card.auth.loggedOut')}
         </p>
         <iframe
-          src="https://auth.eda.cn/"
-          title="华秋EDA AI 登录"
+          key={remountKey}
+          src={src}
+          title={t('card.auth.title')}
           className="hq-genhit__login-iframe"
+          style={{ background: loginIframeBackground(dark) }}
           allow="clipboard-write"
         />
       </div>
@@ -621,7 +639,7 @@ function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
 // ── main GenHit card ────────────────────────────────────────────────────────
 
 export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
-  const t = defaultT
+  const t = useT()
   const state = projectToolCall(props.block)
 
   const result = state.phase === 'completed' || state.phase === 'needs_confirmation'
