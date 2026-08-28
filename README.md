@@ -1,53 +1,240 @@
-# Huaqiu PCB EDA for DSH
+# Huaqiu PCB EDA for DeepSeek Harness (DSH)
 
 Brings Huaqiu electronic-design capabilities into
 [DeepSeek Harness (DSH)](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) as
 standalone, published DSH plugins: Huaqiu part search, symbol/footprint generation, and
-schematic generation. Being migrated out of the HQ Edge monorepo — **zero `@hqedge/*`
-dependency is a hard requirement**.
+schematic / system-design generation — with an eda.cn account login flow and a local
+preview-artifact store.
+
+The codebase is migrated out of the HQ Edge monorepo into self-contained DSH plugins.
+**Zero `@hqedge/*` dependency is a hard requirement** — every package must be able to
+stand on its own and be published to npm (`pnpm check:hqedge` enforces this).
 
 ## Packages
 
-| Package | Node | Client | Status |
+| Package | Shape | What it does | Status |
 |---|---|---|---|
-| `@huaqiu/dsh-auth` | ✓ (webServer route) | ✓ (auth iframe) | Phase 0A POC |
-| `@huaqiu/dsh-artifacts` | ✓ (service + routes) | — | Phase 0B |
-| `@huaqiu/dsh-tool-part-search` | ✓ | — | skeleton |
-| `@huaqiu/dsh-tool-symbol-footprint` | ✓ | stub | skeleton |
-| `@huaqiu/dsh-tool-schematic-gen` | ✓ | stub | skeleton |
+| `@huaqiu/dsh-auth` | dual-face | eda.cn login HIT (embedded `auth.eda.cn` iframe) + sidebar login; node `huaqiuAuth` credential cache | Phase 0A — working |
+| `@huaqiu/dsh-artifacts` | node + routes | filesystem artifact store + HTTP preview routes; `huaqiuArtifacts` service | Phase 0B — working |
+| `@huaqiu/dsh-tool-part-search` | node only | 4 part-search tools wrapping the published `@huaqiu/part-search` library | Phase 1 — **published v0.1.0** |
+| `@huaqiu/dsh-tool-symbol-footprint` | dual-face | symbol / footprint generation over `wss://www.eda.cn/componentV2/chat` + dimension-confirmation HIT card | working |
+| `@huaqiu/dsh-tool-schematic-gen` | dual-face | schematic + system-design generation via gen.eda.cn CopilotKit SSE + zip export + ECAD preview card | working |
+
+## Architecture
+
+### DSH plugin model
+
+Every package is a DSH plugin composed into a profile's layer stack by its
+`cordis.patch.yml` (`dsh.bundle.patch` in `package.json`):
+
+```yaml
+# e.g. packages/dsh-tool-schematic-gen/cordis.patch.yml
+- insert:
+    - id: huaqiu-tool-schematic-gen
+      name: '@huaqiu/dsh-tool-schematic-gen'
+      inject: ['tools']   # node services this half depends on
+```
+
+Two plugin shapes:
+
+- **Node-only** (`inject: ['tools']`, no `dsh.client`) — part search. Returns JSON,
+  never renders UI, so there is no browser bundle.
+- **Dual-face** (`inject: ['tools', ...]` + `dsh.client.inject: ['@deepseek-ai/dsh-client-runtime']`) —
+  auth, symbol/footprint, schematic-gen. A cordis node half registers tools/services/routes,
+  and a browser half registers React `tool.call.toolview` cards for human-in-the-loop steps.
+
+### Node half (cordis plugin)
+
+- Registers agent-visible tools via `ctx.tools.register` (`defineTool`), e.g.
+  `generate_schematic_from_description`, `generate_system_module_graph`.
+- Provides cross-plugin services via `ctx.provide`:
+  - `huaqiuAuth` (`@huaqiu/dsh-auth`) — capability API `isAuthenticated()` /
+    `getAccessToken()` / `getUserInfo()`; token is never baked in.
+  - `huaqiuArtifacts` (`@huaqiu/dsh-artifacts`) — in-process artifact store; tools call it
+    directly (no HTTP loopback).
+- Mounts plugin-owned HTTP routes on `ctx.webServer` (the smallest supported extension
+  point — DSH's `apiProxy` dispatch table is closed):
+  - `/api/v1/huaqiu/auth` — browser→node credential channel.
+  - `/api/v1/huaqiu/artifacts/<id>` + `/content` — preview metadata / raw bytes.
+
+### Browser half (React HIT cards)
+
+- Registers `tool.call.toolview` slot entries keyed by tool name, replacing the stock JSON
+  fallback. Cards are rendered from the frozen `ToolCallBlock` via a pure projection, and
+  human answers (e.g. "regenerate") are sent back to the agent through
+  `sessions.binding(sessionId).session.prompt`.
+- Reads the auth plugin's localStorage credential cache (`huaqiu.dsh.auth`) for display.
+- Renders ECAD previews with the published `@huaqiu/ecad-renderer` (`renderSchematic` for a
+  single sheet, `loadProjectZip` → root sheet for a project zip).
+
+### Cross-plugin dependencies
+
+```
+@huaqiu/dsh-tool-symbol-footprint ──► huaqiuAuth, huaqiuArtifacts
+@huaqiu/dsh-tool-schematic-gen   ──► huaqiuAuth, huaqiuArtifacts
+@huaqiu/dsh-tool-part-search     ──► (none — public API only)
+```
+
+Tools require the auth/artifacts services at runtime; a `needs_auth` result is returned
+when the eda.cn login is missing (never a hard throw — it surfaces a login HIT instead).
+
+## Dataflow
+
+### Authentication (login HIT)
+
+```
+browser ──► auth.eda.cn iframe ──postMessage (category-1 envelope)──► parse (validate
+envelope) ──► localStorage cache ──► POST /api/v1/huaqiu/auth/session
+      ──► node InMemoryHuaqiuAuthService ──► tools read getAccessToken()/getUserInfo()
+```
+
+The origin gate is intentionally dropped (the harness runs fully offline on `127.0.0.1`),
+but the envelope is still validated (`category: 1` + well-formed `token`/`userId`) so
+unrelated window messages can never corrupt the cache. Envelope types:
+`update_access_token`, `logout`, `close_dialog`.
+
+### Part search (node only, no auth)
+
+```
+agent → tool → @huaqiu/part-search library → kiapi.eda.cn → JSON → agent
+```
+
+### Symbol & footprint (datasheet image → KiCad files)
+
+```
+agent → tool → resolve account (huaqiuAuth) → WebSocket wss://www.eda.cn/componentV2/chat
+  → generated .kicad_sym / .kicad_mod → store in huaqiuArtifacts (in-process)
+  → result JSON { artifact ids } → browser card fetches /content → renders via ecad-renderer
+```
+
+Footprint generation is **human-in-the-loop**: dimensions extracted from the image are
+returned as a `needs_confirmation` result; the browser card shows a dimension editor, the
+user confirms/corrects, and only then does the agent call
+`generate_footprint_from_dimensions`.
+
+### Schematic & system design (CopilotKit SSE + zip export)
+
+```
+agent → tool → resolve account → POST gen.eda.cn/api/copilotkit (SSE stream,
+STATE_DELTA → STATE_SNAPSHOT) ──►
+  schematic: extract inline .kicad_sch sheets → store each as 'schematic' artifact
+  system:    extract module_graph → POST gen.eda.cn/api/modular_circuit/export-zip
+             → store the KiCad project zip as 'zip' artifact (single source of truth)
+→ result JSON { artifact ids } → browser card fetches /content (text for a sheet,
+  ArrayBuffer for a zip) → renders the sheet (or the root sheet matching the
+  .kicad_pro name) via ecad-renderer → download / regenerate / inspect
+```
+
+The backend design agents are slow (single runs routinely take 9–12+ minutes), so the
+SSE/tool budget is **30 minutes** (`HTTP_TIMEOUT_MS = 1_800_000` in
+`packages/dsh-tool-schematic-gen/src/sse.ts`).
+
+### Artifacts
+
+Filesystem-backed store under `~/.dsh/artifacts/dsh-artifacts` with `meta.json`,
+atomic writes, TTL expiry, a `maxBytes` cap, and strict id validation (`^art_[0-9a-f]+$`).
+The `/content` route returns **already-decoded bytes** (base64 is decoded at store time) —
+clients must read it as an `ArrayBuffer`, never as text.
 
 ## Development
 
+### Prerequisites
+
+- Node ≥ 22, pnpm 11 (`pnpm-workspace.yaml` globs `packages/*`).
+- The `dsh` CLI is on public npm as `@deepseek-ai/dsh` — run with `npx` to avoid a
+  global install.
+
+### Commands
+
 ```bash
 pnpm install
-pnpm -r typecheck     # tsc --noEmit
-pnpm -r test          # vitest
-pnpm -r build         # tsdown → lib/
-pnpm -r pack --dry-run
-pnpm check:hqedge     # fails if any @hqedge reference exists
+pnpm -r typecheck      # tsc --noEmit per package
+pnpm -r test           # vitest per package
+pnpm -r build          # tsdown → lib/
+pnpm -r pack --dry-run # confirm npm-packable output
+pnpm check:hqedge      # FAILS if any @hqedge/* reference exists
 ```
 
-Requires Node ≥ 22 (pnpm 11).
+### Local run
+
+`update.sh` rebuilds nothing — it kills port 3080, links every local package into the
+`web` profile (`dsh plugin add <path>`), and starts the web profile:
+
+```bash
+./update.sh   # → http://127.0.0.1:3080
+```
+
+Per-package layout:
+
+```
+packages/<pkg>/
+  src/index.ts        # cordis plugin entry: name, inject, apply()
+  src/tools.ts        # agent tool bodies (defineTool)
+  src/client/         # browser half: HIT cards (React), ecad helpers, theme
+  cordis.patch.yml    # profile insert
+  tsdown.config.ts    # build → lib/ (client bundle for dual-face packages)
+  test/               # vitest
+```
+
+Smoke-test scratch space lives in `.smoke/` (a throwaway `DSH_HOME` so nothing touches the
+real DSH home).
+
+## How to use
+
+### Install the plugins
+
+Local development (link each package from this repo):
+
+```bash
+npx @deepseek-ai/dsh plugin --profile web add ./packages/dsh-auth
+npx @deepseek-ai/dsh plugin --profile web add ./packages/dsh-artifacts
+npx @deepseek-ai/dsh plugin --profile web add ./packages/dsh-tool-part-search
+npx @deepseek-ai/dsh plugin --profile web add ./packages/dsh-tool-symbol-footprint
+npx @deepseek-ai/dsh plugin --profile web add ./packages/dsh-tool-schematic-gen
+```
+
+Or add the published packages by name once they are published (e.g.
+`@huaqiu/dsh-tool-part-search` is on npm today).
+
+### Run
+
+```bash
+npx @deepseek-ai/dsh web --no-open   # then open http://127.0.0.1:3080
+```
+
+### Login (required for eda.cn-backed tools)
+
+The generation tools require a Huaqiu EDA (eda.cn) account. Log in via the **华秋EDA**
+button in the sidebar, or let the agent trigger a login HIT — a card with an embedded
+`auth.eda.cn` iframe appears and the agent waits for you to finish before retrying.
+Part search does not require login.
+
+### Agent usage
+
+Ask in natural language, e.g.:
+
+- *"Find the eda models for `<part>`"* (part search)
+- *"Convert /path/to/datasheet.png into a footprint"* (footprint — confirm the extracted
+  BGA/QFP dimensions in the card)
+- *"Generate a schematic for a minimal ESP32 dev board using the schematic gen tool"*
+- *"Create a mini ESP32 design using the system design tool"* (system design → project zip
+  preview)
+
+### Runtime configuration (env)
+
+| Variable | Default | Used by |
+|---|---|---|
+| `HQ_EDA_COPILOTKIT_URL` | `https://gen.eda.cn/api/copilotkit` | schematic / system design |
+| `HQ_EDA_EXPORT_ZIP_URL` | `https://gen.eda.cn/api/modular_circuit/export-zip` | system design zip export |
+| `HQ_EDA_COMPONENT_WS_URL` | `wss://www.eda.cn/componentV2/chat` | symbol / footprint (whitelist-checked) |
+| `HQ_EDA_COOKIE` | — | optional cookie for schematic backend |
 
 ## Phase status
 
-Phase 0 (foundation + auth POC + artifacts service) in progress. See
-`docs/tasks/phase0-implementation-spec.md` for the exact contract. Publishing and tool
-implementation are Phases 1–5.
-
-## Installing a local package into DSH (manual / integration)
-
-The `dsh` CLI is **available on public npm** as `@deepseek-ai/dsh@0.1.1-rc.2` (verified
-Phase 0; run it with `npx` to avoid a global install). Phase 0's stock-DSH smoke test
-passes for both plugin shapes — a node-only package (`dsh-tool-part-search`) and a
-dual-face package (`dsh-tool-schematic-gen`) — each composes its `cordis.patch.yml`
-(`inject`) into a fresh `web` profile.
-
-```bash
-# scratch home so nothing touches the real DSH home
-export DSH_HOME="$(pwd)/.smoke/dsh-home"
-npx --yes @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add <path-to-package>
-npx --yes @deepseek-ai/dsh@0.1.1-rc.2 --profile web --dump-config | grep huaqiu
-```
-
-Then start the web profile and confirm the plugin loads and its tools register.
+- **Phase 0A** `dsh-auth` — login HIT + node credential cache: working.
+- **Phase 0B** `dsh-artifacts` — filesystem store + preview routes: working.
+- **Phase 1** `dsh-tool-part-search` — first published plugin (`v0.1.0`): done.
+- **Phases 2–3** `dsh-tool-symbol-footprint`, `dsh-tool-schematic-gen` — tools + React HIT
+  cards + ECAD preview: implemented and exercised end-to-end; publishing tracked in
+  `docs/tasks/` (see `phase0-implementation-spec.md` and `comment-on-migration-plan.md`
+  for the exact contracts).
