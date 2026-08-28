@@ -1,27 +1,28 @@
 # Phase 0 Implementation Task Spec — `@huaqiu/dsh-*` workspace foundation
 
-Status: **FOR REVIEW** (do not implement until approved)
+Status: **APPROVED WITH MINOR CHANGES** (per `docs/tasks/start-p0.md`) — implementation may start
 Owner: dsh-pcb-eda
-References: `docs/research/migrate-hq-edge-plugins.md` (§10 phase ordering, review #7/#20), `docs/research/dsh-pcb-eda.md` (§23 auth RPC).
+References: `docs/research/migrate-hq-edge-plugins.md` (§10 phase ordering, review #7/#20), `docs/research/dsh-pcb-eda.md` (§23 auth RPC), `docs/tasks/start-p0.md` (delivery-first review — incorporated below).
 
 This spec fixes every architectural decision an implementer would otherwise have to make implicitly while scaffolding the five packages: exact manifests, `cordis.patch.yml` rows, service IDs, route IDs, service contracts, and the stock-DSH verification commands. It covers the whole Phase 0 group: **Phase 0 (foundation) + Phase 0A (auth POC) + Phase 0B (artifacts)**.
 
----
+> **Guiding principle (start-p0.md §1): Phase 0 proves the architecture works. It does not build production infrastructure that Phase 1–4 might later invalidate.**
 
 ## 0. Scope
 
 Build the workspace and **prove the two novel/risky mechanisms before any tool depends on them**:
 
-- Phase 0: pnpm workspace, build/test toolchain, 5 skeleton packages with exact manifests + patches, stock-DSH install smoke test.
+- Phase 0: pnpm workspace, build/test toolchain, 5 thin skeleton packages with exact manifests + patches, stock-DSH install smoke test.
 - Phase 0A: browser↔node auth token propagation POC (the one genuinely novel piece).
 - Phase 0B: `@huaqiu/dsh-artifacts` service + `webServer` adapter (proves the HTTP-route-mount mechanism).
 
 Out of scope: part-search / symbol-footprint / schematic-gen tool logic (Phases 1–4), publishing (Phase 5), ECAD renderer bundling (Phase 3/4).
 
-**Hard constraints** (from migration plan §1):
+**Hard constraints** (from migration plan §1 + start-p0.md):
 - Zero `@hqedge/*` in any `package.json` or generated bundle (CI-guarded).
 - Node tools use `huaqiuArtifacts` **in-process only** — no HTTP loopback (review #2).
 - Route namespace is plugin-owned: `/api/v1/huaqiu/artifacts` (review #3).
+- **No publish** in Phase 0: package versions stay `0.0.0`, `publishConfig` present, CI never runs `pnpm publish` (start-p0.md §18).
 
 ---
 
@@ -29,11 +30,13 @@ Out of scope: part-search / symbol-footprint / schematic-gen tool logic (Phases 
 
 | # | Deliverable | Phase | Exit criterion |
 |---|---|---|---|
-| D1 | pnpm workspace `dsh-pcb-eda` with 5 skeleton packages, all green `pnpm -r test && pnpm -r build` | 0 | CI passes |
-| D2 | Stock-DSH install smoke test of a skeleton tool plugin | 0 | boots + `--dump-config` shows the row |
-| D3 | Auth POC (browser↔node token flow) with 8 acceptance tests | 0A | all 8 green |
-| D4 | `@huaqiu/dsh-artifacts` service + `webServer` adapter + security tests | 0B | unit + route tests green |
-| D5 | Updated workspace README + per-package skeleton READMEs | 0 | rendered |
+| D1 | pnpm workspace `dsh-pcb-eda` with 5 **thin** skeleton packages, all green `pnpm -r test && pnpm -r build` | 0 | CI passes |
+| D2 | Stock-DSH install smoke test of a skeleton tool plugin (probe registers in the tool registry) | 0 | boots + `--dump-config` shows the row + tool present (manual/integration step, not CI) |
+| D3 | Auth POC (browser↔node token flow): 4 grouped behaviors + wrong-origin test | 0A | all green |
+| D4 | `@huaqiu/dsh-artifacts` service + `webServer` adapter + hardening tests | 0B | unit + route tests green |
+| D5 | Tiny workspace README + per-package one-liner READMEs | 0 | rendered |
+
+**Skeleton thickness (start-p0.md §2/#16)**: tool packages are extremely thin — `package.json` + `cordis.patch.yml` + `src/index.ts` + `test/index.test.ts` (+ `src/client/index.tsx` stub for dual-face ones). Client stubs only prove the bundle builds and exports the right shape (`export const inject = [...]; export function apply(ctx) {}`). **No React components.** The one exception: `dsh-auth`'s real minimal auth iframe/UI (it IS the POC).
 
 ---
 
@@ -68,11 +71,10 @@ packages/<pkg>/
 ├── cordis.patch.yml            # node row (bundle patch)
 ├── tsconfig.json               # extends ../../tsconfig.base.json
 ├── tsconfig.build.json         # emit types → lib/types
-├── tsdown.config.ts            # entry index.ts (+ client.ts when dual-face); external: react, @deepseek-ai/*, @huaqiu/dsh-*
-├── vitest.config.ts            # optional per-package override
+├── tsdown.config.ts            # entry index.ts (+ client.ts when dual-face)
 ├── src/
 │   ├── index.ts                # node half: name/inject/apply (+ provide service for service packages)
-│   └── (client/index.tsx)      # browser half, only for dsh-auth / dual-face tools
+│   └── (client/index.tsx)      # browser half stub — ONLY dsh-auth (real) + dual-face tools (empty stubs)
 └── test/
     └── index.test.ts           # node-half smoke: plugin shape, apply() runs, no @hqedge import
 ```
@@ -108,9 +110,10 @@ All five share the same skeleton with per-package differences. Values are the co
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-client-runtime": "*",
-    "@deepseek-ai/dsh-client-connection": "*",
-    "@deepseek-ai/dsh-host-apiproxy": "*",    // host dispatch face (token-set/invalidate RPC)
-    "@deepseek-ai/dsh-host-webserver": "*"    // if a route is used for token refresh
+    "@deepseek-ai/dsh-client-connection": "*"
+    // NOTE (start-p0.md §3): NO speculative @deepseek-ai/dsh-host-* peers yet.
+    // The browser→node RPC mechanism is discovered in Phase 0A; only the
+    // dependency the POC actually uses is added then.
   },
   "dependencies": {},
   "files": ["lib", "src", "cordis.patch.yml"],
@@ -298,12 +301,11 @@ Client half (`src/client/index.tsx`): `exports.inject = ['@deepseek-ai/dsh-clien
 
 ```ts
 export interface HuaqiuArtifacts {
-  create(opts: { type: string; filename: string; content: string | Uint8Array | Buffer;
+  create(opts: { type: string; filename: string; content: string | Uint8Array;   // Buffer passes naturally (extends Uint8Array)
                  contentEncoding?: 'utf8' | 'base64'; ttlSeconds?: number })
     : Promise<{ id: string; type: string; filename: string; size: number }>;
   get(id: string): Promise<ArtifactMeta | null>;
-  readContent(id: string): Promise<Uint8Array>;
-  openStream(id: string): ReadableStream;
+  readContent(id: string): Promise<Uint8Array>;   // enough for preview artifacts (start-p0.md §7/#8 — no openStream yet)
   delete(id: string): Promise<void>;
   deleteAll(opts?: { onlyExpired?: boolean }): Promise<number>;
 }
@@ -335,25 +337,22 @@ dsh-auth node (in-memory cache)
 huaqiuAuth.auth.getAccessToken() / getUserInfo()   ← consumed by a probe tool
 ```
 
-**Implementer's task #1 (the actual unknown)**: pin the exact browser→host RPC call shape. Candidate mechanisms, in preference order:
+**Implementer's task #1 (the actual unknown)**: **inspect the actual public extension point and implement the smallest supported browser→host message path, then freeze it** (start-p0.md §4). Do NOT write the implementation as though `apiProxy` is the expected answer. Research order only:
 1. A custom host RPC handler registered on the `apiProxy` service (`@deepseek-ai/dsh-host-apiproxy`, service id `apiProxy`) — mirrors how `userQuestions.registerProvider(...)` plugs a provider into the host dispatch (see `packages/host/apiproxy/src/api-proxy.ts`).
 2. A plugin-owned `webServer` route as a fallback channel if the dispatch face rejects plugin handlers.
 3. `dsh-client-connection`'s exported `ClientConnectionRpc`/`HostApi` wire, if a public extension point exists.
 
-**Acceptance tests (all 8 — review #6):**
+Acceptance criterion is the **behavior** (browser → public DSH mechanism → node → `huaqiuAuth`), not which mechanism wins.
 
-| # | Scenario | Pass criterion |
-|---|---|---|
-| T1 | Login | iframe opens; postMessage received with origin check passing |
-| T2 | Token received | client caches `token`/`userInfo` in localStorage |
-| T3 | Node receives token | node half cache is populated (probe tool reads it) |
-| T4 | Tool reads token | `huaqiuAuth.auth.getAccessToken()` returns the pushed value |
-| T5 | Logout | `logout()` clears client + node state |
-| T6 | Node invalidation | after logout, node `getAccessToken()` → `null` |
-| T7 | Token refresh/update | a second login overwrites the node cache |
-| T8 | Reload persistence | reload → fingerprint silent login restores token (localStorage path) |
+**Acceptance tests (grouped — start-p0.md §5)**: four essential behaviors + the security test. T1–T8 below are the implementation checklist; do not build eight layers of test infrastructure around them.
 
-**Also verify** (security, review #15): a postMessage from a non-`auth.eda.cn` origin is rejected (negative test).
+| Group | Scenario | Pass criterion | Checklist |
+|---|---|---|---|
+| A. Login propagation | login/message | client state → node state → `getAccessToken()`/`getUserInfo()` | T1 iframe opens + origin check passes; T2 localStorage cached; T3 node receives; T4 tool reads token |
+| B. Update | new token | replaces old node state | T7 second login overwrites node cache |
+| C. Logout | logout | client cleared + node cleared | T5/T6 node `getAccessToken()` → `null` |
+| D. Reload | reload | existing local state restored | T8 fingerprint silent login restores (localStorage path) |
+| — Security | wrong origin | postMessage from non-`auth.eda.cn` origin is ignored | negative test |
 
 ---
 
@@ -361,23 +360,23 @@ huaqiuAuth.auth.getAccessToken() / getUserInfo()   ← consumed by a probe tool
 
 **Goal**: deliver `@huaqiu/dsh-artifacts` (D4) and prove the route-mount mechanism (mirrors the `edge-bridge` `/hq-edge` precedent).
 
-**Service (`src/service.ts`)**: port `DshPreviewArtifactService` (fs + `meta.json` per artifact dir under `<baseDir>/dsh-artifacts/<id>/`; atomic tmp+rename; TTL) **plus hardening** (review #15/#16):
+**Service (`src/service.ts`)**: port `DshPreviewArtifactService` (fs + `meta.json` per artifact dir under `<baseDir>/dsh-artifacts/<id>/`; atomic tmp+rename; TTL) **plus the scoped hardening** (start-p0.md §6 — MVP is a localhost preview cache, not a multi-user blob server):
 - `id` validated `^art_[0-9a-f]+$` before any path use; non-matching → `null`/404.
-- `filename` never in the storage path — only in `meta.json` + `Content-Disposition`.
-- Max artifact size + max metadata size (config; port the existing 512 KiB/1 MiB caps).
+- Path traversal prevention: `filename` never in the storage path — only in `meta.json` + `Content-Disposition`; no user input in paths beyond the validated id.
+- Max artifact size (config; port the existing caps).
+- Atomic write (tmp+rename; no partial file on failure).
 - TTL expiry (`ttlSeconds` + `deleteAll({onlyExpired})`).
-- Symlink-safe access (`lstat`/`realpath` containment under `baseDir`).
 - Storage default `~/.dsh/artifacts/` via `dshHomePath('artifacts')`; config `{ baseDir }` override.
+- **Deferred** (start-p0.md §6): symlink-safe `realpath` containment + elaborate metadata limits — revisit only if the implementation naturally exposes a risk.
 
-**Routes (`src/routes.ts`)**: `GET /api/v1/huaqiu/artifacts/:id` (meta JSON) and `GET /:id/content` (stream, `Content-Disposition: attachment; filename="<meta.filename>"`); 404 on missing/invalid id. Both registered with `ctx.webServer.register({ kind:'exact', path, handler })`, disposers returned.
+**Routes (`src/routes.ts`)**: `GET /api/v1/huaqiu/artifacts/:id` (meta JSON) and `GET /:id/content` (via `readContent()`, `Content-Disposition: attachment; filename="<meta.filename>"`); 404 on missing/invalid id. Both registered with `ctx.webServer.register({ kind:'exact', path, handler })`, disposers returned.
 
 **Tests** (unit + route):
 - create → meta shape `{id,type,filename,size}`; content round-trips (utf8 + base64 + binary).
-- get/readContent/openStream/delete/deleteAll(expired).
+- get/readContent/delete/deleteAll(expired).
 - id validation (invalid ids rejected, incl. `../`, absolute, non-hex).
 - filename never affects storage path.
-- max-size / max-meta-size enforced; atomic write leaves no partial file on failure.
-- symlink access blocked.
+- max-size enforced; atomic write leaves no partial file on failure.
 - route: 200 meta, 200 content (correct Content-Disposition), 404 unknown/invalid id, duplicate `(kind,path)` registration throws.
 - disposal unregisters routes (subsequent request → 404/no handler).
 
@@ -398,19 +397,37 @@ huaqiuAuth.auth.getAccessToken() / getUserInfo()   ← consumed by a probe tool
 }
 ```
 
-`tsdown.config.ts` (dual-face example):
+`tsdown.config.ts` (dual-face example) — **regexes fixed** (start-p0.md §10):
 
 ```ts
 import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: ['./src/index.ts', './src/client/index.tsx'],
   format: ['esm'],
-  external: [/^react$/, /^@deepseek-ai\//, /^@huaqiu\/dsh-/],  // everything else BUNDLED
+  external: [
+    /^react$/, /^react\//,
+    /^@deepseek-ai\//,
+  ],
+  // NOTE: do NOT blindly externalize /^@huaqiu\/dsh-/ in Phase 0.
+  // @huaqiu/dsh-auth & @huaqiu/dsh-artifacts are separate PLUGINS resolved
+  // through DSH installation (peer). Ordinary libraries (e.g. @huaqiu/part-search)
+  // are bundled or declared per runtime behavior. The exact externalization
+  // policy is decided in Phase 3/4 when real client bundles exist.
   outDir: 'lib',
 })
 ```
 
-`vitest.config.ts` (root): two projects — `node` (environment: node) and `client` (environment: jsdom, setup: `@testing-library/react`). Per-package `test/` trees run under the matching project via name filters.
+`vitest.config.ts` (root, **single** config — start-p0.md §11): use explicit environment annotations, no multi-project system yet:
+
+```ts
+import { defineConfig } from 'vitest/config'
+export default defineConfig({
+  test: {
+    // node is the default; client tests add `// @vitest-environment jsdom`
+    // when React tests arrive (Phase 3). No projects split in Phase 0.
+  },
+})
+```
 
 `pnpm-workspace.yaml`:
 
@@ -421,7 +438,9 @@ packages:
 
 ---
 
-## 10. CI (`.github/workflows/ci.yml`)
+## 10. CI (`.github/workflows/ci.yml`) — simplified (start-p0.md §12/#14)
+
+CI proves **build/test/package correctness + no HQ Edge**, nothing more. No formal lint job (typecheck covers it), no stock-DSH installation in CI (that is a manual/integration step until a published-package workflow exists).
 
 ```yaml
 on: [push, pull_request]
@@ -434,61 +453,79 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r lint          # tsc --noEmit --strict (or per-package)
-      - run: pnpm -r test          # vitest run
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
       - run: pnpm -r build
-      # review #1 — the two @hqedge guards:
+      # start-p0.md §13 — two explicit @hqedge guards (manifest/source + generated):
       - run: |
-          if pnpm -r why @hqedge | grep -q '@hqedge'; then echo "FAIL: @hqedge resolved" && exit 1; fi
+          if grep -R '"@hqedge/' packages/*/package.json packages/*/src 2>/dev/null; then
+            echo "FAIL: @hqedge dependency/reference found"; exit 1
+          fi
       - run: |
-          if grep -R "@hqedge/" packages/*/lib 2>/dev/null | grep -q .; then echo "FAIL: @hqedge in bundles" && exit 1; fi
-      - run: pnpm -r pack --dry-run   # release-readiness gate (files/peer warnings)
+          if grep -R '@hqedge/' packages/*/lib 2>/dev/null; then
+            echo "FAIL: @hqedge reference found in generated output"; exit 1
+          fi
+      - run: pnpm -r pack --dry-run    # release-readiness gate (files/peer warnings)
+      # CI NEVER runs pnpm publish (start-p0.md §18).
 ```
 
 ---
 
-## 11. Stock-DSH verification commands (must pass at the end of each sub-phase)
+## 11. Stock-DSH verification (manual/integration, NOT CI — start-p0.md §14/#15)
+
+`dsh` CLI is **not installed in this dev environment**; the stock-DSH smoke test runs when a DSH runtime is available (local dev or a dedicated integration workflow after publish). The strongest check (start-p0.md §15) is not just `--dump-config` but that the probe **loads and registers**:
 
 ```bash
-# Phase 0 — skeleton tool package
+# Phase 0 — skeleton tool package: install → startup → tool row exists → tool registry has the probe
 pnpm --filter @huaqiu/dsh-tool-part-search build && pnpm --filter @huaqiu/dsh-tool-part-search pack --dry-run
 dsh plugin --profile web add <path-to-tarball-or-dir>   # or link for local dev
 dsh --profile web --dump-config | grep huaqiu           # row present
+# then start DSH web and confirm the probe tool is in the registry (e.g. via a session tool-call
+# or the tool list in the UI). No real API invocation needed.
 
-# Phase 0B — artifacts
-# (run a DSH web profile; the artifacts plugin must be mounted)
+# Phase 0B — artifacts (when a DSH web profile is running with dsh-artifacts mounted)
 curl -s http://127.0.0.1:3080/api/v1/huaqiu/artifacts/<id>            # 200 meta
 curl -s http://127.0.0.1:3080/api/v1/huaqiu/artifacts/<id>/content    # 200 content
 
-# Phase 0A — auth
-# (manual browser check: dsh web, trigger login, observe T1–T8)
-
-# Final (Phase 5, also a Phase 0 sanity anchor):
-dsh plugin --profile web add @huaqiu/dsh-auth @huaqiu/dsh-artifacts @huaqiu/dsh-tool-part-search @huaqiu/dsh-tool-symbol-footprint @huaqiu/dsh-tool-schematic-gen
-dsh --profile web --dump-config     # all five rows
+# Phase 0A — auth (manual browser check: dsh web, trigger login, observe groups A–D)
 ```
 
 > Web server default bind is `127.0.0.1:3080` (confirmed from `web-app` bundle: `webserver` row `host: ctx.webStartup.host ?? '127.0.0.1'`, `port: 3080`). Artifact MVP trust model holds on `127.0.0.1` (review #15).
 
 ---
 
-## 12. Definition of Done (Phase 0 group)
+## 12. Definition of Done (start-p0.md §19 — reduced)
 
-- [ ] D1–D5 all green (workspace builds, tests pass, CI passes).
-- [ ] Phase 0 smoke test: skeleton part-search package installs on a stock DSH and shows in `--dump-config`.
-- [ ] Phase 0A: all 8 auth-flow tests green + origin-check negative test; exact browser→host RPC shape documented in code.
-- [ ] Phase 0B: artifacts unit + route tests green; route namespace is `/api/v1/huaqiu/artifacts`; hardening enforced and tested.
-- [ ] CI contains the two `@hqedge` guards and a `pack --dry-run` gate.
-- [ ] No tool logic beyond stubs; no publish executed (Phase 5).
+### Foundation
+- [ ] pnpm workspace installs; five packages resolve
+- [ ] all packages typecheck; all packages build
+- [ ] skeleton package can be installed into stock DSH; `--dump-config` shows the plugin
+- [ ] probe tool registers in the tool registry (manual/integration check)
+
+### Auth
+- [ ] auth iframe/message works; strict origin check
+- [ ] client state → node state; `getAccessToken()` works; `getUserInfo()` works
+- [ ] update replaces old credentials; logout invalidates node state; reload restores client state
+
+### Artifacts
+- [ ] create/read/delete works; UTF-8 / binary / base64 work
+- [ ] size limit works; ID/path validation works; TTL cleanup works
+- [ ] HTTP meta route works; HTTP content route works; route disposal works
+
+### Architecture
+- [ ] no `@hqedge/*` in package manifests; no `@hqedge/*` in generated bundles
+- [ ] no HTTP loopback from node tools; artifact namespace is `/api/v1/huaqiu/artifacts`
+- [ ] no demo credentials; no Phase 1–4 tool implementation
+- [ ] no publish executed; package versions stay `0.0.0`
 
 ---
 
 ## 13. Open questions for the implementer (must be answered, then frozen)
 
-1. **Exact browser→host RPC shape** for the auth token push (Phase 0A task #1): `apiProxy` custom handler vs `ClientConnectionRpc` extension vs `webServer` fallback route. Pick one, document the call shape, and freeze it.
-2. **Provider package name for `userQuestions`** in the peer deps (`@deepseek-ai/dsh-user-questions` vs actual) — resolve against `packages/interaction/user-questions` in Phase 0 and correct §3.4.
-3. **DSH runtime peer range** for `@deepseek-ai/dsh-tools` / cordis — confirm the current published `0.1.1-rc.x` range still matches (migration plan §11).
-4. **`dsh plugin --profile web add <local path>` mechanics** for out-of-tree local packages (link vs tarball) — verify once in Phase 0; this unblocks all later phases.
+1. **Exact browser→host RPC shape** for the auth token push (Phase 0A task #1): inspect the public extension point and pick the smallest supported path (`apiProxy` custom handler vs `ClientConnectionRpc` extension vs `webServer` fallback route). Document the call shape and freeze it. Do not add speculative `@deepseek-ai/dsh-host-*` peers until the chosen path is proven (§3.1).
+2. ~~Provider package name for `userQuestions`~~ — **resolved in Phase 0**: `@deepseek-ai/dsh-user-questions` exists on npm (`0.1.1-rc.2`). Use it in §3.4 peer deps (symbol-footprint, Phase 2).
+3. **DSH runtime peer range** — **resolved in Phase 0**: `@deepseek-ai/dsh-tools` published through `0.1.1-rc.2`; range `>=0.1.0-rc.8 <0.2.0` is satisfiable. `@deepseek-ai/cordis` is `4.0.1`. Confirmed live on the npm registry.
+4. **`dsh plugin --profile web add <local path>` mechanics** for out-of-tree local packages (link vs tarball) — verify when a DSH runtime is available; document in the workspace README.
 5. **Dev loop for client plugins** (hot reload vs `dsh web` restart) — note in the workspace README; doesn't block Phase 0.
 
 ---
