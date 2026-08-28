@@ -45,28 +45,20 @@ export async function resolveArtifactText(artifactId: string): Promise<ResolvedT
   }
 }
 
-function base64ToUint8Array(b64: string): Uint8Array {
-  const bin = atob(b64.replace(/\s+/g, ''))
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
-}
-
 /**
- * Resolve an artifact as raw bytes. The artifacts service stores the zip as
- * base64 text (`encoding: 'base64'`); we decode it back to bytes so the
- * renderer can load the zip.
+ * Resolve an artifact as raw bytes. The artifacts service `/content` route
+ * returns the ALREADY-DECODED binary bytes (base64 content is decoded at
+ * store time), so we read the response as an ArrayBuffer — never as text.
  */
 export async function resolveArtifactBytes(artifactId: string): Promise<ResolvedBytes> {
   const metaPath = `/api/v1/huaqiu/artifacts/${encodeURIComponent(artifactId)}`
   const metaRes = await fetch(metaPath)
   if (!metaRes.ok) throw new Error(`artifact metadata ${metaRes.status}`)
-  const meta = (await metaRes.json()) as { type?: string; filename?: string; encoding?: string }
+  const meta = (await metaRes.json()) as { type?: string; filename?: string }
   const contentRes = await fetch(`${metaPath}/content`)
   if (!contentRes.ok) throw new Error(`artifact content ${contentRes.status}`)
-  const raw = await contentRes.text()
-  const encoding = typeof meta.encoding === 'string' ? meta.encoding : ''
-  const bytes = encoding === 'base64' ? base64ToUint8Array(raw) : new TextEncoder().encode(raw)
+  const buf = await contentRes.arrayBuffer()
+  const bytes = new Uint8Array(buf)
   return {
     id: artifactId,
     type: typeof meta.type === 'string' ? meta.type : null,
