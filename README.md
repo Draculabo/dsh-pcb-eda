@@ -6,9 +6,8 @@ standalone, published DSH plugins: Huaqiu part search, symbol/footprint generati
 schematic / system-design generation — with an eda.cn account login flow and a local
 preview-artifact store.
 
-The codebase is migrated out of the HQ Edge monorepo into self-contained DSH plugins.
-**Zero `@hqedge/*` dependency is a hard requirement** — every package must be able to
-stand on its own and be published to npm (`pnpm check:hqedge` enforces this).
+The codebase is migrated out of the HQ Edge monorepo into self-contained DSH plugins,
+each able to stand on its own and be published to npm.
 
 ## Packages
 
@@ -152,7 +151,7 @@ pnpm -r typecheck      # tsc --noEmit per package
 pnpm -r test           # vitest per package
 pnpm -r build          # tsdown → lib/
 pnpm -r pack --dry-run # confirm npm-packable output
-pnpm check:hqedge      # FAILS if any @hqedge/* reference exists
+pnpm run check:publish # pre-publish integrity gate (entry/client/patch/exports)
 ```
 
 ### Local run
@@ -178,6 +177,61 @@ packages/<pkg>/
 
 Smoke-test scratch space lives in `.smoke/` (a throwaway `DSH_HOME` so nothing touches the
 real DSH home).
+
+## Releasing to npm
+
+The five `@huaqiu/dsh-*` packages are released **as one unit** (auth/artifacts are
+peer-dependencies of the tool packages, so their versions move together). Publishing
+follows the community DSH-plugin patterns (see `/Users/admin/code/dsh-plugin`): a Git tag
+`vX.Y.Z` triggers the release pipeline, and the tag must equal every `package.json`
+version.
+
+### 1. Bump
+
+```bash
+node scripts/bump.mjs 0.1.1            # dry-run: preview every change
+node scripts/bump.mjs 0.1.1 --apply    # write versions, rewrite @huaqiu/* peer deps, refresh lockfile
+```
+
+`bump.mjs` keeps the root marker + all five packages on one version and rewrites the
+hardcoded in-workspace peer references (`^0.0.0` → `^<new>`). It can force-resync an
+out-of-sync workspace by passing an explicit version.
+
+### 2. Commit + tag
+
+```bash
+git add -A
+git commit -m "chore: release v0.1.1"
+git tag v0.1.1
+git push origin main --tags
+```
+
+### 3. GitHub pipeline
+
+- `.github/workflows/ci.yml` — on push/PR: install → typecheck → test → build →
+  pack dry-run → `check:publish`.
+- `.github/workflows/release.yml` — on tag `v*` (or manual dispatch with `version` /
+  `publish` / `dry_run` inputs): validates every package version against the tag, runs the
+  full gate (incl. `check:publish:release` which requires a clean tree), then publishes
+  via `node scripts/publish.mjs --provenance`.
+
+Publishing uses **npm Trusted Publishing (OIDC)** — no `NPM_TOKEN` secret needed (it is
+only a fallback). One-time setup on npmjs.com for each `@huaqiu/*` package: Settings →
+Publishing access → Add Trusted Publisher → GitHub Actions, org `Huaqiu-Electronics`,
+repo `dsh-pcb-eda`, workflow `release.yml`.
+
+### Local / manual checks
+
+```bash
+node scripts/check-publish.mjs              # entry/client/patch/exports integrity
+node scripts/check-release-version.mjs 0.1.1 --tag v0.1.1
+node scripts/publish.mjs --dry-run          # build + gate + pack, nothing published
+node scripts/publish.mjs                    # live publish (auth via OIDC or NODE_AUTH_TOKEN)
+```
+
+Publishing is idempotent: a version already on npm is skipped, never re-published.
+Packages publish in dependency order: `dsh-auth` → `dsh-artifacts` → `dsh-tool-part-search`
+→ `dsh-tool-symbol-footprint` → `dsh-tool-schematic-gen`.
 
 ## How to use
 

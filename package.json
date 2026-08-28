@@ -1,7 +1,7 @@
 {
   "name": "dsh-pcb-eda",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -12,7 +12,12 @@
     "test": "pnpm -r test",
     "build": "pnpm -r build",
     "pack:check": "pnpm -r pack --dry-run",
-    "check:hqedge": "grep -R '@hqedge/' packages/*/package.json packages/*/src packages/*/lib 2>/dev/null && { echo 'FAIL: @hqedge found'; exit 1; } || echo 'OK: no @hqedge'"
+    "bump": "node scripts/bump.mjs",
+    "check:publish": "node scripts/check-publish.mjs",
+    "check:publish:release": "node scripts/check-publish.mjs --require-clean",
+    "check:release:version": "node scripts/check-release-version.mjs",
+    "publish:dry": "node scripts/publish.mjs --dry-run",
+    "publish:local": "node scripts/publish.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,0 +1,119 @@
+name: release
+
+# Publishes the Huaqiu DSH plugin set (`@huaqiu/dsh-auth`, `-artifacts`,
+# `-tool-part-search`, `-tool-symbol-footprint`, `-tool-schematic-gen`) to npm.
+#
+# Trigger A — push a Git tag `vX.Y.Z`; every package.json version must equal
+#            X.Y.Z (validated before anything is touched).
+# Trigger B — manual dispatch with an explicit version (+ optional dry-run).
+#
+# Publishing uses npm Trusted Publishing (OIDC) — provenance is attached and
+# no long-lived NPM_TOKEN secret is required. One-time npm-side setup:
+#   1. npmjs.com → each @huaqiu/* package → Settings → Publishing access
+#      → "Add Trusted Publisher".
+#   2. Provider: GitHub Actions
+#      Organization or user: Huaqiu-Electronics
+#      Repository:           dsh-pcb-eda
+#      Workflow filename:    release.yml
+#      Environment:          (blank)
+#   3. Do NOT add an NPM_TOKEN secret — Trusted Publishing replaces it.
+#      (If a token is ever set, it is only used as a fallback.)
+#
+# Pattern reference: the community plugin releases under
+# /Users/admin/code/dsh-plugin (dsh-openpencil + DSH-better-sidebar).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (must match every package.json), e.g. 0.1.0'
+        required: false
+        type: string
+      publish:
+        description: 'Publish to npm after all checks pass'
+        required: false
+        default: true
+        type: boolean
+      dry_run:
+        description: 'Pack + verify everything, but do not publish'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write # mint the OIDC token npm Trusted Publishing exchanges
+
+# npm dist-tags are shared mutable state — releases must serialize globally.
+concurrency:
+  group: dsh-pcb-eda-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: build · verify · publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Resolve + validate release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            version="${RELEASE_TAG#v}"
+            node scripts/check-release-version.mjs "$version" --tag "$RELEASE_TAG"
+          else
+            if [ -z "$DISPATCH_VERSION" ]; then
+              echo "::error::workflow_dispatch requires the 'version' input"
+              exit 1
+            fi
+            version="$DISPATCH_VERSION"
+            node scripts/check-release-version.mjs "$version"
+          fi
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Test
+        run: pnpm -r test
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Pack dry-run
+        run: pnpm -r pack --dry-run
+
+      - name: Pre-publish integrity gate (clean tree)
+        run: pnpm run check:publish:release
+
+      - name: Dry-run release (no publish)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true'
+        run: node scripts/publish.mjs --dry-run
+
+      - name: Publish to npm
+        if: github.event_name == 'push' || (inputs.dry_run != 'true' && inputs.publish == true)
+        run: node scripts/publish.mjs --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
