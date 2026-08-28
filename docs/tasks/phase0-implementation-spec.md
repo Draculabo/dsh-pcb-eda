@@ -599,3 +599,67 @@ both an all-5-package scratch profile and the user's 3-package default profile):
    `tool "huaqiu_phase0_probe" is already registered`. Renamed to
    `huaqiu_part_search_probe` / `huaqiu_symbol_footprint_probe` /
    `huaqiu_schematic_gen_probe` (sources, tests, READMEs).
+
+---
+
+## §15 Phase 1 — part-search plugin (`@huaqiu/dsh-tool-part-search`) record
+
+Phase 1 ships the first **publishable** plugin: the Huaqiu part-search tool
+set as a self-contained DSH plugin (no `@hqedge/*` bridge, no HTTP proxy),
+talking to the Huaqiu public API through the published `@huaqiu/part-search`
+library. All changes landed in `packages/dsh-tool-part-search`.
+
+### §15.1 Shape (implemented)
+- `src/service.ts` — thin adapter `createPartSearch(options?)` →
+  `PartSearchService` (defaults: `@huaqiu/part-search` client defaults). Exports
+  `PartSearchServiceLike` (the four operations as an interface) so tests can
+  inject a stub.
+- `src/tools.ts` — `createPartSearchTools(service)` returns the four tools,
+  preserving the old plugin's public contract verbatim (names, snake_case
+  params, descriptions):
+  `search_hqsch_parts` / `get_hqsch_part` / `get_hqsch_part_models` /
+  `get_hqsch_supply_chain`; `output.schema = { type: 'json' }` with a
+  single-text-block render; `timeoutMs 30_000`.
+- `src/index.ts` — plugin `name = '@huaqiu/dsh-tool-part-search'`,
+  `inject = ['tools']`; `apply` builds one shared service, registers the 4
+  tools, returns a disposer; logs `[dsh-part-search] registered agent tools`.
+- Tests: `test/index.test.ts` (shape / registration / missing-tools /
+  no-`@hqedge`-dependency), `test/tools.test.ts` (snake_case→service mapping,
+  undefined-stripping), `test/service.test.ts` (real library normalization
+  locked against a stubbed fetch).
+
+### §15.2 Findings worth keeping (TypeScript + DSH runtime)
+1. **`defineTool` with `output.schema = { type: 'json' }` infers the execute
+   return as `Promise<JsonValue>`, and typed domain interfaces do not satisfy
+   `JsonValue`'s index signature.** Follow the ecosystem: do not annotate
+   `execute`'s return type (let it infer), and cast the value through a local
+   structural `Json` alias (`asJson`). Keep the alias local — it is
+   structurally identical to `@deepseek-ai/dsh-session`'s `JsonValue`, so the
+   plugin does not need `dsh-session` as a direct dependency for a type only.
+2. **`{ type: 'json' }` output is validated as *lossless* JSON at runtime —
+   `undefined` property values fail it.** This only surfaces in a live DSH
+   call (`tool "search_hqsch_parts" returned invalid output: value is not
+   lossless JSON`), not in unit tests, because `@huaqiu/part-search`'s
+   normalized model carries optional fields as `undefined`
+   (e.g. `huaqiuPn`, `datasheetUrl`). Fix: `asJson` does a JSON round-trip
+   (`JSON.parse(JSON.stringify(value))`), which strips `undefined` properties
+   and array holes. Regression-tested in `tools.test.ts`.
+3. **The "no `@hqedge`" test must check imports/dependencies, not the bare
+   string** — the architectural-boundary docstring legitimately mentions
+   `@hqedge/*`; assert no `from '@hqedge` / `import('@hqedge` and no
+   `@hqedge/*` key in the manifest instead.
+4. **The error-message regex should match the message prefix, not a quoted
+   token** (`toThrow(/requires the DSH/)` rather than `/tools service/`, which
+   fails on the backticked `` `tools` service `` in the message).
+
+### §15.3 Gate status (green at close of Phase 1)
+- `pnpm -r typecheck` → 5/5 `Done`; `pnpm -r test` → 55 tests pass
+  (part-search 14, artifacts 10, auth 26, schematic-gen 3, symbol-footprint 3).
+- Live DSH (user default profile, port 3080, rebuilt `lib/index.mjs`):
+  boot log `[dsh-part-search] registered agent tools { tools: 4 }`.
+- End-to-end tool invocation in the web UI: asked the agent to use
+  `search_hqsch_parts` for STM32F103 → tool returned real candidates
+  (STM32F103ZCT6TR LQFP-144, STM32F103VBI6TR UFBGA-100, …) and the agent
+  summarized them. The lossless-JSON fix (#2) was confirmed by this live call.
+- Publishing `0.1.0` to npm: pending user instruction (release order per
+  plan §18/§19 — auth → artifacts → part-search).
