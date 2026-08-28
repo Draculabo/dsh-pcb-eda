@@ -18,6 +18,7 @@
 import { createAuthStorage } from './storage.js'
 import { createWebServerAuthTransport } from './transport.js'
 import { createAuthClient, type AuthClient } from './client.js'
+import { attachDebugGlobal, dbg } from './debug.js'
 import { disposeAuth, registerAuth, registerAuthSync } from './auth-state.js'
 import { HuaqiuToolView } from './ui/needs-auth-toolview.jsx'
 import { HuaqiuAuthSidebarAction } from './ui/sidebar-action.jsx'
@@ -50,6 +51,8 @@ export interface ClientContext {
 }
 
 export function apply(ctx: ClientContext): () => void {
+  attachDebugGlobal(window)
+  dbg('plugin-apply')
   const client: AuthClient = createAuthClient({
     storage: createAuthStorage(localStorage),
     transport: createWebServerAuthTransport(),

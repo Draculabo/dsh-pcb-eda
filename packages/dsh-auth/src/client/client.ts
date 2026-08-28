@@ -2,9 +2,10 @@
  * Auth client core — the Phase 0A POC logic, factored as a testable factory.
  * `apply()` in index.ts wires this to the real window/document/localStorage.
  */
-import { AUTH_ORIGIN, handleAuthMessage, type AuthMessageEventLike, type AuthTokenPayload } from './lib.js'
+import { AUTH_ORIGIN, handleAuthMessage, parseAuthMessageDebug, type AuthMessageEventLike, type AuthTokenPayload } from './lib.js'
 import type { AuthStorage } from './storage.js'
 import type { AuthTransport } from './transport.js'
+import { dbg } from './debug.js'
 
 export interface AuthClientDeps {
   storage: AuthStorage
@@ -40,16 +41,21 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   const { storage, transport } = deps
   const listeners = new Set<(info: AuthTokenPayload | null) => void>()
   let iframe: ReturnType<typeof deps.documentLike.createElement> | null = null
+  dbg('client-boot', { loginUrl, hasTrustedOrigin: Boolean(deps.trustedOrigin) })
 
   const emit = (info: AuthTokenPayload | null): void => {
     for (const listener of listeners) listener(info)
   }
   const closeIframe = (): void => {
-    iframe?.remove()
+    if (iframe) {
+      dbg('overlay-close')
+      iframe.remove()
+    }
     iframe = null
   }
   const openIframe = (): void => {
     if (iframe) return
+    dbg('overlay-open', { url: loginUrl })
     const el = deps.documentLike.createElement('iframe')
     el.src = loginUrl
     el.style.cssText =
@@ -64,11 +70,13 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     getUserInfo: async (): Promise<AuthTokenPayload | null> => storage.get(),
     login: async (): Promise<void> => openIframe(),
     logout: async (): Promise<void> => {
+      dbg('logout-requested')
       storage.clear()
       try {
         await transport.pushLogout()
+        dbg('node-push-logout-ok')
       } catch {
-        /* node half may be absent during dev — local state is still cleared */
+        dbg('node-push-logout-failed')
       }
       emit(null)
       closeIframe()
@@ -82,19 +90,44 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   const handleMessageEvent = (event: AuthMessageEventLike): void => {
     // Offline deployment: no origin gate (see lib.ts). Envelope validation is
     // the only gate, so unrelated window messages can never corrupt state.
-    const msg = handleAuthMessage({ origin: event.origin, data: event.data })
-    if (!msg) return
+    const rawPreview = typeof event.data === 'string'
+      ? event.data.slice(0, 240)
+      : event.data === null ? 'null'
+      : typeof event.data === 'object' ? (() => {
+          try {
+            const s = JSON.stringify(event.data)
+            return s ? s.slice(0, 240) : '[object-nonjson]'
+          } catch {
+            return '[object-nonjson]'
+          }
+        })()
+      : typeof event.data
+    dbg('window-message', { origin: event.origin, data: rawPreview })
+    const parsed = parseAuthMessageDebug(event.data)
+    if (!parsed.ok) {
+      dbg('message-rejected', { reason: parsed.reason })
+      return
+    }
+    const msg = parsed.msg
     if (msg.kind === 'token') {
+      dbg('token-accepted', { id: msg.info.id })
       storage.set(msg.info)
-      void transport.pushSession(msg.info).catch(() => { /* node may be absent */ })
+      dbg('storage-set', { id: msg.info.id, hasToken: Boolean(msg.info.token) })
+      void transport.pushSession(msg.info)
+        .then(() => dbg('node-push-ok'))
+        .catch(() => dbg('node-push-failed'))
       emit(msg.info)
+      dbg('auth-state', `authenticated (${msg.info.nickname ?? msg.info.id})`)
       closeIframe()
     } else if (msg.kind === 'logout') {
       storage.clear()
+      dbg('storage-clear', 'via logout message')
       emit(null)
-      void transport.pushLogout().catch(() => { /* node may be absent */ })
+      dbg('auth-state', 'anonymous (logout)')
+      void transport.pushLogout().then(() => dbg('node-push-logout-ok')).catch(() => dbg('node-push-logout-failed'))
       closeIframe()
     } else if (msg.kind === 'close') {
+      dbg('close-dialog-message')
       closeIframe()
     }
   }
@@ -108,11 +141,15 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   const restore = async (): Promise<void> => {
     const restored = storage.get()
     if (restored) {
+      dbg('restore-hit', { id: restored.id })
       try {
         await transport.pushSession(restored)
+        dbg('node-push-ok', 'restore')
       } catch {
-        /* node half may be absent */
+        dbg('node-push-failed', 'restore')
       }
+    } else {
+      dbg('restore-miss')
     }
   }
 
@@ -129,11 +166,15 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
      */
     async syncNow(): Promise<void> {
       const info = storage.get()
-      if (!info) return
+      if (!info) {
+        dbg('sync-now-miss')
+        return
+      }
       try {
         await transport.pushSession(info)
+        dbg('node-push-ok', 'syncNow')
       } catch {
-        /* node may be temporarily unavailable — retried on the next sync */
+        dbg('node-push-failed', 'syncNow')
       }
     },
     dispose() {

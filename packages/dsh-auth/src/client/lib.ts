@@ -47,6 +47,13 @@ interface RawEnvelope {
   data?: { type?: unknown; data?: unknown }
 }
 
+/** Coerce an id field (string or number, as auth.eda.cn sends) to a string. */
+function stringifyId(value: unknown): string | null {
+  if (typeof value === 'string' && value.length > 0) return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return null
+}
+
 export function parseAuthMessage(raw: unknown): ParsedAuthMessage | null {
   let envelope: RawEnvelope | null = null
   if (typeof raw === 'string') {
@@ -68,9 +75,8 @@ export function parseAuthMessage(raw: unknown): ParsedAuthMessage | null {
       if (!d || typeof d !== 'object') return null
       const record = d as Record<string, unknown>
       const token = typeof record.token === 'string' && record.token.length > 0 ? record.token : null
-      const id = typeof record.userId === 'string' && record.userId.length > 0
-        ? record.userId
-        : typeof record.id === 'string' && record.id.length > 0 ? record.id : null
+      // auth.eda.cn sends userId/id as NUMBERS (e.g. 6215935) — coerce to string.
+      const id = stringifyId(record.userId) ?? stringifyId(record.id)
       if (!token || !id) return null
       const nickname = typeof record.nickname === 'string' && record.nickname.length > 0 ? record.nickname : undefined
       const expiresAt = typeof record.expires_at === 'number' ? record.expires_at : undefined
@@ -96,4 +102,51 @@ export function parseAuthMessage(raw: unknown): ParsedAuthMessage | null {
 /** Origin-agnostic envelope parsing. The ONLY entry point for window message events. */
 export function handleAuthMessage(event: AuthMessageEventLike): ParsedAuthMessage | null {
   return parseAuthMessage(event.data)
+}
+
+/**
+ * Diagnostic variant of `parseAuthMessage` — returns the exact reason an
+ * envelope was rejected, so login-handshake failures can be traced from the
+ * browser console (`[huaqiu-auth] message-rejected reason=…`).
+ */
+export function parseAuthMessageDebug(
+  raw: unknown,
+): { ok: true; msg: ParsedAuthMessage } | { ok: false; reason: string } {
+  let envelope: RawEnvelope | null = null
+  if (typeof raw === 'string') {
+    try {
+      envelope = JSON.parse(raw) as RawEnvelope
+    } catch {
+      return { ok: false, reason: 'data-is-string-but-not-json' }
+    }
+  } else if (raw !== null && typeof raw === 'object') {
+    envelope = raw as RawEnvelope
+  } else {
+    return { ok: false, reason: `data-type-${typeof raw}` }
+  }
+  if (!envelope || envelope.category !== 1) {
+    return { ok: false, reason: `category=${String(envelope?.category)}` }
+  }
+  const data = envelope.data
+  if (!data || typeof data !== 'object') return { ok: false, reason: 'missing-envelope-data' }
+  switch (data.type) {
+    case 'update_access_token': {
+      const d = data.data
+      const record = (d && typeof d === 'object' ? d : null) as Record<string, unknown> | null
+      if (!record) return { ok: false, reason: 'update_access_token-missing-data' }
+      const token = typeof record.token === 'string' && record.token.length > 0
+      const id = stringifyId(record.userId) ?? stringifyId(record.id)
+      if (!token) return { ok: false, reason: 'update_access_token-missing-token' }
+      if (!id) return { ok: false, reason: 'update_access_token-missing-id' }
+      const msg = parseAuthMessage(raw)
+      if (!msg) return { ok: false, reason: 'update_access_token-parse-failed' }
+      return { ok: true, msg }
+    }
+    case 'logout':
+      return { ok: true, msg: { kind: 'logout' } }
+    case 'close_dialog':
+      return { ok: true, msg: { kind: 'close' } }
+    default:
+      return { ok: false, reason: `unknown-type-${String(data.type)}` }
+  }
 }

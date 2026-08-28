@@ -12,6 +12,24 @@ const validEnvelope = {
   },
 }
 
+// Exact payload shape auth.eda.cn actually posts: userId/id are NUMBERS.
+// Regression for the login that was rejected with `update_access_token-missing-id`.
+const realAuthEdaCnEnvelope = {
+  category: 1,
+  data: {
+    type: 'update_access_token',
+    data: {
+      userId: 6216935,
+      expires_at: 1788359214,
+      agreeCollectIP: false,
+      token: '0494009e-edbc-5f52-99e3-ae5544f051e-6a919aad',
+      id: 6215935,
+      username: 'jf_66463080',
+      nickname: '老铁',
+    },
+  },
+}
+
 function makeClient() {
   const pushes: unknown[] = []
   const transport = {
@@ -129,6 +147,18 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
     expect(storage.get()).toEqual({ id: 'u1', token: 'tok-1', nickname: 'Alice', expiresAt: 9999999999 })
     expect(transport.pushSession).toHaveBeenCalled()
     expect(iframes[0]!.remove).toHaveBeenCalled()
+  })
+
+  it('accepts the REAL auth.eda.cn payload where userId/id are numbers (regression)', () => {
+    const { client, transport, storage } = makeClient()
+    client.handleMessageEvent(eventLike(AUTH_ORIGIN, JSON.stringify(realAuthEdaCnEnvelope)))
+    expect(storage.get()).toEqual({
+      id: '6215935',
+      token: '0494009e-edbc-5f52-99e3-ae4ef00f051e-6a919aad',
+      nickname: '老铁',
+      expiresAt: 1788359214,
+    })
+    expect(transport.pushSession).toHaveBeenCalledWith(expect.objectContaining({ id: '6215935' }))
   })
 
   it('still ignores malformed envelopes (no store, no push, iframe stays)', () => {

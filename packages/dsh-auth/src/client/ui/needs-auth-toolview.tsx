@@ -11,8 +11,9 @@
  * For any other result it renders a faithful JSON fallback (the generic row
  * that this keyed entry replaces), so nothing is lost for successful calls.
  */
-import { memo, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { memo, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { getAuthState, subscribeAuth, syncAuthNow } from '../auth-state.js'
+import { dbg } from '../debug.js'
 import {
   AUTH_ORIGIN,
   CARD_STYLE,
@@ -44,12 +45,29 @@ function JsonFallback({ toolName, block }: { toolName: string; block?: ToolBlock
 
 function LoginCard({ toolName }: { toolName: string }): React.JSX.Element {
   const authState = useSyncExternalStore(subscribeAuth, getAuthState)
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
   // Healing: if the browser already holds a token (e.g. the node half was
   // reset by a server restart), push it again the moment the login card
   // mounts so the tool gate flips to authenticated without a manual re-login.
   useEffect(() => {
+    dbg('login-card-mount', { toolName })
     syncAuthNow()
-  }, [])
+  }, [toolName])
+  // Observe the embedded login iframe's load/error lifecycle — a failure here
+  // (e.g. auth.eda.cn unreachable from the offline deployment) is a separate
+  // failure mode from the postMessage handshake.
+  useEffect(() => {
+    const el = iframeRef.current
+    if (!el) return
+    const onLoad = (): void => dbg('card-iframe-loaded', { toolName, src: el.src })
+    const onError = (): void => dbg('card-iframe-error', { toolName, src: el.src })
+    el.addEventListener('load', onLoad)
+    el.addEventListener('error', onError)
+    return () => {
+      el.removeEventListener('load', onLoad)
+      el.removeEventListener('error', onError)
+    }
+  }, [toolName])
   return (
     <div style={CARD_STYLE}>
       <p style={TITLE_STYLE}>华秋 EDA（eda.cn）登录</p>
@@ -59,6 +77,7 @@ function LoginCard({ toolName }: { toolName: string }): React.JSX.Element {
       </p>
       <StatusLine authenticated={authState.authenticated} nickname={authState.nickname} />
       <iframe
+        ref={iframeRef}
         src={AUTH_ORIGIN}
         title="华秋EDA登录"
         style={IFRAME_STYLE}
