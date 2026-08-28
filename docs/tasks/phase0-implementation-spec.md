@@ -663,3 +663,103 @@ library. All changes landed in `packages/dsh-tool-part-search`.
   summarized them. The lossless-JSON fix (#2) was confirmed by this live call.
 - Publishing `0.1.0` to npm: pending user instruction (release order per
   plan §18/§19 — auth → artifacts → part-search).
+
+## §16 Phase 2 + Phase 4 Node — symbol-footprint & schematic-gen plugins (record)
+
+This record closes the **node half** of Phase 2 (`@huaqiu/dsh-tool-symbol-footprint`)
+and Phase 4 (`@huaqiu/dsh-tool-schematic-gen`). Both are faithful TypeScript
+ports of the `hq-edge` node plugins, rewritten against the published DSH plugin
+surface established in Phase 0/1. The **client halves (React, Phase 3) and
+release** remain open.
+
+### §16.1 Symbol-footprint node (`packages/dsh-tool-symbol-footprint`)
+
+Shape: `inject = ['tools','huaqiuAuth','huaqiuArtifacts']` (replaces the old
+`hqEdge` bridge). Three tools, same contracts as the source plugin:
+`generate_symbol_from_image` (180s), `generate_footprint_from_image` (900s),
+`generate_footprint_from_dimensions` (180s). Outputs are `{ type: 'json' }`
+with `asJson` round-trip (Phase 1 §15.2.1). Artifacts are stored by calling
+`huaqiuArtifacts.create` directly (no loopback HTTP). HIL is kept: the image
+footprint path returns `needs_confirmation` (web client renders the dimension
+editor card) when the extracted dimensions need the human, and falls back to a
+self-approving `generate_footprint_from_dimensions` call when there is nothing
+to confirm; the direct-from-dimensions path keeps the `userQuestions`
+accept/decline gate.
+
+Files: `src/protocol.ts` (componentV2 WS: `callComponentAgent`,
+`buildCommand`, `consumeFrame`, `buildSocketUrl` with token query param,
+whitelisted hosts `www.eda.cn` / `www.fdatasheets.com`, env override
+`HQ_EDA_COMPONENT_WS_URL`, budgets WS_ROUND_TRIP_MS=120000 /
+WS_CONNECT_MS=20000 / WS_TRAILING_ACTION_MS=2500 / MAX_IMAGE_BYTES=4MiB /
+MAX_ARTIFACT_BYTES=512KiB, `resolveImageDataUrl` from local path or URL,
+`fetchArtifactText`), `src/dimensions.ts` (normalize / parse overrides /
+render + HIL_CONFIRM/EDIT/CANCEL/ACCEPT/DECLINE), `src/tools.ts` (the three
+tools + run bodies), `src/index.ts` (apply + validation).
+
+Findings recorded during implementation:
+- **DOM `WebSocket` vs `SocketLike`**: the lib's `onopen`/`onmessage` use
+  `(this: WebSocket, ev: Event)` signatures; assigning them to the custom
+  `SocketLike` shape needs `new WebSocket(url) as unknown as SocketLike`, and
+  every post-assignment handler reference needs `socket!` (TS does not narrow
+  after assignment in this control flow).
+- **`parameters` is a property map, not `{ type:'object', properties:{} }`**:
+  `ParameterSchemaSpec = { [key]: ParameterPropertySpec }`; required-ness is a
+  per-property `required: true`, never a `required: [...]` array. `as const`
+  fragments break the shape — declare `const IMAGE_PARAMS: ParameterSchemaSpec`
+  and spread it (`{ ...IMAGE_PARAMS, instruction: {...} }`).
+
+### §16.2 Schematic-gen node (`packages/dsh-tool-schematic-gen`)
+
+Shape: `inject = ['tools','huaqiuAuth','huaqiuArtifacts']`. Two tools:
+`generate_schematic_from_description` (agentId `schemagen`) and
+`generate_system_module_graph` (agentId `modular_circuit`), both 600s, outputs
+`{ type: 'json' }` + `asJson`. The plugin drives CopilotKit `agent/run` over
+SSE (`POST {copilotkitUrl}`, headers `x-user-id`/`x-user-token`/`x-thread-id` +
+`Referer`), consuming `STATE_SNAPSHOT`/`STATE_DELTA`/`TEXT_MESSAGE_CONTENT`/
+`RUN_FINISHED`/`RUN_ERROR` (`src/sse.ts`); the system tool then POSTs the
+`module_graph` to `{exportZipUrl}` and stores the returned zip as a `zip`
+preview artifact via `huaqiuArtifacts.create` with `contentEncoding:'base64'`
+(`src/tools.ts`, `src/config.ts`).
+
+**Migration plan review #9 is honored — demo credentials are gone.** There is
+no `DEFAULT_USER_ID`/`DEFAULT_USER_TOKEN`; the account is resolved per call
+from `huaqiuAuth.auth.getUserInfo()` → `x-user-id` / `x-user-token`. When no
+eda.cn user is logged in the tool throws the actionable error
+`schematic-gen: the design API requires an eda.cn login. Sign in to HQ EDA
+(huaqiuAuth) and retry.` Endpoints remain env-overridable
+(`HQ_EDA_COPILOTKIT_URL`, `HQ_EDA_EXPORT_ZIP_URL`, `HQ_EDA_COOKIE`). The zip
+is the single source of truth (never inlined into the tool result); if the
+artifact store is unavailable it falls back to an inline data URL only when
+≤ `MAX_INLINE_ZIP_BYTES` (1 MB), else a temp file path. Zip basename keeps CJK
+via `sanitizeZipBaseName` (matches the card display name — the earlier
+`STM32F103C8T6迷你开发板.zip` bug).
+
+### §16.3 Gate status (green at close of the node phase)
+
+- `pnpm -r typecheck` → 5/5 `Done`.
+- `pnpm -r test` → **130 tests pass** (auth 26, artifacts 10, part-search 14,
+  symbol-footprint 51, schematic-gen 29). symbol-footprint/schematic-gen
+  probes were rewritten as real tool-body tests (socket lifecycle, SSE
+  consumption, HIL verdicts, artifact storage, auth-gate, no-`@hqedge`,
+  lossless-JSON).
+- `pnpm -r build` → all five packages emit `lib/index.mjs`; client halves
+  emit self-registering `lib/client.js` (CJS classic script).
+- Live DSH (user default profile `~/.dsh`, port 3080, fresh `dsh web` boot):
+  boot log clean, 0 errors —
+  `[dsh-part-search] registered agent tools { tools: 4 }`,
+  `[dsh-symbol-footprint] registered agent tools { tools: 3 }`,
+  `[dsh-schematic-gen] registered agent tools { tools: 2 }`.
+- Browser E2E: agent lists all 5 huaqiu tools; a real
+  `generate_schematic_from_description` call returns the designed auth-gate
+  error (confirming wiring + credential removal). A full generation requires
+  the user to sign in to eda.cn via the `huaqiuAuth` login UI.
+
+### §16.4 Remaining (open)
+
+- Phase 3: React client halves for symbol-footprint (dimension editor card,
+  result card) and schematic-gen (schematic canvas + zip download card),
+  consuming the node result contracts.
+- Release order per plan §18/§19: auth → artifacts → part-search →
+  symbol-footprint → schematic-gen (awaiting user instruction to publish).
+- The user's real eda.cn login must be exercised to see a full successful
+  generation E2E (current live instance has no logged-in account).

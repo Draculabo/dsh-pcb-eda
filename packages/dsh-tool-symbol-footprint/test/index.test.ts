@@ -1,23 +1,100 @@
-import { describe, expect, it } from 'vitest'
-import { apply, inject, name } from '../src/index.js'
-import * as client from '../src/client/index.js'
+import { describe, expect, it, vi } from 'vitest'
+import { apply, inject, name, packageTypes } from '../src/index.js'
+import type { HuaqiuAuthService } from '@huaqiu/dsh-auth'
+import type { HuaqiuArtifacts, CreateArtifactResult } from '@huaqiu/dsh-artifacts'
 
-describe('@huaqiu/dsh-tool-symbol-footprint skeleton', () => {
+type Tool = { name: string; execute(args: unknown, exec?: unknown): Promise<unknown> }
+
+function ctxStub() {
+  let id = 0
+  const registered: unknown[] = []
+  const auth: HuaqiuAuthService = {
+    auth: {
+      isAuthenticated: () => true,
+      getAccessToken: async () => 'tok-1',
+      getUserInfo: async () => ({ id: 'u1', token: 'tok-1' }),
+      login: async () => {},
+      logout: async () => {},
+      onAuthStateChanged: () => () => {},
+    },
+    setCredentials: () => {},
+    invalidate: () => {},
+  }
+  const artifacts: HuaqiuArtifacts = {
+    create: async (): Promise<CreateArtifactResult> => ({ id: 'art_test', type: 'footprint', filename: 'x.kicad_mod', size: 1 }),
+    get: async () => null,
+    readContent: async () => null,
+    delete: async () => {},
+    deleteAll: async () => 0,
+  }
+  return {
+    auth,
+    artifacts,
+    registered,
+    ctx: {
+      tools: { register: (d: unknown) => (registered.push(d), () => { id += 1 }) },
+      huaqiuAuth: auth,
+      huaqiuArtifacts: artifacts,
+      get: () => undefined,
+    } as Record<string, unknown>,
+  }
+}
+
+describe('@huaqiu/dsh-tool-symbol-footprint plugin', () => {
   it('exposes the expected node plugin shape', () => {
     expect(name).toBe('@huaqiu/dsh-tool-symbol-footprint')
-    expect(inject).toEqual(['tools'])
+    expect(inject).toEqual(['tools', 'huaqiuAuth', 'huaqiuArtifacts'])
     expect(typeof apply).toBe('function')
+    expect(Array.isArray(packageTypes)).toBe(true)
+    expect(packageTypes.length).toBeGreaterThan(0)
   })
 
-  it('registers the probe tool', () => {
-    const registered: unknown[] = []
-    apply({ tools: { register: (d: unknown) => (registered.push(d), () => undefined) } } as never)
-    expect((registered[0] as { name: string }).name).toBe('huaqiu_symbol_footprint_probe')
+  it('registers the three generation tools', () => {
+    const { ctx, registered } = ctxStub()
+    apply(ctx as never)
+    const names = (registered as Tool[]).map((t) => t.name)
+    expect(names).toEqual([
+      'generate_symbol_from_image',
+      'generate_footprint_from_image',
+      'generate_footprint_from_dimensions',
+    ])
   })
 
-  it('client stub exports the DSH client-module shape', () => {
-    // The module's inject must be REAL service names; Phase 0 consumes none.
-    expect(client.inject).toEqual([])
-    expect(typeof client.apply).toBe('function')
+  it('throws loudly when the tools service is missing', () => {
+    expect(() => apply({} as never)).toThrow(/requires the DSH/)
+  })
+
+  it('throws loudly when the huaqiuAuth service is missing', () => {
+    const { ctx } = ctxStub()
+    expect(() => apply({ ...ctx, huaqiuAuth: undefined } as never)).toThrow(/huaqiuAuth/)
+  })
+
+  it('throws loudly when the huaqiuArtifacts service is missing', () => {
+    const { ctx } = ctxStub()
+    expect(() => apply({ ...ctx, huaqiuArtifacts: undefined } as never)).toThrow(/huaqiuArtifacts/)
+  })
+
+  it('returns a disposer that unregisters the tools', () => {
+    const { ctx, registered } = ctxStub()
+    const dispose = apply(ctx as never)
+    expect(typeof dispose).toBe('function')
+    dispose()
+    // register returned a disposer per tool; the plugin-level dispose calls them.
+    expect(registered.length).toBe(3)
+  })
+
+  it('has no @hqedge dependency (import or manifest)', async () => {
+    const fs = await import('node:fs/promises')
+    const [source, manifest] = await Promise.all([
+      fs.readFile(new URL('../src/index.ts', import.meta.url), 'utf8'),
+      fs.readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    ])
+    expect(source).not.toMatch(/from\s+['"]@hqedge/)
+    const deps = {
+      ...JSON.parse(manifest).dependencies,
+      ...JSON.parse(manifest).peerDependencies,
+      ...JSON.parse(manifest).devDependencies,
+    }
+    expect(Object.keys(deps).some((k) => k.startsWith('@hqedge'))).toBe(false)
   })
 })

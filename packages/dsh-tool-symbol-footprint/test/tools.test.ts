@@ -1,0 +1,156 @@
+import { describe, expect, it } from 'vitest'
+import type { HuaqiuAuthService } from '@huaqiu/dsh-auth'
+import type { HuaqiuArtifacts, CreateArtifactResult } from '@huaqiu/dsh-artifacts'
+import { runGenerateFootprintFromDimensions, runGenerateFootprintFromImage, runGenerateSymbol, type SymbolFootprintEnv } from '../src/tools.js'
+import type { SocketLike } from '../src/protocol.js'
+
+type Tool = { name: string; execute(args: unknown, exec?: unknown): Promise<unknown> }
+
+/** A fake socket that emits the awaited AGENT frame on open. */
+function emitOnOpen(action: { action: string; context: unknown }, extra: unknown[] = []) {
+  const frames = [...extra, { type: 6, action: action.action, context: action.context }]
+  return () => {
+    const socket: SocketLike = {
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+      send: () => {},
+      close: () => {},
+    }
+    // Defer until the caller wires handlers (callComponentAgent sets onopen
+    // synchronously before returning the promise).
+    queueMicrotask(() => {
+      for (const f of frames) socket.onmessage?.({ data: JSON.stringify(f) })
+      socket.onopen?.(null)
+    })
+    return socket
+  }
+}
+
+function stubEnv(overrides: Partial<SymbolFootprintEnv> = {}): SymbolFootprintEnv {
+  const auth: HuaqiuAuthService = {
+    auth: {
+      isAuthenticated: () => true,
+      getAccessToken: async () => 'tok-1',
+      getUserInfo: async () => ({ id: 'u1', token: 'tok-1' }),
+      login: async () => {},
+      logout: async () => {},
+      onAuthStateChanged: () => () => {},
+    },
+    setCredentials: () => {},
+    invalidate: () => {},
+  }
+  const created: CreateArtifactResult[] = []
+  const artifacts: HuaqiuArtifacts = {
+    create: async (input) => {
+      const c = { id: 'art_' + created.length, type: input.type, filename: input.filename, size: Buffer.byteLength(input.content) }
+      created.push(c)
+      return c
+    },
+    get: async () => null,
+    readContent: async () => null,
+    delete: async () => {},
+    deleteAll: async () => 0,
+  }
+  return {
+    auth: auth.auth,
+    artifacts,
+    deps: { processEnv: {}, random: () => 0.1234567 },
+    getUserQuestions: () => undefined,
+    ...overrides,
+  }
+}
+
+const FETCH_OK = async (_url: RequestInfo | URL) => new Response('(kicad (version 20231118))')
+
+describe('symbol-footprint tool bodies', () => {
+  it('generate_symbol_from_image stores the generated symbol as an artifact', async () => {
+    const env = stubEnv({
+      deps: {
+        processEnv: {},
+        random: () => 0.1234567,
+        socketFactory: emitOnOpen({ action: 'symbol_button', context: { params: '{"fileUrl":"https://x/y.kicad_sym"}' } }),
+        fetchImpl: FETCH_OK,
+      },
+    })
+    const result = await runGenerateSymbol({ image_url: 'data:image/png;base64,AAAA' }, undefined, env)
+    expect(result.status).toBe('generated')
+    expect(result.kind).toBe('symbol')
+    expect(result.artifact).toMatchObject({ type: 'symbol', filename: 'y.kicad_sym' })
+    // Content is NOT inlined when the artifact store succeeds.
+    expect(result.content).toBeUndefined()
+  })
+
+  it('generate_footprint_from_image returns needs_confirmation with dimensions', async () => {
+    const env = stubEnv({
+      deps: {
+        processEnv: {},
+        random: () => 0.1234567,
+        socketFactory: emitOnOpen({
+          action: 'footprint_dimensions',
+          context: { fileName: 'SOIC-8.kicad_mod', pkgType: 'sop', dimensions: { W: 6.2, L: 5.0 } },
+        }),
+        fetchImpl: FETCH_OK,
+      },
+    })
+    const result = await runGenerateFootprintFromImage({ image_url: 'data:image/png;base64,AAAA' }, undefined, env)
+    expect(result.status).toBe('needs_confirmation')
+    expect(result.kind).toBe('footprint')
+    expect((result as { dimensions: unknown }).dimensions).toEqual({ W: 6.2, L: 5.0 })
+    expect(result.note).toMatch(/web client renders/)
+  })
+
+  it('generate_footprint_from_dimensions requires a supported package_type', async () => {
+    const env = stubEnv()
+    await expect(runGenerateFootprintFromDimensions({ dimensions: { W: 1 } }, undefined, env))
+      .rejects.toThrow(/package_type is required/)
+    await expect(runGenerateFootprintFromDimensions({ package_type: 'bogus', dimensions: { W: 1 } }, undefined, env))
+      .rejects.toThrow(/unsupported package_type/)
+  })
+
+  it('generate_footprint_from_dimensions generates and stores the footprint', async () => {
+    const env = stubEnv({
+      deps: {
+        processEnv: {},
+        random: () => 0.1234567,
+        socketFactory: emitOnOpen({ action: 'footprint_button', context: { params: '{"fileUrl":"https://x/SOIC8.kicad_mod"}' } }),
+        fetchImpl: FETCH_OK,
+      },
+    })
+    const result = await runGenerateFootprintFromDimensions(
+      { package_type: 'sop', dimensions: { W: 6.2, L: 5.0 }, file_name: 'SOIC-8' },
+      undefined,
+      env,
+    )
+    expect(result.status).toBe('generated')
+    expect(result.kind).toBe('footprint')
+    expect(result.pkgType).toBe('sop')
+    expect(result.artifact).toMatchObject({ type: 'footprint', filename: 'SOIC8.kicad_mod' })
+  })
+
+  it('the direct footprint path falls back to a generated result when no user-questions channel', async () => {
+    const env = stubEnv({
+      deps: {
+        processEnv: {},
+        random: () => 0.1234567,
+        socketFactory: emitOnOpen({ action: 'footprint_button', context: { params: '{"fileUrl":"https://x/auto.kicad_mod"}' } }),
+        fetchImpl: FETCH_OK,
+      },
+    })
+    const result = await runGenerateFootprintFromImage({ image_url: 'data:image/png;base64,AAAA' }, undefined, env)
+    expect(result.status).toBe('generated')
+    expect(result.autoGenerated).toBe(true)
+    expect(result.note).toMatch(/no dimensions to confirm/)
+  })
+})
+
+describe('tool schema/execute shape', () => {
+  it('tools are registry-ready defineTool definitions with json output', async () => {
+    const fs = await import('node:fs/promises')
+    const source = await fs.readFile(new URL('../src/tools.ts', import.meta.url), 'utf8')
+    expect(source).toMatch(/defineTool/)
+    expect(source).toMatch(/\{ type: 'json' \}/)
+    expect(source).not.toMatch(/from\s+['"]@hqedge/)
+  })
+})

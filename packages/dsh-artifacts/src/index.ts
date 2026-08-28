@@ -10,6 +10,14 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import { HuaqiuArtifactService, type HuaqiuArtifacts } from './service.js'
 import { ARTIFACTS_ROUTE_PREFIX, createArtifactsHandler } from './routes.js'
 
+export type {
+  ArtifactMeta,
+  ArtifactType,
+  CreateArtifactInput,
+  CreateArtifactResult,
+  HuaqiuArtifacts,
+} from './service.js'
+
 export const name = '@huaqiu/dsh-artifacts'
 export const inject = ['webServer'] as const
 

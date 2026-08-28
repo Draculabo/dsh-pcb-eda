@@ -9,6 +9,8 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import { InMemoryHuaqiuAuthService, type HuaqiuAuthService } from './service.js'
 import { AUTH_ROUTE_PREFIX, createAuthHandler } from './routes.js'
 
+export type { HuaqiuAuthApi, HuaqiuAuthService, HuaqiuUserInfo } from './service.js'
+
 export const name = '@huaqiu/dsh-auth'
 export const inject = ['webServer'] as const
 
