@@ -2,13 +2,16 @@
  * ECAD preview + artifact resolution for the schematic/system HIT card.
  *
  * Both renderers come from the bundled `@huaqiu/ecad-renderer` subpaths:
- *   - `renderSchematic`      — single `.kicad_sch` sheet (schematic tool)
- *   - `renderProjectFromZip` — the system-design project zip (root sheet auto-
- *     selected by the renderer, matching the `*.kicad_pro` name).
+ *   - `renderSchematic`          — single `.kicad_sch` sheet (schematic tool)
+ *   - `loadProjectZip`           — system-design project zip; the root sheet
+ *     matching the `*.kicad_pro` name is selected and rendered (the published
+ *     `renderProjectFromZip` helper is declared in d.ts but not actually
+ *     exported by the bundle, so we drive `loadProjectZip` ourselves).
  *
  * Artifact content comes from the `@huaqiu/dsh-artifacts` webServer routes:
  *   GET /api/v1/huaqiu/artifacts/<id>          → { type, filename, encoding }
- *   GET /api/v1/huaqiu/artifacts/<id>/content  → raw body (text or base64 bytes)
+ *   GET /api/v1/huaqiu/artifacts/<id>/content  → raw bytes (base64 is already
+ *     decoded at store time; read as ArrayBuffer, never as text)
  */
 import { SchematicParser } from '@huaqiu/kicad-sexpr-parser'
 import { renderSchematic } from '@huaqiu/ecad-renderer/schematic'

@@ -7,8 +7,14 @@
 import type { EdaAccount, SchematicGenConfig } from './config.js'
 import { buildExportHeaders } from './config.js'
 
-/** Overall SSE / zip budget — design agents run for minutes. */
-export const HTTP_TIMEOUT_MS = 600_000
+/**
+ * Overall SSE / zip budget — the eda.cn design agents routinely run 9–12+
+ * minutes per generation (observed runs exceeded the old 10-min cap), so
+ * allow 30 minutes before aborting the stream. This single constant drives
+ * both the backend SSE stream timeout and the agent-facing tool timeout hint
+ * (`TOOL_TIMEOUT_MS` in tools.ts references it).
+ */
+export const HTTP_TIMEOUT_MS = 1_800_000
 
 // ── STATE_DELTA application ──────────────────────────────────────────────────
 
