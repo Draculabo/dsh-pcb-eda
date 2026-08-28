@@ -1,0 +1,7 @@
+# DSH bundle patch: inserts the Huaqiu account/auth plugin.
+# The webServer route is the browser→node credential channel (the smallest
+# supported extension point — see phase0-implementation-spec.md §7).
+- insert:
+    - id: huaqiu-auth
+      name: '@huaqiu/dsh-auth'
+      inject: ['webServer']

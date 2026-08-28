@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      - run: pnpm -r build
+      # start-p0.md §13 — the published artifact must not know HQ Edge exists:
+      - name: Guard manifest/source
+        run: |
+          if grep -R '"@hqedge/' packages/*/package.json packages/*/src 2>/dev/null; then
+            echo "FAIL: @hqedge dependency/reference found"; exit 1
+          fi
+      - name: Guard generated output
+        run: |
+          if grep -R '@hqedge/' packages/*/lib 2>/dev/null; then
+            echo "FAIL: @hqedge reference found in generated output"; exit 1
+          fi
+      - run: pnpm -r pack --dry-run
+      # CI NEVER runs `pnpm publish` in Phase 0 (start-p0.md §18).

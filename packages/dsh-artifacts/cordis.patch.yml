@@ -1,0 +1,5 @@
+# DSH bundle patch: inserts the Huaqiu artifact store + its HTTP routes.
+- insert:
+    - id: huaqiu-artifacts
+      name: '@huaqiu/dsh-artifacts'
+      inject: ['webServer']

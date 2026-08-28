@@ -1,0 +1,7 @@
+# DSH bundle patch: inserts the Huaqiu symbol/footprint generation tool plugin.
+# NOTE: the full inject list (tools, huaqiuAuth, huaqiuArtifacts, userQuestions)
+# is the Phase 2 target; the Phase 0 skeleton keeps ['tools'] so it loads standalone.
+- insert:
+    - id: huaqiu-tool-symbol-footprint
+      name: '@huaqiu/dsh-tool-symbol-footprint'
+      inject: ['tools']

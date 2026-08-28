@@ -473,13 +473,18 @@ jobs:
 
 ## 11. Stock-DSH verification (manual/integration, NOT CI — start-p0.md §14/#15)
 
-`dsh` CLI is **not installed in this dev environment**; the stock-DSH smoke test runs when a DSH runtime is available (local dev or a dedicated integration workflow after publish). The strongest check (start-p0.md §15) is not just `--dump-config` but that the probe **loads and registers**:
+`dsh` CLI is **available on public npm** as `@deepseek-ai/dsh@0.1.1-rc.2` (resolved in
+Phase 0; run via `npx` to avoid a global install). The smoke test remains a
+manual/integration step (not CI), but was **executed and passed** in Phase 0 for a
+node-only and a dual-face package. The strongest check (start-p0.md §15) is not just
+`--dump-config` but that the probe **loads and registers**:
 
 ```bash
 # Phase 0 — skeleton tool package: install → startup → tool row exists → tool registry has the probe
 pnpm --filter @huaqiu/dsh-tool-part-search build && pnpm --filter @huaqiu/dsh-tool-part-search pack --dry-run
-dsh plugin --profile web add <path-to-tarball-or-dir>   # or link for local dev
-dsh --profile web --dump-config | grep huaqiu           # row present
+export DSH_HOME="$(pwd)/.smoke/dsh-home"     # scratch home; never touch the real one
+npx --yes @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add <path-to-tarball-or-dir>
+npx --yes @deepseek-ai/dsh@0.1.1-rc.2 --profile web --dump-config | grep huaqiu  # row present + inject merged
 # then start DSH web and confirm the probe tool is in the registry (e.g. via a session tool-call
 # or the tool list in the UI). No real API invocation needed.
 
@@ -525,9 +530,40 @@ curl -s http://127.0.0.1:3080/api/v1/huaqiu/artifacts/<id>/content    # 200 cont
 1. **Exact browser→host RPC shape** for the auth token push (Phase 0A task #1): inspect the public extension point and pick the smallest supported path (`apiProxy` custom handler vs `ClientConnectionRpc` extension vs `webServer` fallback route). Document the call shape and freeze it. Do not add speculative `@deepseek-ai/dsh-host-*` peers until the chosen path is proven (§3.1).
 2. ~~Provider package name for `userQuestions`~~ — **resolved in Phase 0**: `@deepseek-ai/dsh-user-questions` exists on npm (`0.1.1-rc.2`). Use it in §3.4 peer deps (symbol-footprint, Phase 2).
 3. **DSH runtime peer range** — **resolved in Phase 0**: `@deepseek-ai/dsh-tools` published through `0.1.1-rc.2`; range `>=0.1.0-rc.8 <0.2.0` is satisfiable. `@deepseek-ai/cordis` is `4.0.1`. Confirmed live on the npm registry.
-4. **`dsh plugin --profile web add <local path>` mechanics** for out-of-tree local packages (link vs tarball) — verify when a DSH runtime is available; document in the workspace README.
+4. **`dsh plugin --profile web add <local path>` mechanics** for out-of-tree local packages (link vs tarball) — **resolved in Phase 0**: `@deepseek-ai/dsh@0.1.1-rc.2` on public npm provides the `dsh` CLI (via `npx`). `dsh plugin --profile web add <local dir>` links the package (`link:` in the profile project) and composes its `cordis.patch.yml` into the profile tree (verified for a node-only and a dual-face package — see §14).
 5. **Dev loop for client plugins** (hot reload vs `dsh web` restart) — note in the workspace README; doesn't block Phase 0.
 
----
+## 14. Phase 0 implementation notes (recorded at completion)
 
-*End of Phase 0 implementation task spec — ready for review.*
+Gates all green on `node v24.18.0` / `pnpm 11.7.0`: typecheck 0 errors, 45 tests
+pass across the five packages, build clean, `check:hqedge` passes (manifests +
+src + lib), `pack --dry-run` produces valid tarballs for all packages. Stock-DSH
+smoke passes: both a node-only (`@huaqiu/dsh-tool-part-search`) and a dual-face
+(`@huaqiu/dsh-tool-schematic-gen`) package install into a scratch `web` profile
+and compose their `inject` patch.
+
+Reconciliation of the three implementation-vs-spec deviations (all now reflected
+in the committed manifests; kept here so the doc stays the source of truth):
+
+1. **`dsh-client-runtime` removed from peerDependencies** in all three tool
+   packages. It is not installable from public npm (`dsh-compact` etc. are
+   missing), and the client contract is the `dsh.client.inject` string, not the
+   runtime package. The client runtime is supplied by the DSH profile host.
+   §3.1/§3.4/§3.5 keep the `dsh.client.inject` row; the peer is gone.
+2. **`@huaqiu/dsh-auth` / `@huaqiu/dsh-artifacts` peer versions are `^0.0.0`**
+   (Phase 0 does not publish; workspace `devDependencies: workspace:*` satisfy
+   them). At publish time (Phase ≥ 2) bump to the real `^0.1.0` range.
+3. **`@huaqiu/part-search` dependency is `^0.2.0`** in the part-search manifest
+   (npm latest 0.2.6); spec's suggested `^0.2.6` is a fine follow-up bump.
+
+Build-time adjustments made during Phase 0 that change nothing in the contract:
+- tsdown emits `.mjs`/`.d.mts`; manifests' `main`/`types`/`exports` point at
+  `lib/*.mjs` + `lib/*.d.mts` (+ `lib/client/index.*` and `lib/service.*`).
+- tsdown uses `deps.neverBundle` (the `external` option is deprecated).
+- vitest: single root config, no `include` override (default globs work from both
+  the workspace root and package dirs); client tests use per-file
+  `// @vitest-environment jsdom`.
+- cordis lifecycle: `apply` uses `ctx.effect(() => ctx.provide(...))` and
+  `ctx.effect(() => ctx.webServer.register(...))` — `effect` takes a callback
+  returning the disposer. `ctx.webServer` typing comes from importing
+  `@deepseek-ai/dsh-host-webserver` (its `declare module` augmentation).

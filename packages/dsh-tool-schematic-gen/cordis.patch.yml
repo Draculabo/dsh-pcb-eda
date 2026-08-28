@@ -1,0 +1,7 @@
+# DSH bundle patch: inserts the Huaqiu schematic generation tool plugin.
+# NOTE: the full inject list (tools, huaqiuAuth, huaqiuArtifacts) is the
+# Phase 2 target; the Phase 0 skeleton keeps ['tools'] so it loads standalone.
+- insert:
+    - id: huaqiu-tool-schematic-gen
+      name: '@huaqiu/dsh-tool-schematic-gen'
+      inject: ['tools']

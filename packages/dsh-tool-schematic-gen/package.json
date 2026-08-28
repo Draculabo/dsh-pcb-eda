@@ -1,0 +1,36 @@
+{
+  "name": "@huaqiu/dsh-tool-schematic-gen",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./lib/index.mjs",
+  "types": "./lib/index.d.mts",
+  "exports": {
+    ".": { "types": "./lib/index.d.mts", "default": "./lib/index.mjs" },
+    "./client": { "types": "./lib/client/index.d.mts", "default": "./lib/client/index.mjs" },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-runtime"] }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.8 <0.2.0",
+    "@huaqiu/dsh-auth": "^0.0.0",
+    "@huaqiu/dsh-artifacts": "^0.0.0",
+    "react": "^18"
+  },
+  "devDependencies": {
+    "@huaqiu/dsh-artifacts": "workspace:*",
+    "@huaqiu/dsh-auth": "workspace:*"
+  },
+  "files": ["lib", "src", "cordis.patch.yml"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "publishConfig": { "access": "public" }
+}
