@@ -32,18 +32,19 @@ import { HuaqiuAuthSidebarAction } from './ui/sidebar-action.jsx'
 export const inject: string[] = ['slots']
 
 /**
- * The Huaqiu tools whose `needs_auth` results surface the login card.
+ * Huaqiu tools that still surface the auth login card via this plugin.
  *
- * Only the schematic/system tools remain here. The three symbol/footprint
- * generation tools are owned by `@huaqiu/dsh-tool-symbol-footprint`'s GenHit
- * card (which renders its own inline login for `needs_auth`), so their keys
- * must NOT be claimed here — otherwise both plugins register the same
- * `tool.call.toolview` key and the winner is ambiguous.
+ * Currently EMPTY: all five Huaqiu tools now own their keyed HIT cards in
+ * their own plugins (`@huaqiu/dsh-tool-symbol-footprint` for the three
+ * symbol/footprint generators, `@huaqiu/dsh-tool-schematic-gen` for the two
+ * schematic/system generators), and each renders its own inline login card for
+ * `needs_auth`. Keeping the toolview keys here would double-register the same
+ * `tool.call.toolview` slot with an ambiguous winner.
+ *
+ * The auth plugin remains the credential owner: the `huaqiuAuth` client
+ * service, the sidebar login entrypoint and the webServer credential channel.
  */
-export const AUTH_TOOL_NAMES = [
-  'generate_schematic_from_description',
-  'generate_system_module_graph',
-] as const
+export const AUTH_TOOL_NAMES: readonly string[] = []
 
 /** Minimal structural client context (dsh-client-runtime provides this). */
 export interface ClientContext {

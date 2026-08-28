@@ -78,9 +78,6 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: '>=0.1.0-rc.8 <0.2.0'
         version: 0.1.0-rc.8(ac9081d1e007de8a90a707560a8ae1c3)
-      react:
-        specifier: ^18
-        version: 18.3.1
     devDependencies:
       '@huaqiu/dsh-artifacts':
         specifier: workspace:*
@@ -88,6 +85,18 @@ importers:
       '@huaqiu/dsh-auth':
         specifier: workspace:*
         version: link:../dsh-auth
+      '@huaqiu/ecad-renderer':
+        specifier: ^0.2.4
+        version: 0.2.4
+      '@huaqiu/kicad-sexpr-parser':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@types/react':
+        specifier: ^18.3.31
+        version: 18.3.31
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
 
   packages/dsh-tool-symbol-footprint:
     dependencies:
