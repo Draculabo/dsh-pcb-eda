@@ -16,9 +16,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build      
       - run: pnpm -r typecheck
       - run: pnpm -r test
-      - run: pnpm -r build
       - run: pnpm -r pack --dry-run
       - name: Pre-publish integrity gate
         run: pnpm run check:publish
