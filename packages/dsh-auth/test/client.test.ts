@@ -65,6 +65,28 @@ function eventLike(origin: string, data: unknown): MessageEvent {
 }
 
 describe('parseAuthMessage / handleAuthMessage', () => {
+  it('carries the avatar (headimage) through to the credential payload', () => {
+    const msg = parseAuthMessage({
+      category: 1,
+      data: { type: 'update_access_token', data: { userId: 6215935, token: 't', headimage: 'https://cdn.eda.cn/a.png' } },
+    })
+    expect(msg).toEqual({ kind: 'token', info: { id: '6215935', token: 't', avatar: 'https://cdn.eda.cn/a.png' } })
+  })
+
+  it('carries the phone (string or number) through to the credential payload', () => {
+    const asString = parseAuthMessage({
+      category: 1,
+      data: { type: 'update_access_token', data: { userId: 6215935, token: 't', phone: '13800000000' } },
+    })
+    expect(asString).toEqual({ kind: 'token', info: { id: '6215935', token: 't', phone: '13800000000' } })
+
+    const asNumber = parseAuthMessage({
+      category: 1,
+      data: { type: 'update_access_token', data: { userId: 6215935, token: 't', phone: 13800000000 } },
+    })
+    expect(asNumber).toEqual({ kind: 'token', info: { id: '6215935', token: 't', phone: '13800000000' } })
+  })
+
   it('parses a valid token envelope from a JSON string (auth.eda.cn form)', () => {
     const msg = parseAuthMessage(JSON.stringify(validEnvelope))
     expect(msg).toEqual({
@@ -168,6 +190,50 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
     expect(storage.get()).toBeNull()
     expect(transport.pushSession).not.toHaveBeenCalled()
     expect(iframes[0]!.remove).not.toHaveBeenCalled()
+  })
+
+  it('login() opens the transparent, click-outside-closable auth.eda.cn embed', () => {
+    const { client, iframes } = makeClient()
+    client.auth.login()
+    expect(iframes).toHaveLength(1)
+    const src = new URL(iframes[0]!.src)
+    expect(`${src.origin}${src.pathname}`).toBe('https://auth.eda.cn/')
+    expect(src.searchParams.get('clickOutsideToClose')).toBe('true')
+    expect(src.searchParams.get('transparent')).toBe('true')
+    // `fill=full` would repaint the embedded page's own background — never sent.
+    expect(src.searchParams.get('fill')).toBeNull()
+    expect(iframes[0]!.style.cssText).toContain('background:transparent')
+  })
+
+  it('the embed is transparent unconditionally — no option can make it opaque', () => {
+    const { client, iframes } = makeClient()
+    // @ts-expect-error `transparent` is gone: transparency is not optional.
+    client.auth.login({ transparent: false })
+    const src = new URL(iframes[0]!.src)
+    expect(src.searchParams.get('transparent')).toBe('true')
+    expect(src.searchParams.get('fill')).toBeNull()
+    expect(iframes[0]!.style.cssText).toContain('background:transparent')
+    expect(iframes[0]!.style.cssText).not.toContain('#fff')
+  })
+
+  it('login() forwards lang (both `lang` and `locale`) and theme to the embed', () => {
+    const { client, iframes } = makeClient()
+    client.auth.login({ lang: 'en', theme: 'dark' })
+    const src = new URL(iframes[0]!.src)
+    expect(src.searchParams.get('lang')).toBe('en')
+    // auth.eda.cn reads `locale`, and its ids are `cn` / `en`
+    // (eda-cn-login LanguageContext#getLangFromUrl) — hq-eda-ai sends only
+    // `lang=zh`, which the embed ignores.
+    expect(src.searchParams.get('locale')).toBe('en')
+    expect(src.searchParams.get('theme')).toBe('dark')
+  })
+
+  it('login() maps zh to the embed locale id `cn`', () => {
+    const { client, iframes } = makeClient()
+    client.auth.login({ lang: 'zh' })
+    const src = new URL(iframes[0]!.src)
+    expect(src.searchParams.get('lang')).toBe('zh')
+    expect(src.searchParams.get('locale')).toBe('cn')
   })
 
   it('group B: a new login overwrites the previous credentials', () => {

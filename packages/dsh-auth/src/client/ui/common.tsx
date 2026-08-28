@@ -1,7 +1,13 @@
 /**
  * Login-state + result rendering helpers shared by the client React cards.
+ *
+ * Every style is a FUNCTION of the active color scheme: the cards are inline
+ * styled (the client bundle ships no CSS file), so light/dark support has to
+ * be expressed in JS. Colors prefer DSH's `--dsw-alias-*` tokens and fall back
+ * to an explicit per-scheme value (see `sidebar-action.tsx`).
  */
 import type { CSSProperties, ReactNode } from 'react'
+import type { Translate } from '../i18n.js'
 
 /** Tool result content block (subset of DSH `ContentBlock`). */
 interface ContentBlockLike {
@@ -37,13 +43,48 @@ export function isNeedsAuthResult(result: Record<string, unknown> | null): resul
 
 export const AUTH_ORIGIN = 'https://auth.eda.cn'
 
-export const CARD_STYLE: CSSProperties = {
-  border: '1px solid #e4e7ec',
-  borderRadius: 10,
-  padding: '12px 14px',
-  margin: '4px 0',
-  background: '#fff',
-  fontFamily: 'inherit',
+/** Card colors for one color scheme (DSH token first, explicit fallback second). */
+export interface CardPalette {
+  surface: string
+  border: string
+  text: string
+  muted: string
+  success: string
+  danger: string
+}
+
+export const LIGHT_CARD_PALETTE: CardPalette = {
+  surface: 'var(--dsw-alias-bg-layer-1, #ffffff)',
+  border: 'var(--dsw-alias-border-l1, #e4e7ec)',
+  text: 'var(--dsw-alias-label-primary, inherit)',
+  muted: 'var(--dsw-alias-label-secondary, #5b6472)',
+  success: 'var(--dsw-alias-state-success-primary, #1677ff)',
+  danger: 'var(--dsw-alias-state-error-primary, #d4380d)',
+}
+
+export const DARK_CARD_PALETTE: CardPalette = {
+  surface: 'var(--dsw-alias-bg-layer-1, #20242c)',
+  border: 'var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.14))',
+  text: 'var(--dsw-alias-label-primary, #e6eaf0)',
+  muted: 'var(--dsw-alias-label-secondary, #8b95a5)',
+  success: 'var(--dsw-alias-state-success-primary, #4cc38a)',
+  danger: 'var(--dsw-alias-state-error-primary, #ff7875)',
+}
+
+export function cardPalette(dark: boolean): CardPalette {
+  return dark ? DARK_CARD_PALETTE : LIGHT_CARD_PALETTE
+}
+
+export function cardStyle(palette: CardPalette): CSSProperties {
+  return {
+    border: `1px solid ${palette.border}`,
+    borderRadius: 10,
+    padding: '12px 14px',
+    margin: '4px 0',
+    background: palette.surface,
+    color: palette.text,
+    fontFamily: 'inherit',
+  }
 }
 
 export const TITLE_STYLE: CSSProperties = {
@@ -52,39 +93,48 @@ export const TITLE_STYLE: CSSProperties = {
   margin: '0 0 6px',
 }
 
-export const DESC_STYLE: CSSProperties = {
-  fontSize: 13,
-  color: '#5b6472',
-  margin: '0 0 10px',
-  lineHeight: 1.5,
-}
-
 export const STATUS_STYLE: CSSProperties = {
   fontSize: 13,
   margin: '0 0 10px',
   lineHeight: 1.5,
 }
 
-export const IFRAME_STYLE: CSSProperties = {
-  width: '100%',
-  height: 520,
-  border: '1px solid #e4e7ec',
-  borderRadius: 8,
-  background: '#fff',
-  display: 'block',
+/**
+ * The embedded login iframe: ALWAYS transparent so the card's own surface
+ * shows through and the login box sits on the host palette in both schemes.
+ */
+export function iframeStyle(palette: CardPalette): CSSProperties {
+  return {
+    width: '100%',
+    height: 520,
+    border: `1px solid ${palette.border}`,
+    borderRadius: 8,
+    background: 'transparent',
+    display: 'block',
+  }
 }
 
-export function StatusLine({ authenticated, nickname }: { authenticated: boolean; nickname?: string }): ReactNode {
+export function StatusLine({
+  authenticated,
+  nickname,
+  palette,
+  t,
+}: {
+  authenticated: boolean
+  nickname?: string
+  palette: CardPalette
+  t: Translate
+}): ReactNode {
   if (authenticated) {
     return (
-      <p style={{ ...STATUS_STYLE, color: '#1677ff' }}>
-        ✓ 已登录{nickname ? `：${nickname}` : ''} —— 现在可以回复助手「已登录，请重试」，助手会重新调用工具。
+      <p style={{ ...STATUS_STYLE, color: palette.success }}>
+        {t('card.loggedIn', { nickname: nickname ? `：${nickname}` : '' })}
       </p>
     )
   }
   return (
-    <p style={{ ...STATUS_STYLE, color: '#d4380d' }}>
-      未登录 —— 请在上方登录华秋 EDA（eda.cn）账号，或点击左侧「华秋EDA登录」按钮；登录完成后让助手重试。
+    <p style={{ ...STATUS_STYLE, color: palette.danger }}>
+      {t('card.loggedOut')}
     </p>
   )
 }

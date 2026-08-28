@@ -2,7 +2,15 @@
  * Auth client core — the Phase 0A POC logic, factored as a testable factory.
  * `apply()` in index.ts wires this to the real window/document/localStorage.
  */
-import { AUTH_ORIGIN, handleAuthMessage, type AuthMessageEventLike, type AuthTokenPayload } from './lib.js'
+import {
+  AUTH_ORIGIN,
+  buildLoginUrl,
+  handleAuthMessage,
+  LOGIN_OVERLAY_STYLE,
+  type AuthMessageEventLike,
+  type AuthTokenPayload,
+  type LoginOptions,
+} from './lib.js'
 import type { AuthStorage } from './storage.js'
 import type { AuthTransport } from './transport.js'
 
@@ -21,7 +29,7 @@ export interface AuthClient {
     isAuthenticated(): boolean
     getAccessToken(): Promise<string | null>
     getUserInfo(): Promise<AuthTokenPayload | null>
-    login(): Promise<void>
+    login(options?: LoginOptions): Promise<void>
     logout(): Promise<void>
     onAuthStateChanged(listener: (info: AuthTokenPayload | null) => void): () => void
   }
@@ -48,12 +56,19 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     if (iframe) iframe.remove()
     iframe = null
   }
-  const openIframe = (): void => {
+  /**
+   * Open the full-viewport auth.eda.cn overlay.
+   *
+   * The embed is ALWAYS transparent: the login card floats over the app
+   * instead of blanking it. `closeOnOutsideClick` asks auth.eda.cn to post
+   * `close_dialog` on an outside click; `lang`/`theme` follow the host UI so
+   * the card matches it. `loginUrl` (deps) overrides the base URL only.
+   */
+  const openIframe = (options: LoginOptions = {}): void => {
     if (iframe) return
     const el = deps.documentLike.createElement('iframe')
-    el.src = loginUrl
-    el.style.cssText =
-      'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:#fff;'
+    el.src = buildLoginUrl({ baseUrl: loginUrl, ...options })
+    el.style.cssText = LOGIN_OVERLAY_STYLE
     deps.documentLike.body.appendChild(el)
     iframe = el
   }
@@ -62,7 +77,7 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     isAuthenticated: (): boolean => storage.get() !== null,
     getAccessToken: async (): Promise<string | null> => storage.get()?.token ?? null,
     getUserInfo: async (): Promise<AuthTokenPayload | null> => storage.get(),
-    login: async (): Promise<void> => openIframe(),
+    login: async (options?: LoginOptions): Promise<void> => openIframe(options ?? {}),
     logout: async (): Promise<void> => {
       storage.clear()
       try {

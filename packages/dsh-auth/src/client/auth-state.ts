@@ -13,7 +13,30 @@ import type { AuthClient } from './client.js'
 export interface AuthState {
   authenticated: boolean
   nickname?: string
+  /** Avatar URL for the sidebar trigger; absent → the HQ icon is shown. */
+  avatar?: string
+  /**
+   * Access token, needed by「Go to profile」(eda.cn takes it from the query
+   * and hides it itself). Kept in the store, never rendered or logged.
+   */
+  token?: string
+  /** Bound mobile number, forwarded to the profile page as `phone=`. */
+  phone?: string
 }
+
+/** Snapshot for one credential payload (`null` = logged out). */
+function stateOf(info: AuthTokenPayloadLike | null): AuthState {
+  if (!info) return { authenticated: false }
+  return {
+    authenticated: true,
+    ...(info.nickname ? { nickname: info.nickname } : {}),
+    ...(info.avatar ? { avatar: info.avatar } : {}),
+    ...(info.token ? { token: info.token } : {}),
+    ...(info.phone ? { phone: info.phone } : {}),
+  }
+}
+
+type AuthTokenPayloadLike = { nickname?: string; avatar?: string; token?: string; phone?: string } | null
 
 let auth: AuthClient['auth'] | null = null
 let state: AuthState = { authenticated: false }
@@ -30,12 +53,10 @@ function setState(next: AuthState): void {
 export function registerAuth(a: AuthClient['auth']): void {
   auth = a
   unsubscribe = a.onAuthStateChanged((info) => {
-    setState(info ? { authenticated: true, ...(info.nickname ? { nickname: info.nickname } : {}) } : { authenticated: false })
+    setState(stateOf(info))
   })
   void a.getUserInfo()
-    .then((info) => {
-      setState(info ? { authenticated: true, ...(info.nickname ? { nickname: info.nickname } : {}) } : { authenticated: false })
-    })
+    .then((info) => setState(stateOf(info)))
     .catch(() => setState({ authenticated: false }))
 }
 

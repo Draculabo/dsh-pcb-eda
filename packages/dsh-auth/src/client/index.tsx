@@ -21,6 +21,7 @@ import { createAuthClient, type AuthClient } from './client.js'
 import { disposeAuth, registerAuth, registerAuthSync } from './auth-state.js'
 import { HuaqiuToolView } from './ui/needs-auth-toolview.jsx'
 import { HuaqiuAuthSidebarAction } from './ui/sidebar-action.jsx'
+import { disposeUiEnv } from './ui-env.js'
 
 /**
  * Client cordis inject: REAL service names only (the loader maps these to
@@ -103,5 +104,6 @@ export function apply(ctx: ClientContext): () => void {
     disposeProvide?.()
     client.dispose()
     disposeAuth()
+    disposeUiEnv()
   }
 }

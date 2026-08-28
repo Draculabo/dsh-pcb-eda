@@ -21,13 +21,114 @@
 
 export const AUTH_ORIGIN = 'https://auth.eda.cn'
 
+/**「Go to profile」destination: the eda.cn account page. */
+export const PROFILE_URL = 'https://www.eda.cn/account/profile'
+
+/**
+ * Build the「Go to profile」URL: the eda.cn account page WITH the access token
+ * in the query, mirroring `hq-eda-ai`'s `UserMenu`
+ * (`/account/profile?token=…&phone=…`).
+ *
+ * The token is always attached: eda.cn consumes it to establish the session
+ * and strips it from the address bar / history itself, so there is nothing to
+ * leak beyond the target site. `encodeURIComponent` is required (not cosmetic):
+ * tokens are base64-ish and may contain `+`, `/` or `=`, and a raw `+` in a
+ * query string decodes to a space, which would corrupt the credential.
+ */
+export function buildProfileUrl(options: { token: string; phone?: string | number }): string {
+  const phone = options.phone === undefined || options.phone === null ? '' : String(options.phone)
+  return `${PROFILE_URL}?token=${encodeURIComponent(options.token)}&phone=${encodeURIComponent(phone)}`
+}
+
+/**
+ * Contract version of the auth.eda.cn embed, shared with the web app
+ * (`hq-eda-ai` LoginDialog) so both send the same cache-busting `v=`.
+ */
+export const AUTH_IFRAME_VERSION = '20260409'
+
+/** UI language of the auth.eda.cn embed. */
+export type AuthLocale = 'zh' | 'en'
+
+/** Color scheme of the auth.eda.cn embed (its own vocabulary: light | dark). */
+export type AuthTheme = 'light' | 'dark'
+
+/**
+ * auth.eda.cn's own language ids, keyed by our locale id.
+ *
+ * The embed reads `?locale=`, NOT `lang`: `eda-cn-login/app/layout.tsx` reads
+ * `urlParams.get('locale')` and `components/ui/LanguageContext.tsx`
+ * (`getLangFromUrl`) only accepts the ids in `locales/index.ts` — `cn` and
+ * `en` (`zh` / `zh_CN` are aliased to `cn` there, but we send the canonical
+ * id outright).
+ *
+ * NOTE: `hq-eda-ai`'s `LoginDialog.tsx` sends `lang=zh`, which the embed
+ * IGNORES, so its login card always falls back to whatever the browser asks
+ * for. We send `locale` (what is actually read) and keep `lang` alongside it
+ * for parity with the web app and forward compatibility.
+ */
+export const AUTH_LOCALE_ID: Record<AuthLocale, string> = { zh: 'cn', en: 'en' }
+
+/**
+ * Options for the auth.eda.cn overlay iframe opened by `auth.login()`.
+ *
+ * The embed is ALWAYS transparent — that is not per-call negotiable. Two
+ * things make it work and neither is optional:
+ *   1. the URL omits `fill=full` (auth.eda.cn's own transparent mode: the
+ *      page then sets `data-iframe-mode` and paints
+ *      `background: transparent`), and also sends `transparent=true`;
+ *   2. the host `<iframe>` element gets `background: transparent`.
+ * Confirmed against `hq-eda-ai` (`LoginDialog.tsx`): it sends
+ * `?v=20260409&clickOutsideToClose=true` with no `fill` at all and its dialog
+ * content is `bg-transparent!` — transparency there likewise comes from the
+ * ABSENCE of `fill=full`.
+ */
+export interface LoginOptions {
+  /** Ask auth.eda.cn to self-close on an outside click (default `true`). */
+  closeOnOutsideClick?: boolean
+  /** Embed UI language (default `zh`). */
+  lang?: AuthLocale
+  /** Embed color scheme (default `light`). */
+  theme?: AuthTheme
+}
+
 export interface AuthTokenPayload {
   id: string
   token: string
   nickname?: string
+  /** User avatar URL (`headimage` in the auth.eda.cn payload). */
+  avatar?: string
+  /** Bound mobile number; forwarded to the eda.cn profile page as `phone=`. */
+  phone?: string
   /** unix seconds; undefined = no expiry */
   expiresAt?: number
 }
+
+/**
+ * Build the auth.eda.cn embed URL.
+ *
+ * `fill=full` is deliberately NEVER sent: that is what keeps the embedded
+ * page's own background transparent (`eda-cn-login/app/page.tsx` only applies
+ * its `bg-transparent` class when `fill` is not `full`). `transparent=true` is
+ * an explicit, forward-compatible hint — older auth.eda.cn builds ignore it
+ * and are transparent by default anyway.
+ */
+export function buildLoginUrl(options: LoginOptions & { baseUrl?: string } = {}): string {
+  const url = new URL(options.baseUrl ?? `${AUTH_ORIGIN}/`)
+  url.searchParams.set('v', AUTH_IFRAME_VERSION)
+  if (options.closeOnOutsideClick !== false) url.searchParams.set('clickOutsideToClose', 'true')
+  url.searchParams.set('transparent', 'true')
+  const lang = options.lang ?? 'zh'
+  // `locale` is the param auth.eda.cn reads; `lang` keeps parity with
+  // hq-eda-ai's LoginDialog (see AUTH_LOCALE_ID).
+  url.searchParams.set('locale', AUTH_LOCALE_ID[lang])
+  url.searchParams.set('lang', lang)
+  url.searchParams.set('theme', options.theme ?? 'light')
+  return url.toString()
+}
+
+/** Inline style of the always-transparent overlay iframe (`auth.login()`). */
+export const LOGIN_OVERLAY_STYLE =
+  'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent;'
 
 export type ParsedAuthMessage =
   | { kind: 'token'; info: AuthTokenPayload }
@@ -79,6 +180,12 @@ export function parseAuthMessage(raw: unknown): ParsedAuthMessage | null {
       const id = stringifyId(record.userId) ?? stringifyId(record.id)
       if (!token || !id) return null
       const nickname = typeof record.nickname === 'string' && record.nickname.length > 0 ? record.nickname : undefined
+      // auth.eda.cn sends the avatar as `headimage`; `avatar` accepted as alias.
+      const avatar = typeof record.headimage === 'string' && record.headimage.length > 0
+        ? record.headimage
+        : typeof record.avatar === 'string' && record.avatar.length > 0 ? record.avatar : undefined
+      // Phone may arrive as a string or a number (mirrors `stringifyId`).
+      const phone = stringifyId(record.phone) ?? undefined
       const expiresAt = typeof record.expires_at === 'number' ? record.expires_at : undefined
       return {
         kind: 'token',
@@ -86,6 +193,8 @@ export function parseAuthMessage(raw: unknown): ParsedAuthMessage | null {
           id,
           token,
           ...(nickname !== undefined ? { nickname } : {}),
+          ...(avatar !== undefined ? { avatar } : {}),
+          ...(phone !== undefined ? { phone } : {}),
           ...(expiresAt !== undefined ? { expiresAt } : {}),
         },
       }
