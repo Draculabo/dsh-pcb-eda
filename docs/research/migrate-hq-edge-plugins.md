@@ -32,6 +32,24 @@ Source inputs:
 3. **Auth** comes from the shared `@huaqiu/dsh-auth` plugin (recommended in `dsh-pcb-eda.md` §10) — never from HQ Edge.
 4. **ERC** explicitly not planned this phase.
 
+**Acceptance criteria** (review #1/#19 — must hold at the end, enforced by CI):
+
+```text
+dsh-pcb-eda
+      │
+      ├── @huaqiu/dsh-auth
+      ├── @huaqiu/dsh-artifacts
+      ├── @huaqiu/dsh-tool-part-search
+      ├── @huaqiu/dsh-tool-symbol-footprint
+      └── @huaqiu/dsh-tool-schematic-gen
+
+NO @hqedge/* anywhere
+```
+
+- **Zero `@hqedge/*` dependency** in any published `package.json` — CI: `pnpm -r why @hqedge` must exit non-zero (fail if any package resolves it).
+- **Zero `@hqedge/` in generated bundles** — CI: `grep -R "@hqedge/" packages/*/lib` must find nothing (a dependency can disappear from `package.json` while remaining bundled).
+- **Final hard acceptance test**: on a completely clean DSH (no hq-edge bridge / HQ Edge server / HQ Edge API), install all five, boot, load, register all 9 tools, and exercise each capability (see §10 Phase 5).
+
 ---
 
 ## 2. Current-State Inventory (verified in hq-edge source)
@@ -82,17 +100,37 @@ Verified from `edge-bridge/lib/index.js` (`createNodeHqEdge`) + `client.js`:
 
 ## 3. Target Architecture (React + TS, community conventions)
 
-Four published packages in one pnpm workspace under `/Users/admin/code/dsh-pcb-eda`:
+Five published packages in one pnpm workspace under `/Users/admin/code/dsh-pcb-eda`:
 
 ```text
 dsh-pcb-eda/
 ├── package.json / pnpm-workspace.yaml / tsconfig.base.json / vitest.config.ts
 └── packages/
     ├── dsh-auth/                 # @huaqiu/dsh-auth            — shared auth plugin (dual-face)
-    ├── dsh-artifacts/            # @huaqiu/dsh-artifacts       — local ECAD artifact store (node-only + webServer routes)
+    ├── dsh-artifacts/            # @huaqiu/dsh-artifacts       — local ECAD artifact service (node service + webServer adapter)
     ├── dsh-tool-part-search/     # @huaqiu/dsh-tool-part-search     — node-only
     ├── dsh-tool-symbol-footprint/# @huaqiu/dsh-tool-symbol-footprint — dual-face
     └── dsh-tool-schematic-gen/   # @huaqiu/dsh-tool-schematic-gen   — dual-face
+```
+
+**Dependency graph** (review #1 — DSH is the runtime boundary; HQ Edge disappears from the graph; `@huaqiu/part-search` is a normal library dependency):
+
+```text
+                         DSH
+                          │
+             ┌────────────┼─────────────┐
+             │            │             │
+          dsh-auth     dsh-artifacts   dsh-tools
+             │            │             │
+             ├────────────┴──────┐      │
+             │                   │      │
+      symbol-footprint      schematic-gen
+             │                   │
+             └──────────┬────────┘
+                        │
+                 part-search
+                        │
+                @huaqiu/part-search
 ```
 
 Each tool package declares (verified manifest shape from `dsh-plugin/dsh-pcb-parts-search`, `dsh-visualize`, `dsh-auth-gate`, and the in-box `ui-tool`):
@@ -148,7 +186,7 @@ Per-package `cordis.patch.yml`:
 ```
 
 **Key convention change from hq-edge**: on official DSH the "zero-import / classic-script client" constraint is **gone**. Use the real DSH APIs:
-- Node: `export const name`, `export const inject = ['huaqiuAuth', 'huaqiuArtifacts', 'tools']`, `export function apply(ctx, config)`, tools via `ctx.tools.register(defineTool({...}))` (`@deepseek-ai/dsh-tools`).
+- Node: `export const name`, `export const inject = ['huaqiuAuth', 'huaqiuArtifacts', 'tools']` (symbol-footprint adds `'userQuestions'` — see §7.2), `export function apply(ctx, config)`, tools via `ctx.tools.register(defineTool({...}))` (`@deepseek-ai/dsh-tools`).
 - Client: `exports.inject = ['@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-locale', '@huaqiu/dsh-auth']`, `exports.apply = (ctx) => ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name:'tool.call.toolview', key, locale }, Component))` (the `packages/client/ui-tool` pattern).
 - Build: `tsdown` (→ `lib/index.js` + `lib/client.js`) + `tsc -p tsconfig.build.json` (→ types); `vitest` node + jsdom client tests; `prepack: build`.
 
@@ -187,21 +225,44 @@ Per-package `cordis.patch.yml`:
    ```
    duplicate `(kind, path)` throws; match order exact → longest prefix → fallback. **Precedent**: hq-edge's own `edge-bridge/lib/index.js` node half already mounts the `/hq-edge` prefix route on DSH's `webServer` ("webServer is DSH's node:http route registry (packages/host/webserver)") — the exact mechanism we reuse.
 
-### 5.1 `@huaqiu/dsh-artifacts` plugin design (node-only + webServer routes)
+### 5.1 `@huaqiu/dsh-artifacts` — a first-class service, HTTP is only an adapter (review #2/#3)
 
 ```
 src/
   index.ts              # name, inject ['webServer']; apply(ctx, config):
                         #   provide 'huaqiuArtifacts' service + register webServer routes
-  service.ts            # port of DshPreviewArtifactService verbatim (fs + meta.json)
-  routes.ts             # GET /:id (meta) + GET /:id/content (stream) handlers
+  service.ts            # port of DshPreviewArtifactService (fs + meta.json) + path hardening
+  routes.ts             # webServer adapter: GET /:id (meta) + GET /:id/content (stream)
   storage.ts            # default baseDir = dshHomePath('artifacts') → ~/.dsh/artifacts/
                         #   (@deepseek-ai/dsh-home-paths resolveDshHome/dshHomePath), config-overridable
 ```
 
-- **Node tools use the service in-process** (`ctx.get('huaqiuArtifacts').create({ type, filename, content })`) — no HTTP loopback needed (both are node-half plugins in the same process). This replaces `hqEdge.api.request({ method:'POST', path:'/api/v1/dsh/artifacts' })` 1:1 and returns the identical `{ id, type, filename, size }` metadata shape, so tool results stay byte-compatible with today. The tool plugins declare it in `inject` (`['huaqiuAuth','huaqiuArtifacts','tools']`) and keep the inline-content fallback when the service is somehow absent (defensive `try/catch`).
-- **Browser fetches same-origin** (`fetch('/api/v1/dsh/artifacts/<id>')` / `/content`) — no CORS, no token, opaque-id lookup exactly as hq-edge's design. The client halves only change their transport (`hqEdge.api.request` GET → plain `fetch`); the card logic is untouched.
-- **No browser half required** — the client fetches the URLs directly. A thin `huaqiuArtifacts` client service could be added later if desired.
+The service is the single unit of truth; the HTTP routes are just one adapter around it (review #2):
+
+```text
+HuaqiuArtifacts            ← interface below; independently testable
+       │
+       ├── Node consumer   ← tools call ctx.get('huaqiuArtifacts').create(...) in-process (HARD RULE, no HTTP loopback)
+       └── webServer adapter ← same-origin GET /api/v1/huaqiu/artifacts/:id[/content]
+```
+
+```ts
+interface HuaqiuArtifacts {
+  create(opts: { type: string; filename: string; content: string | Uint8Array | Buffer;
+                 contentEncoding?: 'utf8' | 'base64'; ttlSeconds?: number })
+    : Promise<{ id: string; type: string; filename: string; size: number }>;
+  get(id: string): Promise<ArtifactMeta | null>;
+  readContent(id: string): Promise<Uint8Array>;
+  openStream(id: string): ReadableStream;
+  delete(id: string): Promise<void>;
+  deleteAll(opts?: { onlyExpired?: boolean }): Promise<number>;
+}
+```
+
+- **Node tools use the service in-process** (`ctx.get('huaqiuArtifacts').create({...})`) — replaces `hqEdge.api.request({ method:'POST', path:'/api/v1/dsh/artifacts' })` 1:1 and returns the identical `{ id, type, filename, size }` metadata shape, so tool results stay byte-compatible with today. The tool plugins declare it in `inject` (`['huaqiuAuth','huaqiuArtifacts','tools']`) and keep the inline-content fallback when the service is somehow absent (defensive `try/catch`).
+- **Route namespace owned by the plugin** (review #3): use `/api/v1/huaqiu/artifacts/<id>` + `/content`, **not** `/api/v1/dsh/artifacts` — the resource belongs to the Huaqiu plugin, not DSH; avoids creating a de-facto global DSH API namespace and sidesteps future duplicate-route throws.
+- **Browser fetches same-origin** (`fetch('/api/v1/huaqiu/artifacts/<id>')` / `/content`) — no CORS, no token; the client halves only change their transport (`hqEdge.api.request` GET → plain `fetch`); the card logic is untouched.
+- **No browser half required** — the client fetches the URLs directly.
 - Storage default `~/.dsh/artifacts/` (`dshHomePath('artifacts')`), overridable by plugin config `{ baseDir }` or env `DSH_HOME`. Its own `cordis.patch.yml` inserts one node row:
   ```yaml
   - insert:
@@ -210,15 +271,21 @@ src/
         inject: ['webServer']      # node:http route registry (official @deepseek-ai/dsh-host-webserver)
   ```
 
+**Path & size hardening** (review #15/#16 — must be in the service + its tests):
+- `id` must match `^art_[0-9a-f]+$` — validated before any path join; `get`/`readContent` on a non-matching id → `null`/404 (never interpolate into the path).
+- `filename` **never** participates in the storage path — only `<id>/content` + `<id>/meta.json`; filename lives in `meta.json` and is used only for `Content-Disposition`.
+- Enforce: max artifact size, max metadata size, TTL, atomic write (tmp+rename), symlink-safe access (`lstat` guard / `realpath` containment under `baseDir`).
+- **Security model** (review #15): unguessable id + **local-only DSH web server** (`127.0.0.1`) + size limits + TTL + path-traversal protection is the MVP; if the web server ever binds `0.0.0.0`, add an auth gate (defer — see §11).
+
 ### 5.2 symbol-footprint
 
 - Node tool result: `{ status:'generated', kind, artifact:{id,type,filename,size}, fileUrl, filename, content?, note?, serviceMessage? }` — **unchanged from today**: `finishGeneration` now stores via `huaqiuArtifacts.create` instead of `hqEdge.api.request`; `artifact` present when storage succeeds, `content` inline as the data-loss fallback.
-- Client preview: `fetch('/api/v1/dsh/artifacts/<id>/content')` → text → render with `@huaqiu/ecad-renderer` (or inline `content`). Download: same URL → blob → save. No `hqEdge.api`, no external fetch.
+- Client preview: `fetch('/api/v1/huaqiu/artifacts/<id>/content')` → text → render with `@huaqiu/ecad-renderer` (or inline `content`). Download: same URL → blob → save. No `hqEdge.api`, no external fetch.
 
 ### 5.3 schematic-gen
 
 - Node system tool result: `{ status:'generated', kind:'system', design_name, module_count, connection_count, module_names, zip_bytes, zipArtifact:{id,type,filename,size}, zip?, note? }` — `zipArtifact` is the **single source of truth** for both preview and download (the earlier hq-edge fix), stored via `huaqiuArtifacts.create` (content base64-encoded for the zip, as today). Inline `zip` data-URL ≤1 MiB fallback only when storage fails.
-- Client: `fetch('/api/v1/dsh/artifacts/<id>/content')` → zip URL/blob → `renderProjectFromZip` (root schematic) + download. Multi-sheet schematic tool keeps per-sheet inline `schFiles` (+ optional `fileUrl`).
+- Client: `fetch('/api/v1/huaqiu/artifacts/<id>/content')` → zip URL/blob → `renderProjectFromZip` (root schematic) + download. Multi-sheet schematic tool keeps per-sheet inline `schFiles` (+ optional `fileUrl`).
 - part-search: no artifacts (JSON text via `@huaqiu/part-search`), unchanged.
 
 ### 5.4 Why local artifacts > direct external `fileUrl` (the earlier §5 alternative)
@@ -251,9 +318,21 @@ interface HuaqiuAuthService {
 }
 ```
 
-- Browser half: `auth.eda.cn` iframe (`?v=&lang=&theme=&clickOutsideToClose=true`), **`event.origin === 'https://auth.eda.cn'` check**, `update_access_token` envelope `{category:1,data:{type:'update_access_token',data}}`, localStorage `token`/`userInfo`, fingerprint silent login, 5-day expiry, `close_dialog`. Pushes token to node half via the DSH host RPC (prototype; see `dsh-pcb-eda.md` §23).
-- Node half: in-memory token cache, `getAccessToken()`/`getUserInfo()` served to tools, `api.request` with `X-Token`.
-- **schematic-gen specifically needs `getUserInfo().id`** for `x-user-id` (the demo account is removed — §8).
+- Browser half: `auth.eda.cn` iframe (`?v=&lang=&theme=&clickOutsideToClose=true`), **`event.origin === 'https://auth.eda.cn'` check**, `update_access_token` envelope `{category:1,data:{type:'update_access_token',data}}`, localStorage `token`/`userInfo`, fingerprint silent login, 5-day expiry, `close_dialog`. Pushes token to node half via the DSH host RPC (prototype in Phase 0A; see `dsh-pcb-eda.md` §23).
+- Node half: in-memory token cache, `getAccessToken()`/`getUserInfo()` served to tools.
+- **Auth is a capability, not a token transport** (review #5): the auth plugin does **not** promise `getAccessToken()` and `getUserInfo().token` are the same credential. Each backend adapter decides what it needs:
+  ```text
+  componentV2 (symbol-footprint WS)   → auth.getAccessToken()   (the ?token= value)
+  gen.eda.cn (schematic-gen headers)  → auth.getUserInfo()      → { id, token } (x-user-id / x-user-token)
+  ```
+  The semantic contract the plugins rely on is only:
+  ```text
+  auth.isAuthenticated()  → boolean         (cheap, sync)
+  auth.getAccessToken()   → string|null     (componentV2 WS token)
+  auth.getUserInfo()      → {id,token,nickname?} | null   (gen.eda.cn identity)
+  ```
+  This keeps `@huaqiu/dsh-auth` uncoupled from either backend; a backend change only touches its adapter.
+- **schematic-gen uses `getUserInfo()`** for `x-user-id`/`x-user-token` (the demo account is removed — §8).
 
 ---
 
@@ -266,15 +345,13 @@ Target: `@huaqiu/dsh-tool-part-search` (node-only, no client).
 ```
 src/
   index.ts            # name, inject ['tools'], apply(); registers 4 tools via defineTool
-  tools/search.ts     # snake_case args → @huaqiu/part-search input; output { schema, render }
-  tools/detail.ts
-  tools/models.ts
-  tools/supply-chain.ts
-  huaqiu.ts           # createPartSearchService() with language/defaults; single instance
+  service.ts          # createPartSearchService() — @huaqiu/part-search wrapper (language/defaults, single instance)
+  tools.ts            # 4 defineTool()s: snake_case args → service.* calls; output { schema, render }
 test/
   index.test.ts       # port of lib/index.test.ts: tool shape, args translation, no hqEdge
 ```
 
+- **Don't over-split** (review #9): start with `index.ts / service.ts / tools.ts` and split only if the files grow — the important separation is **`@huaqiu/part-search` service ↓ DSH tool adapter**, not one file per tool.
 - Replace `hqEdge.api.request` bodies with `service.searchParts(...)` / `getPart(...)` / `getEdaModels(...)` / `getSupplyChain(...)` from `@huaqiu/part-search` (published; add as `dependencies` — not peer, it's a library).
 - Keep the 4 public tool names and the exact snake_case schemas (agent-facing contract unchanged).
 - Keep `TOOL_TIMEOUT_MS` (30 s) and business-code handling (`code === 200000`).
@@ -286,7 +363,8 @@ Target: `@huaqiu/dsh-tool-symbol-footprint` (dual-face).
 
 ```
 src/
-  index.ts                 # name, inject ['huaqiuAuth','huaqiuArtifacts','tools']; apply() registers 3 tools
+  index.ts                 # name, inject ['huaqiuAuth','huaqiuArtifacts','tools','userQuestions'];
+                           #   apply() registers 3 tools
   saas/
     protocol.ts            # CMD / FRAME / ACTION consts, consumeFrame, findAction
     socket.ts              # callComponentAgent() (WS RPC, budgets, token-expired) — port as-is
@@ -294,31 +372,42 @@ src/
     images.ts              # resolveImageDataUrl, guessImageMime, size caps
     artifacts.ts           # extractFileUrl, fetchArtifactText (→ now feeds fileUrl/content)
     commands.ts            # buildCommand (chat/base64_images/history=[])
-  domain/
+  domain/                  # ← PURE TS, zero React/DOM (review #10) → exhaustively unit-tested
     dimensions.ts          # normalizeDimensions, renderDimensionsForHuman,
-                           #   parseDimensionOverrides, confirm*/direct HIL helpers
+                           #   parseDimensionOverrides, classify/validate, bgaGrid, packageSilhouette
     packageTypes.ts        # PACKAGE_TYPES
   tools/
     generateSymbol.ts      # runGenerateSymbol
-    generateFootprintFromImage.ts   # 3-phase + HIL
+    generateFootprintFromImage.ts   # 3-phase + HIL (ask() via injected ctx.userQuestions)
     generateFootprintFromDimensions.ts
-  hil/
-    userQuestions.ts       # ctx.get('userQuestions') seam (same opportunistic pattern)
   client/
     index.tsx              # apply(): inject tool.call.toolview for the 3 keys; locale zh/en
-    project.ts             # projectToolCall, parseGenResult, resultTextOf (pure TS)
-    cards/GenHitCard.tsx   # header/summary/actions (download/regenerate/inspect)
-    cards/DimensionEditor.tsx  # rich editor (SVG + numeric) — port pickGeometry/bgaGrid/etc.
-    ecad/Preview.tsx       # @huaqiu/ecad-renderer mount; fetch fileUrl/content → render
-    download.ts            # fetch fileUrl → blob → save; regenerate via sessions
+    project.ts             # projectToolCall, parseGenResult, resultTextOf (pure TS — state machine)
+    transport.ts           # artifact fetch (fetch '/api/v1/huaqiu/artifacts/<id>[/content]'),
+                           #   sessions sendHumanAnswer, download→blob
+    components/GenHitCard.tsx   # header/summary/actions (download/regenerate/inspect)
+    components/DimensionEditor.tsx  # FIRST-CLASS reusable component (props API below)
+    components/Preview.tsx  # @huaqiu/ecad-renderer mount
     i18n.ts                # zh/en packs (port COPY)
 test/
-  index.test.ts, client.test.ts, saas/*.test.ts, domain/*.test.ts
+  index.test.ts, domain/*.test.ts, client.test.ts (jsdom + @testing-library/react)
 ```
 
-- Node: `inject ['huaqiuAuth','huaqiuArtifacts','tools']`; token via `huaqiuAuth.auth.getAccessToken()`; **artifact storage via `ctx.get('huaqiuArtifacts').create(...)`** (in-process, replaces `createPreviewArtifact`/`hqEdge.api` POST) — `finishGeneration` returns the same `artifact:{id,type,filename,size}` + `fileUrl` + inline-`content` fallback shape as today.
-- `userQuestions` stays opportunistic (`ctx.get('userQuestions')`, not injected) — the HIL contract is unchanged. Keep the **single** HIL: node `ask()` is authoritative; the client dimension editor submits through the `sessions` conversation channel (existing `sendHumanAnswer`). Do not re-add a second popup (the earlier hq-edge "duplicate question" bug).
-- Client: React + TS, keyed toolviews via `ctx.slots.inject('tool.call.toolview', ...)`, `sessions` for regenerate/human-answer, ECAD preview component, dimension editor ported 1:1 (pure geometry math stays pure → unit-testable).
+- Node: `inject ['huaqiuAuth','huaqiuArtifacts','tools','userQuestions']`; token via `huaqiuAuth.auth.getAccessToken()`; **artifact storage via `ctx.get('huaqiuArtifacts').create(...)`** (in-process, replaces `createPreviewArtifact`/`hqEdge.api` POST) — `finishGeneration` returns the same `artifact:{id,type,filename,size}` + `fileUrl` + inline-`content` fallback shape as today.
+- **`userQuestions` is DECLARED in `inject`, not opportunistic** (review #4): the dimension workflow fundamentally requires HIL, so the plugin declares the dependency (`ctx.userQuestions.ask(...)`). *Exception (explicit product decision)*: if we later want **headless** DSH where the tool works without HIL, flip to opportunistic `ctx.get('userQuestions')` — but that is not the current target.
+- **Single-HIL invariant (formal, review #12)**: exactly **one** interactive channel per generation — node `ask()` (authoritative) → React HIT renders the same interaction → client submits via the `sessions` conversation channel → tool resumes. Never a second popup (the earlier hq-edge "duplicate question" bug).
+- **React migration: extract layers, don't translate the 1,885-line classic script literally** (review #10). The client splits into `project.ts` (pure state machine) → `domain/` (pure geometry: extraction, classification, override validation, BGA grid, silhouette, handle movement, normalization) + `transport.ts` (artifacts/sessions/download) → thin React components. `domain/dimensions.ts` is **UI-independent** and unit-tested before React is involved.
+- **`DimensionEditor` is a first-class reusable component** (review #11), not buried in GenHitCard:
+  ```tsx
+  <DimensionEditor
+    geometry={geometry}
+    dimensions={dimensions}
+    onChange={...}
+    onConfirm={...}
+    onCancel={...}
+  />
+  ```
+  HIT layout: `Preview` → `Dimensions/DimensionEditor` → `Actions (Regenerate / Accept / Download)`.
 - Port every unit test; add client component tests with `@testing-library/react` + jsdom.
 
 ### 7.3 schematic-gen (protocol + zip preview)
@@ -348,9 +437,16 @@ test/
   index.test.ts, saas/*.test.ts, client.test.ts
 ```
 
-- **Credentials**: remove the baked-in demo account. Node resolves `x-user-id`/`x-user-token` from `huaqiuAuth.auth.getUserInfo()` (the logged-in eda.cn account) with env override `HQ_EDA_USER_ID`/`HQ_EDA_USER_TOKEN`; fail the tool with a "log in to Huaqiu first" error when neither is present. `state.user_id`/`state.token` filled from the same source.
+- **Credentials — resolve early, structured AUTH_REQUIRED** (review #13): remove the baked-in demo account. Before any CopilotKit request the tool calls `resolveCredentials()`:
+  ```text
+  resolveCredentials()
+       ├── env override (HQ_EDA_USER_ID / HQ_EDA_USER_TOKEN)   ← dev/CI ONLY (§8)
+       ├── authenticated Huaqiu user (huaqiuAuth.auth.getUserInfo())
+       └── otherwise → tool result { status:'AUTH_REQUIRED', ... }  ← never a late 401/403/SSE timeout
+  ```
+  `state.user_id`/`state.token` filled from the same source. A structured `AUTH_REQUIRED` result also makes the HIT trivially renderable (show "Sign in to Huaqiu" instead of an error dump).
 - Artifact: store the zip via `huaqiuArtifacts.create({ type:'zip', filename, content: base64, contentEncoding:'base64' })` → `zipArtifact` (single source of truth, §5.1/§5.3); external datastream-upload → `zipUrl` is only a fallback if no artifacts plugin is mounted.
-- Client: `fetch('/api/v1/dsh/artifacts/<id>/content')` → `renderProjectFromZip` (root schematic) + download; sheet tool renders per-sheet inline `schFiles`.
+- Client: `fetch('/api/v1/huaqiu/artifacts/<id>/content')` → `renderProjectFromZip` (root schematic) + download; sheet tool renders per-sheet inline `schFiles`.
 
 ---
 
@@ -358,14 +454,28 @@ test/
 
 - **Remove the hardcoded demo eda.cn account** from schematic-gen (§7.3). Never ship a real token.
 - Keep: componentV2 host whitelist + endpoint validation; `auth.eda.cn` origin check; image size cap (4 MiB) and artifact fetch cap (512 KiB); dimension-override key validation (only keys the extractor returned); token never logged.
+- **Auth is a capability, not token plumbing** (§6): `@huaqiu/dsh-auth` exposes `isAuthenticated()` / `getAccessToken()` / `getUserInfo()`; each backend adapter maps its own credential. The plugin never promises the two tokens are the same value.
+- **Env credential override is dev/CI ONLY** (review #14): `HQ_EDA_USER_ID`/`HQ_EDA_USER_TOKEN` are a **test/diagnostic escape hatch**, documented as such — never the recommended setup. Production priority: `huaqiuAuth.auth.getUserInfo()`.
 - `@huaqiu/part-search` is public/unauthenticated (kiapi.eda.cn) — no secrets there.
-- Artifacts are served same-origin by opaque id with **no auth gate** (same trust model as hq-edge: ids are random uuids, localhost-only). Do not attach the token to artifact URLs; if an external `fileUrl` is ever used as fallback and is token-gated, route it through `huaqiuAuth.api` server-side instead (§11).
+- **Artifact security model** (review #15): unguessable id (`^art_[0-9a-f]+$`) + **local-only DSH web server** (`127.0.0.1`) + size limits + TTL + path-traversal/symlink protection = MVP. If the web server ever binds `0.0.0.0`, add an auth gate (deferred, §11). Do not attach the token to artifact URLs; if an external `fileUrl` is ever used as fallback and is token-gated, route it through `huaqiuAuth.api` server-side instead.
 
 ---
 
 ## 9. Publishing Workflow
 
-Per package (community conventions, `dsh-plugin/dsh-auth-gate` reference):
+**Release dependency order** (review #18) — publish in this exact sequence:
+
+```text
+@huaqiu/dsh-auth
+        ↓
+@huaqiu/dsh-artifacts
+        ↓
+@huaqiu/dsh-tool-part-search
+        ↓
+@huaqiu/dsh-tool-symbol-footprint
+        ↓
+@huaqiu/dsh-tool-schematic-gen
+```
 
 ```text
 pnpm install
@@ -379,31 +489,55 @@ pnpm --filter @huaqiu/dsh-tool-schematic-gen publish --access public
 
 - `cordis.patch.yml` MUST be in `files`.
 - `dependencies` vs `peerDependencies` (corrected): `@huaqiu/part-search` → **`dependencies`** (plain leaf lib, no shared state — self-contained install); `@huaqiu/ecad-renderer` → **`devDependencies`** (bundled into `lib/client.js`, not needed at runtime); `@huaqiu/dsh-auth`, `@huaqiu/dsh-artifacts` → **peer** (co-installed plugins, like the auth-gate pattern); DSH runtime + `react` + client runtime packages → peer with verified ranges.
-- Verify install: `dsh plugin --profile web add @huaqiu/dsh-auth @huaqiu/dsh-artifacts @huaqiu/dsh-tool-part-search @huaqiu/dsh-tool-symbol-footprint @huaqiu/dsh-tool-schematic-gen` on a stock DSH, then `dsh --profile web --dump-config` shows all five rows.
+- **Compatibility / installation matrix** (review #18 — test before releasing a new version):
+
+  | Test              | Auth | Artifacts | Part | Symbol | Schematic |
+  | ----------------- | ---: | --------: | ---: | -----: | --------: |
+  | Node load         |    ✓ |         ✓ |    ✓ |      ✓ |         ✓ |
+  | Stock DSH         |    ✓ |         ✓ |    ✓ |      ✓ |         ✓ |
+  | Web profile       |    ✓ |         ✓ |    — |      ✓ |         ✓ |
+  | Tool call         |    ✓ |         ✓ |    ✓ |      ✓ |         ✓ |
+  | Client bundle     |    ✓ |         — |    — |      ✓ |         ✓ |
+  | Clean npm install |    ✓ |         ✓ |    ✓ |      ✓ |         ✓ |
+
+  Commands: `dsh plugin --profile web add ...`, `dsh --profile web --dump-config`, then **actual tool invocation** — not just load.
+- **Bundle-size gate** (review #17): add a release check that prints `lib/client.js` size + gzip size per package so ecad-renderer duplication can't quietly grow; keep the bundled-renderer decision (no `dsh-ecad-viewer` yet — premature abstraction).
 
 ---
 
-## 10. Phased Implementation Plan
+## 10. Phased Implementation Plan (review #7/#20 ordering)
 
-- **Phase 0 — foundation**: workspace scaffolding (5 packages, tsdown/tsc/vitest, CI); `@huaqiu/dsh-auth` browser iframe + node twin service (prototype the browser→node token push RPC first — the only genuinely novel piece).
-- **Phase 0.5 — `@huaqiu/dsh-artifacts`**: port `DshPreviewArtifactService` (fs+json, `~/.dsh/artifacts/`) + `ctx.webServer` GET routes (`/api/v1/dsh/artifacts/:id`, `/:id/content`) + `huaqiuArtifacts` in-process service. Validates the webServer-mount mechanism early (mirrors the edge-bridge `/hq-edge` precedent) before any tool depends on it.
-- **Phase 1 — part-search** (no auth, no UI): validates tool-plugin packaging + publish + clean-install. Deliver `@huaqiu/dsh-tool-part-search`.
-- **Phase 2 — symbol-footprint node** (TS port of protocol + HIL + `huaqiuAuth` token + `huaqiuArtifacts` storage): deliver the 3 tools, unit tests green, HIL works via `userQuestions`.
-- **Phase 3 — symbol-footprint client** (React HIT: GenHitCard + DimensionEditor + ECAD preview + sessions actions); port client tests.
-- **Phase 4 — schematic-gen node + client** (CopilotKit TS + zip via `huaqiuArtifacts` + `renderProjectFromZip` card); remove demo creds; deliver both tools.
-- **Phase 5 — release**: publish all five, awesome-list entries, GitHub tags, clean-install verification, README rewrite (currently wrongly claims an HQ Edge connection).
+- **Phase 0 — DSH foundation**: workspace scaffolding (5 packages, tsdown/tsc/vitest, CI); **exact package manifests + `cordis.patch.yml` rows + service/route IDs first** (see `docs/tasks/phase0-implementation-spec.md`); clean **stock-DSH install smoke test** (`dsh plugin --profile web add` a skeleton → boot → `--dump-config`) so the packaging contract is proven before building on it.
+- **Phase 0A — auth token-propagation POC** (review #6): auth.eda.cn iframe → postMessage (origin check) → browser token state → browser→node RPC → `getAccessToken()`/`getUserInfo()`. Test: login / token received / node receives / tool reads / logout / node invalidation / token refresh / reload persistence. Only after green do we build the full auth UI/service.
+- **Phase 0B — `@huaqiu/dsh-artifacts`**: fs+json service (`~/.dsh/artifacts/`, TTL, size/path security) + `webServer` adapter (`/api/v1/huaqiu/artifacts/:id`, `/:id/content`) + `huaqiuArtifacts` in-process service + browser fetch/download tests. Validates the webServer-mount mechanism early.
+- **Phase 1 — part-search** (no auth/browser/artifacts/HIL/WS/React/renderer): smallest vertical slice — package → patch → DSH load → `ctx.tools` → `defineTool` → publish → stock install → tool invocation. Deliver `@huaqiu/dsh-tool-part-search`.
+- **Phase 2 — symbol-footprint node** (TS port of protocol + auth + artifacts + declared `userQuestions` HIL + pure `domain/dimensions`): deliver the 3 tools, unit tests green, single-HIL works.
+- **Phase 3 — symbol-footprint client** (layered React: project.ts → domain + transport → GenHitCard + first-class DimensionEditor + ECAD preview + sessions actions); single-HIL verification; port tests.
+- **Phase 4 — schematic-gen node + client** (CopilotKit TS + `resolveCredentials()`/AUTH_REQUIRED + zip via `huaqiuArtifacts` + `renderProjectFromZip` card); remove demo creds; deliver both tools.
+- **Phase 5 — release + hard acceptance test** (review #19): on a **completely clean DSH** (no hq-edge bridge / HQ Edge server / HQ Edge API), install all five, then verify:
+
+```text
+✓ DSH boots                ✓ all plugins load           ✓ all 9 tools register
+✓ part search works        ✓ auth login works           ✓ symbol generation works
+✓ dimension HIL works      ✓ footprint generation works ✓ artifact preview works
+✓ artifact download works  ✓ schematic generation works ✓ project preview works
+✓ schematic download works ✓ no HQ Edge process running ✓ no @hqedge dependency exists
+```
+
+  Plus: dependency-graph audit (`pnpm -r why @hqedge` fails), bundle audit (`grep -R "@hqedge/" packages/*/lib` empty), security audit, README/docs rewrite (currently wrongly claims an HQ Edge connection), GitHub tags, publish.
 
 ---
 
 ## 11. Risks & Open Questions
 
-- **`webServer` route contract** (`Needs confirmation` in practice): `ctx.webServer.register` throws on duplicate `(kind, path)` — a future plugin could collide on `/api/v1/dsh/artifacts`; use a distinctive path (e.g. `/api/v1/huaqiu/artifacts`) or document the reservation. Verify the route is reachable on the stock web profile (it is — `webserver` row in `web-app` bundle, `@deepseek-ai/dsh-host-webserver`).
-- **Artifact storage location + lifecycle**: default `~/.dsh/artifacts/` (`dshHomePath('artifacts')`); decide TTL/housekeeping (reuse the existing `ttlSeconds` + `deleteAll({onlyExpired})`); confirm disposal unregisters routes + cleans service (the webserver invariant plugin already checks route cleanup on fiber teardown).
+- **`webServer` route contract**: resolved — plugin-owned namespace `/api/v1/huaqiu/artifacts` (review #3) avoids the duplicate-route throw and any de-facto global DSH API namespace. Verify reachability on the stock web profile in Phase 0B (it is — `webserver` row in `web-app` bundle, `@deepseek-ai/dsh-host-webserver`).
+- **Artifact storage location + lifecycle**: default `~/.dsh/artifacts/` (`dshHomePath('artifacts')`); reuse existing `ttlSeconds` + `deleteAll({onlyExpired})`; confirm disposal unregisters routes + cleans service (the webserver invariant plugin already checks route cleanup on fiber teardown).
+- **Deployment boundary** (review #15): `webServer` can bind `127.0.0.1` or `0.0.0.0`. Opaque-id artifacts are an acceptable MVP on `127.0.0.1`; on `0.0.0.0` we need an auth/authorization story before release. Confirm the stock DSH bind in Phase 0B.
 - **`fileUrl` / datastream-upload fetchability** (fallback path only, `Needs confirmation`): if the artifacts plugin is not mounted, the tool falls back to `fileUrl`/inline content; whether those URLs are browser-fetchable cross-origin remains unverified. Local artifacts remove this concern for the primary path.
-- **Client bundle size / ecad-renderer duplication**: bundling `@huaqiu/ecad-renderer` into both tool plugins duplicates it; acceptable at first, revisit via a shared `@huaqiu/dsh-ecad-viewer` client row + `dsh.client.external` if the bundle grows (the module system supports it — `WebBootEntry.external` — but the renderer would need a `/plugins/<id>/client.js` bundle, which it does not ship today).
-- **`userQuestions` + rich-editor HIL**: keep exactly one interactive channel to avoid the earlier hq-edge duplicate-popup bug; confirm `userQuestions` is present on the stock web profile (it is in-box: `packages/interaction/user-questions`).
-- **Browser→node token push RPC**: exact DSH host-RPC shape (prototype in Phase 0).
-- **CopilotKit auth**: real eda.cn account required (demo removed); `gen.eda.cn` may gate by Referer/cookie — verify header-based auth works from Node.
+- **Client bundle size / ecad-renderer duplication**: bundling `@huaqiu/ecad-renderer` into both tool plugins duplicates it; acceptable at first (add the size/gzip gate, §9), revisit via a shared client row + `dsh.client.external` only if it grows — **do not introduce `dsh-ecad-viewer` yet** (review #17).
+- **`userQuestions` availability on web profile**: now **declared in `inject`** (review #4); confirm it is present on the stock web profile (it is in-box: `packages/interaction/user-questions`). The single-HIL invariant (§7.2) is enforced.
+- **Browser→node token push RPC**: exact DSH host-RPC shape (prototype in Phase 0A — the whole point of the POC).
+- **CopilotKit auth**: real eda.cn account required (demo removed); `gen.eda.cn` may gate by Referer/cookie — verify header-based auth works from Node; tools resolve credentials early with structured `AUTH_REQUIRED` (§7.3).
 - **Tool-result size limits**: keeping the zip out of the JSON (artifact id instead) avoids the inline-base64 truncation failure that motivated the artifact store; keep the ≤1 MiB inline fallback + a `note` when neither artifact nor inline is possible.
 - **Package versioning**: DSH runtime is pre-1.0 (`0.1.1-rc.x`); pin compatible peer ranges and re-verify on DSH bumps.
 - **Hot reload for out-of-tree client plugins** (`Needs confirmation`): `client-hmr`/`dev-web` vs `dsh web` restart for external packages.
