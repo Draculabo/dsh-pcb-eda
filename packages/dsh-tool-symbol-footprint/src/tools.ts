@@ -102,6 +102,25 @@ async function resolveToken(auth: HuaqiuAuthService['auth']): Promise<string | n
 }
 
 /**
+ * Structured `needs_auth` result returned when the Huaqiu EDA (eda.cn) login
+ * is missing — the signal that makes login a human-in-the-loop step. The web
+ * client (dsh-auth client half) renders a login card with an embedded
+ * auth.eda.cn iframe for this result; the model asks the user to complete the
+ * login and then retries the tool. Throwing here would hide that HIT surface.
+ */
+export function needsAuth(kind: 'symbol' | 'footprint'): Record<string, unknown> {
+  return {
+    status: 'needs_auth',
+    kind,
+    hint:
+      'This tool requires a Huaqiu EDA (eda.cn) login. The web client is showing ' +
+      'a login card with an embedded eda.cn login iframe — ask the user to complete ' +
+      'the login there (or use the 华秋EDA login button in the sidebar), then call ' +
+      'this tool again.',
+  }
+}
+
+/**
  * Store a generated artifact in the user-wide preview store via the
  * `huaqiuArtifacts` service (in-process — no HTTP loopback).
  */
@@ -256,6 +275,7 @@ export async function runGenerateSymbol(
   const image = await resolveImageDataUrl(args, env.deps)
   const endpoint = resolveEndpoint(env.deps?.processEnv)
   const token = await resolveToken(env.auth)
+  if (token === null) return needsAuth('symbol')
   const url = buildSocketUrl(endpoint, token, env.deps?.random)
 
   const instruction = typeof args.instruction === 'string' ? args.instruction : ''
@@ -293,6 +313,7 @@ export async function runGenerateFootprintFromDimensions(
 
   const endpoint = resolveEndpoint(env.deps?.processEnv)
   const token = await resolveToken(env.auth)
+  if (token === null) return needsAuth('footprint')
   const url = buildSocketUrl(endpoint, token, env.deps?.random)
 
   const extra: Record<string, unknown> = { pkgType, dimensions }
@@ -328,6 +349,7 @@ export async function runGenerateFootprintFromImage(
   const image = await resolveImageDataUrl(args, env.deps)
   const endpoint = resolveEndpoint(env.deps?.processEnv)
   const token = await resolveToken(env.auth)
+  if (token === null) return needsAuth('footprint')
 
   const requestedPkg = typeof args.package_type === 'string'
     ? args.package_type.trim().toLowerCase() : ''
@@ -403,6 +425,21 @@ const IMAGE_PARAMS: ParameterSchemaSpec = {
   },
 }
 
+/**
+ * Agent-awareness note about the Huaqiu EDA login gate, appended to every tool
+ * description. It tells the model that a `needs_auth` result surfaces a login
+ * HIT (embedded eda.cn iframe card) and that it should wait for the user to
+ * log in, then retry — it must not invent credentials or fake a success.
+ */
+const AUTH_GATE_NOTE =
+  'AUTH: This tool requires a Huaqiu EDA (eda.cn) account. If the result has ' +
+  'status "needs_auth", the web client is showing a login card with an embedded ' +
+  'eda.cn login iframe (the human-in-the-loop step). Ask the user to complete the ' +
+  'login there or via the 华秋EDA login button in the sidebar (you may use ' +
+  'ask_user_question with options "已登录，请重试" / "取消" to wait), then call this ' +
+  'tool again. Never invent credentials and never claim success when the result ' +
+  'is needs_auth.'
+
 function createGenerateSymbolTool(env: SymbolFootprintEnv) {
   return defineTool({
     name: 'generate_symbol_from_image',
@@ -415,7 +452,7 @@ function createGenerateSymbolTool(env: SymbolFootprintEnv) {
       'IMPORTANT: The generated symbol renders automatically as a result card in the web client — ' +
       'an interactive canvas preview with a download button. Do NOT paste the symbol source, its ' +
       'file URL, or any fenced code block into your reply; just note in one line that the symbol ' +
-      'was generated.',
+      'was generated. ' + AUTH_GATE_NOTE,
     parameters: {
       ...IMAGE_PARAMS,
       instruction: {
@@ -448,7 +485,7 @@ function createGenerateFootprintFromImageTool(env: SymbolFootprintEnv) {
       'IMPORTANT: The generated footprint renders automatically as a result card in the web client — ' +
       'an interactive canvas preview with a download button. Do NOT paste the footprint source, its ' +
       'file URL, or any fenced code block into your reply; just note in one line that the footprint ' +
-      'was generated (with the package type when known).',
+      'was generated (with the package type when known). ' + AUTH_GATE_NOTE,
     parameters: {
       ...IMAGE_PARAMS,
       package_type: {
@@ -486,7 +523,7 @@ function createGenerateFootprintFromDimensionsTool(env: SymbolFootprintEnv) {
       'IMPORTANT: The generated footprint renders automatically as a result card in the web client — ' +
       'an interactive canvas preview with a download button. Do NOT paste the footprint source, its ' +
       'file URL, or any fenced code block into your reply; just note in one line that the footprint ' +
-      'was generated.',
+      'was generated. ' + AUTH_GATE_NOTE,
     parameters: {
       package_type: {
         type: 'string',

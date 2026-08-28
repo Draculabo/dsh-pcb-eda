@@ -17,14 +17,14 @@ export default defineConfig([
     // Mirrors @deepseek-ai/dsh-client-*/tsdown.client.ts: cjs + browser,
     // entry pinned to lib/client.js, exports live on module.exports.
     name: `${CLIENT_ID}/client`,
-    entry: { client: './src/client/index.ts' },
+    entry: { client: './src/client/index.tsx' },
     outDir: 'lib',
     format: 'cjs',
     platform: 'browser',
     dts: false,
     sourcemap: true,
     clean: false,
-    deps: { neverBundle: [/^@deepseek-ai\//] },
+    deps: { neverBundle: [/^@deepseek-ai\//, 'react', 'react-dom', /^react\//] },
     outputOptions: {
       entryFileNames: 'client.js',
       banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(CLIENT_ID)}, factory: (require) => {`,

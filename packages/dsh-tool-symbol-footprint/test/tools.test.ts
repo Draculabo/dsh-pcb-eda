@@ -28,16 +28,20 @@ function emitOnOpen(action: { action: string; context: unknown }, extra: unknown
   }
 }
 
+function stubAuth(authenticated = true): HuaqiuAuthService['auth'] {
+  return {
+    isAuthenticated: () => authenticated,
+    getAccessToken: async () => (authenticated ? 'tok-1' : null),
+    getUserInfo: async () => (authenticated ? { id: 'u1', token: 'tok-1' } : null),
+    login: async () => {},
+    logout: async () => {},
+    onAuthStateChanged: () => () => {},
+  }
+}
+
 function stubEnv(overrides: Partial<SymbolFootprintEnv> = {}): SymbolFootprintEnv {
   const auth: HuaqiuAuthService = {
-    auth: {
-      isAuthenticated: () => true,
-      getAccessToken: async () => 'tok-1',
-      getUserInfo: async () => ({ id: 'u1', token: 'tok-1' }),
-      login: async () => {},
-      logout: async () => {},
-      onAuthStateChanged: () => () => {},
-    },
+    auth: stubAuth(),
     setCredentials: () => {},
     invalidate: () => {},
   }
@@ -65,6 +69,22 @@ function stubEnv(overrides: Partial<SymbolFootprintEnv> = {}): SymbolFootprintEn
 const FETCH_OK = async (_url: RequestInfo | URL) => new Response('(kicad (version 20231118))')
 
 describe('symbol-footprint tool bodies', () => {
+  it('returns needs_auth for generate_symbol_from_image without a token', async () => {
+    const env = stubEnv({ auth: stubAuth(false) })
+    const result = await runGenerateSymbol({ image_url: 'data:image/png;base64,AAAA' }, undefined, env)
+    expect(result.status).toBe('needs_auth')
+    expect(result.kind).toBe('symbol')
+  })
+
+  it('returns needs_auth for the footprint tools without a token', async () => {
+    const env = stubEnv({ auth: stubAuth(false) })
+    const r1 = await runGenerateFootprintFromImage({ image_url: 'data:image/png;base64,AAAA' }, undefined, env)
+    expect(r1.status).toBe('needs_auth')
+    const r2 = await runGenerateFootprintFromDimensions({ package_type: 'sop', dimensions: { W: 6.2 } }, undefined, env)
+    expect(r2.status).toBe('needs_auth')
+    expect(r2.kind).toBe('footprint')
+  })
+
   it('generate_symbol_from_image stores the generated symbol as an artifact', async () => {
     const env = stubEnv({
       deps: {

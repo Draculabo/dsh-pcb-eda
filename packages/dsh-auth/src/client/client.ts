@@ -29,6 +29,8 @@ export interface AuthClient {
   handleMessageEvent(event: AuthMessageEventLike): void
   /** Re-push persisted credentials on boot (acceptance group D). */
   restore(): Promise<void>
+  /** Re-push persisted credentials on demand (heals a reset/absent node half). */
+  syncNow(): Promise<void>
   dispose(): void
 }
 
@@ -78,6 +80,8 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   }
 
   const handleMessageEvent = (event: AuthMessageEventLike): void => {
+    // Offline deployment: no origin gate (see lib.ts). Envelope validation is
+    // the only gate, so unrelated window messages can never corrupt state.
     const msg = handleAuthMessage({ origin: event.origin, data: event.data })
     if (!msg) return
     if (msg.kind === 'token') {
@@ -88,6 +92,7 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     } else if (msg.kind === 'logout') {
       storage.clear()
       emit(null)
+      void transport.pushLogout().catch(() => { /* node may be absent */ })
       closeIframe()
     } else if (msg.kind === 'close') {
       closeIframe()
@@ -115,10 +120,26 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     auth,
     handleMessageEvent,
     restore,
+    /**
+     * Re-push the persisted credential to the node half. Healing path: the
+     * node keeps auth in memory, so a `dsh web` restart (or a failed first
+     * push) drops it while the browser still has the token. Callers re-sync on
+     * focus / visibilitychange / login-card mount so the tool gate reflects
+     * the actual browser login without requiring a page reload.
+     */
+    async syncNow(): Promise<void> {
+      const info = storage.get()
+      if (!info) return
+      try {
+        await transport.pushSession(info)
+      } catch {
+        /* node may be temporarily unavailable — retried on the next sync */
+      }
+    },
     dispose() {
       deps.windowLike.removeEventListener('message', onWindowMessage)
       closeIframe()
-      void trustedOrigin // referenced for clarity: the gate lives in lib.handleAuthMessage
+      void trustedOrigin // referenced for clarity: the auth iframe URL comes from it
     },
   }
 }

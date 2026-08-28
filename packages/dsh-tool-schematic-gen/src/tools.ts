@@ -207,6 +207,25 @@ async function materializeSchematicArtifacts(env: SchematicGenEnv, schFiles: Sch
 // ── Tool bodies ──────────────────────────────────────────────────────────────
 
 /**
+ * Structured `needs_auth` result returned when the eda.cn login is missing —
+ * the signal that makes login a human-in-the-loop step. The web client
+ * (dsh-auth client half) renders a login card with an embedded auth.eda.cn
+ * iframe for this result; the model asks the user to complete the login and
+ * then retries the tool. Throwing here would hide that HIT surface.
+ */
+export function needsAuth(kind: 'schematic' | 'system'): Record<string, unknown> {
+  return {
+    status: 'needs_auth',
+    kind,
+    hint:
+      'This tool requires a Huaqiu EDA (eda.cn) login. The web client is showing ' +
+      'a login card with an embedded eda.cn login iframe — ask the user to complete ' +
+      'the login there (or use the 华秋EDA login button in the sidebar), then call ' +
+      'this tool again.',
+  }
+}
+
+/**
  * `generate_schematic_from_description` body — stream `schemagen`, extract the
  * inline `.kicad_sch` files, then store each sheet as a preview artifact.
  */
@@ -216,11 +235,7 @@ export async function runGenerateSchematic(
   env: SchematicGenEnv,
 ): Promise<Record<string, unknown>> {
   const account = await resolveAccount(env.auth)
-  if (!account) {
-    throw new Error(
-      'schematic-gen: the design API requires an eda.cn login. Sign in to HQ EDA (huaqiuAuth) and retry.',
-    )
-  }
+  if (!account) return needsAuth('schematic')
   const threadId = newRunId(env)
   const body = buildRunBody(
     agentIds.SCHEMATIC,
@@ -269,11 +284,7 @@ export async function runGenerateSystem(
   env: SchematicGenEnv,
 ): Promise<Record<string, unknown>> {
   const account = await resolveAccount(env.auth)
-  if (!account) {
-    throw new Error(
-      'schematic-gen: the design API requires an eda.cn login. Sign in to HQ EDA (huaqiuAuth) and retry.',
-    )
-  }
+  if (!account) return needsAuth('system')
   const threadId = newRunId(env)
   const body = buildRunBody(
     agentIds.SYSTEM,
@@ -364,6 +375,19 @@ export async function runGenerateSystem(
   return result
 }
 
+/** Agent-awareness note about the eda.cn login gate, appended to both tool
+ *  descriptions: a `needs_auth` result surfaces a login HIT (embedded eda.cn
+ *  iframe card) — wait for the user to log in, then retry. Never invent
+ *  credentials or fake success. */
+const AUTH_GATE_NOTE =
+  'AUTH: This tool requires a Huaqiu EDA (eda.cn) account. If the result has ' +
+  'status "needs_auth", the web client is showing a login card with an embedded ' +
+  'eda.cn login iframe (the human-in-the-loop step). Ask the user to complete the ' +
+  'login there or via the 华秋EDA login button in the sidebar (you may use ' +
+  'ask_user_question with options "已登录，请重试" / "取消" to wait), then call this ' +
+  'tool again. Never invent credentials and never claim success when the result ' +
+  'is needs_auth.'
+
 // ── Tool definitions ─────────────────────────────────────────────────────────
 
 function createSchematicTool(env: SchematicGenEnv) {
@@ -384,7 +408,7 @@ function createSchematicTool(env: SchematicGenEnv) {
       'results get a sheet tab bar) and a download button for the current sheet. ' +
       'Do NOT paste the schematic source, file URLs, or any fenced code block ' +
       'into your reply; just note in one line that the schematic was generated ' +
-      'and how many sheets it has.',
+      'and how many sheets it has. ' + AUTH_GATE_NOTE,
     parameters: {
       description: {
         type: 'string',
@@ -423,7 +447,7 @@ function createSystemTool(env: SchematicGenEnv) {
       'project zip. Do NOT paste the schematic source, file URLs, or any fenced ' +
       'code block into your reply; just note in one line that the design was ' +
       'generated, its module count, and that the project zip is downloadable ' +
-      'from the card.',
+      'from the card. ' + AUTH_GATE_NOTE,
     parameters: {
       description: {
         type: 'string',

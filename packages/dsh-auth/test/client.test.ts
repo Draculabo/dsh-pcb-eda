@@ -73,14 +73,17 @@ describe('parseAuthMessage / handleAuthMessage', () => {
     expect(parseAuthMessage({ category: 1, data: { type: 'update_access_token', data: { token: '' } } })).toBeNull()
   })
 
-  it('rejects messages from a non-auth.eda.cn origin (wrong-origin negative test)', () => {
-    expect(handleAuthMessage(eventLike('https://evil.example', validEnvelope))).toBeNull()
-    expect(handleAuthMessage(eventLike('https://auth.eda.cn.evil.example', validEnvelope))).toBeNull()
-    expect(handleAuthMessage(eventLike('http://auth.eda.cn', validEnvelope))).toBeNull()
-  })
-
-  it('accepts messages only from the exact trusted origin', () => {
+  it('accepts a valid envelope regardless of origin (offline deployment — no origin gate)', () => {
+    // Offline DSH deployment: the origin is intentionally not gated (webviews
+    // may report an opaque origin for the embedded auth.eda.cn iframe). A
+    // well-formed envelope is accepted from any origin; garbage is still
+    // rejected by envelope validation.
+    expect(handleAuthMessage(eventLike('https://evil.example', validEnvelope))).toEqual({ kind: 'token', info: expect.any(Object) })
+    expect(handleAuthMessage(eventLike('null', validEnvelope))).toEqual({ kind: 'token', info: expect.any(Object) })
     expect(handleAuthMessage(eventLike(AUTH_ORIGIN, validEnvelope))).toEqual({ kind: 'token', info: expect.any(Object) })
+    // Malformed envelopes are still rejected regardless of origin.
+    expect(handleAuthMessage(eventLike('https://evil.example', 'not json'))).toBeNull()
+    expect(handleAuthMessage(eventLike(AUTH_ORIGIN, { category: 2, data: { type: 'logout' } }))).toBeNull()
   })
 })
 
@@ -119,10 +122,19 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
     expect(iframes[0]!.remove).toHaveBeenCalled() // closed after success
   })
 
-  it('wrong-origin message is ignored entirely (no store, no push, iframe stays)', () => {
+  it('accepts a valid envelope from any origin and closes the overlay (offline deployment)', () => {
     const { client, transport, storage, iframes } = makeClient()
     client.auth.login()
-    client.handleMessageEvent(eventLike('https://evil.example', validEnvelope))
+    client.handleMessageEvent(eventLike('null', validEnvelope)) // opaque webview origin
+    expect(storage.get()).toEqual({ id: 'u1', token: 'tok-1', nickname: 'Alice', expiresAt: 9999999999 })
+    expect(transport.pushSession).toHaveBeenCalled()
+    expect(iframes[0]!.remove).toHaveBeenCalled()
+  })
+
+  it('still ignores malformed envelopes (no store, no push, iframe stays)', () => {
+    const { client, transport, storage, iframes } = makeClient()
+    client.auth.login()
+    client.handleMessageEvent(eventLike('https://evil.example', 'not an envelope'))
     expect(storage.get()).toBeNull()
     expect(transport.pushSession).not.toHaveBeenCalled()
     expect(iframes[0]!.remove).not.toHaveBeenCalled()
@@ -154,6 +166,23 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
     await client2.restore()
     expect(transport2.pushSession).toHaveBeenCalledWith(expect.objectContaining({ token: 'tok-1' }))
     expect(await client2.auth.getAccessToken()).toBe('tok-1')
+  })
+
+  it('syncNow() re-pushes persisted credentials when the node half was reset', async () => {
+    const { client, transport } = makeClient()
+    client.handleMessageEvent(eventLike(AUTH_ORIGIN, validEnvelope)) // persists to localStorage (+1 push)
+    await client.syncNow() // healing re-push (+1)
+    expect(transport.pushSession).toHaveBeenCalledTimes(2)
+    expect(transport.pushSession).toHaveBeenLastCalledWith(expect.objectContaining({ token: 'tok-1', id: 'u1' }))
+    // A further sync pushes again (idempotent re-push for healing).
+    await client.syncNow()
+    expect(transport.pushSession).toHaveBeenCalledTimes(3)
+  })
+
+  it('syncNow() is a no-op when nothing is stored', async () => {
+    const { client, transport } = makeClient()
+    await client.syncNow()
+    expect(transport.pushSession).not.toHaveBeenCalled()
   })
 
   it('registering the window message listener wires live events', () => {

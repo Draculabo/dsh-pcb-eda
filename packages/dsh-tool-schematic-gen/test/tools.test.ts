@@ -83,10 +83,12 @@ describe('extractModuleGraph', () => {
 })
 
 describe('runGenerateSchematic', () => {
-  it('requires an eda.cn login (no demo credentials)', async () => {
+  it('returns needs_auth (not a throw) when there is no eda.cn login', async () => {
     const env = makeEnv({ auth: stubAuth('', '') })
-    await expect(runGenerateSchematic({ description: 'x' }, undefined, env))
-      .rejects.toThrow(/eda.cn login/)
+    const result = await runGenerateSchematic({ description: 'x' }, undefined, env)
+    expect(result.status).toBe('needs_auth')
+    expect(result.kind).toBe('schematic')
+    expect(String(result.hint)).toMatch(/login/)
   })
 
   it('generates and stores each sheet as a preview artifact', async () => {
@@ -212,5 +214,12 @@ describe('runGenerateSystem', () => {
       },
     })
     await expect(runGenerateSystem({ description: 'x' }, undefined, env)).rejects.toThrow(/no module_graph/)
+  })
+
+  it('returns needs_auth for the system tool without a login', async () => {
+    const env = makeEnv({ auth: stubAuth('', '') })
+    const result = await runGenerateSystem({ description: 'x' }, undefined, env)
+    expect(result.status).toBe('needs_auth')
+    expect(result.kind).toBe('system')
   })
 })
