@@ -171,7 +171,7 @@ describe('i18n', () => {
     })
     const en = probe(useT)
     expect(en.read()('menu.profile')).toBe('Go to profile')
-    expect(en.read()('sidebar.login')).toBe('Huaqiu EDA login')
+    expect(en.read()('sidebar.login')).toBe('Huaqiu EDA AI login')
     en.unmount()
 
     act(() => {

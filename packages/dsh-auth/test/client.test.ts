@@ -3,6 +3,14 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { AUTH_ORIGIN, parseAuthMessage, handleAuthMessage, type AuthTokenPayload } from '../src/client/lib.js'
 import { createAuthStorage } from '../src/client/storage.js'
 import { createAuthClient } from '../src/client/client.js'
+import {
+  DIALOG_CARD_ATTR,
+  DIALOG_CLOSE_ATTR,
+  DIALOG_IFRAME_ATTR,
+  DIALOG_OVERLAY_ATTR,
+  closeLoginDialog,
+  isLoginDialogOpen,
+} from '../src/client/ui/login-dialog.js'
 
 const validEnvelope = {
   category: 1,
@@ -42,26 +50,32 @@ function makeClient() {
     addEventListener: vi.fn((_t: string, fn: (e: MessageEvent) => void) => listeners.push(fn)),
     removeEventListener: vi.fn(() => undefined),
   }
-  const iframes: Array<{ remove: () => void; src: string; style: { cssText: string } }> = []
-  const documentLike = {
-    createElement: vi.fn(() => {
-      const el = { remove: vi.fn(), src: '', style: { cssText: '' } }
-      iframes.push(el)
-      return el
-    }),
-    body: { appendChild: vi.fn() },
-  }
+  // The dialog module builds its DOM with the REAL document. We don't mock
+  // documentLike — the auth client passes the real one through.
   const client = createAuthClient({
     storage,
     transport,
     windowLike: windowLike as never,
-    documentLike: documentLike as never,
+    documentLike: document,
   })
-  return { client, transport, storage, windowLike, documentLike, iframes, listeners }
+  return { client, transport, storage, windowLike, listeners }
 }
 
 function eventLike(origin: string, data: unknown): MessageEvent {
   return { origin, data } as MessageEvent
+}
+
+function findOverlay(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[${DIALOG_OVERLAY_ATTR}]`)
+}
+function findCard(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[${DIALOG_CARD_ATTR}]`)
+}
+function findIframe(): HTMLIFrameElement | null {
+  return document.querySelector<HTMLIFrameElement>(`[${DIALOG_IFRAME_ATTR}]`)
+}
+function findCloseButton(): HTMLButtonElement | null {
+  return document.querySelector<HTMLButtonElement>(`[${DIALOG_CLOSE_ATTR}]`)
 }
 
 describe('parseAuthMessage / handleAuthMessage', () => {
@@ -147,28 +161,199 @@ describe('createAuthStorage', () => {
   })
 })
 
-describe('auth client behaviors (acceptance groups A–D)', () => {
-  beforeEach(() => localStorage.clear())
-  afterEach(() => localStorage.clear())
+describe('login dialog DOM (auth client surface)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    document.body.removeAttribute('data-ds-dark-theme')
+    document.documentElement.removeAttribute('lang')
+    localStorage.clear()
+  })
+  afterEach(() => {
+    closeLoginDialog()
+    document.body.innerHTML = ''
+    document.body.removeAttribute('data-ds-dark-theme')
+    document.documentElement.removeAttribute('lang')
+  })
 
-  it('group A: token message → stored + pushed to node + iframe closed', async () => {
-    const { client, transport, storage, iframes } = makeClient()
+  it('login() mounts a backdrop + card + iframe (NOT a full-viewport iframe)', () => {
+    const { client } = makeClient()
     client.auth.login()
-    expect(iframes).toHaveLength(1) // overlay opened
+    const overlay = findOverlay()
+    const card = findCard()
+    const iframe = findIframe()
+    expect(overlay).not.toBeNull()
+    expect(card).not.toBeNull()
+    expect(iframe).not.toBeNull()
+    // The iframe is INSIDE the card (so the card surface masks Blink's
+    // white base canvas behind the embedded doc's transparent grid rows).
+    expect(card!.contains(iframe)).toBe(true)
+    // The overlay is the full viewport, but the iframe is NOT — it has a
+    // defined max-width / height and lives inside the card.
+    expect(overlay!.style.position).toBe('fixed')
+    expect(iframe!.style.position).not.toBe('fixed')
+    expect(iframe!.style.width).not.toBe('100vw')
+    // The dialog MUST be at least 768px wide so the auth.eda.cn embed's
+    // `md:grid-cols-[2fr_3fr]` 2-column layout (Tailwind `md` = 768px,
+    // measured against the iframe viewport) renders the WeChat QR panel
+    // next to the phone form. Smaller widths silently fall back to a single
+    // column. We cap at 768px (the embed's own `max-w-3xl`) and let the
+    // card fill 100vw on viewports smaller than that.
+    expect(card!.style.cssText).toContain('width: min(100vw, 768px)')
+    expect(iframe!.style.height).toBe('440px')
+    expect(isLoginDialogOpen()).toBe(true)
+  })
+
+  it('iframe element background matches the host card surface (no white canvas in dark mode)', () => {
+    document.body.setAttribute('data-ds-dark-theme', '')
+    const { client } = makeClient()
+    client.auth.login()
+    const card = findCard()!
+    const iframe = findIframe()!
+    // The card and the iframe element share the same surface color — that
+    // is what hides Blink's white default canvas behind the embedded doc's
+    // transparent 20px grid strips.
+    const darkSurface = 'var(--dsw-alias-bg-layer-1, #20242c)'
+    expect(card.style.background).toBe(darkSurface)
+    expect(iframe.style.background).toBe(darkSurface)
+  })
+
+  it('light theme uses a light surface', () => {
+    const { client } = makeClient()
+    client.auth.login()
+    const card = findCard()!
+    const iframe = findIframe()!
+    const lightSurface = 'var(--dsw-alias-bg-layer-1, #ffffff)'
+    expect(card.style.background).toBe(lightSurface)
+    expect(iframe.style.background).toBe(lightSurface)
+    // The card has NO border: a 1px border would shrink the iframe to 766px
+    // on a 768px card, missing the embed's `md:grid-cols` (Tailwind `md`)
+    // threshold by 2px. The card's box-shadow is the only edge.
+    expect(card.style.border).toBe('')
+  })
+
+  it('flipping the host theme updates the card + iframe colors live (mid-session)', async () => {
+    const { client } = makeClient()
+    client.auth.login()
+    expect(findCard()!.style.background).toContain('#ffffff')
+    document.body.setAttribute('data-ds-dark-theme', '')
+    // Give the MutationObserver one tick to fire.
+    await new Promise((r) => setTimeout(r, 0))
+    const card = findCard()!
+    const iframe = findIframe()!
+    expect(card.style.background).toContain('#20242c')
+    expect(iframe.style.background).toContain('#20242c')
+    // Border stays empty after a theme flip (see the previous test).
+    expect(card.style.border).toBe('')
+  })
+
+  it('clicking the backdrop closes the dialog; clicking the card does NOT', () => {
+    const { client } = makeClient()
+    client.auth.login()
+    const overlay = findOverlay()!
+    const card = findCard()!
+    // mousedown on the card — should not close.
+    card.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(isLoginDialogOpen()).toBe(true)
+    // mousedown on the overlay directly — should close.
+    overlay.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(isLoginDialogOpen()).toBe(false)
+  })
+
+  it('Escape closes the dialog', () => {
+    const { client } = makeClient()
+    client.auth.login()
+    expect(isLoginDialogOpen()).toBe(true)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(isLoginDialogOpen()).toBe(false)
+  })
+
+  it('the × button closes the dialog', () => {
+    const { client } = makeClient()
+    client.auth.login()
+    const close = findCloseButton()!
+    close.click()
+    expect(isLoginDialogOpen()).toBe(false)
+  })
+
+  it('a second login() while open is a no-op (idempotent)', () => {
+    const { client } = makeClient()
+    client.auth.login()
+    client.auth.login()
+    expect(document.querySelectorAll(`[${DIALOG_OVERLAY_ATTR}]`)).toHaveLength(1)
+  })
+
+  it('login() forwards lang (both `lang` and `locale`) and theme to the embed', () => {
+    const { client } = makeClient()
+    client.auth.login({ lang: 'en', theme: 'dark' })
+    const src = new URL(findIframe()!.src)
+    expect(src.searchParams.get('lang')).toBe('en')
+    // auth.eda.cn reads `locale`, and its ids are `cn` / `en`
+    // (eda-cn-login LanguageContext#getLangFromUrl) — hq-eda-ai sends only
+    // `lang=zh`, which the embed ignores.
+    expect(src.searchParams.get('locale')).toBe('en')
+    expect(src.searchParams.get('theme')).toBe('dark')
+  })
+
+  it('login() maps zh to the embed locale id `cn`', () => {
+    const { client } = makeClient()
+    client.auth.login({ lang: 'zh' })
+    const src = new URL(findIframe()!.src)
+    expect(src.searchParams.get('lang')).toBe('zh')
+    expect(src.searchParams.get('locale')).toBe('cn')
+  })
+
+  it('the embed URL never sends `fill=full` (that is what keeps the page transparent)', () => {
+    const { client } = makeClient()
+    client.auth.login()
+    const src = new URL(findIframe()!.src)
+    expect(`${src.origin}${src.pathname}`).toBe('https://auth.eda.cn/')
+    expect(src.searchParams.get('fill')).toBeNull()
+    // `clickOutsideToClose` is the other thing auth.eda.cn actually reads.
+    expect(src.searchParams.get('clickOutsideToClose')).toBe('true')
+  })
+
+  it('the embed is transparent unconditionally — no option can make it opaque', () => {
+    const { client } = makeClient()
+    // @ts-expect-error `transparent` is gone: transparency is not optional.
+    client.auth.login({ transparent: false })
+    const src = new URL(findIframe()!.src)
+    expect(src.searchParams.get('transparent')).toBe('true')
+    expect(src.searchParams.get('fill')).toBeNull()
+    // And the iframe element background is the card surface, never #fff.
+    expect(findIframe()!.style.background).not.toBe('#fff')
+  })
+})
+
+describe('auth client behaviors (acceptance groups A–D)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    closeLoginDialog()
+    localStorage.clear()
+  })
+  afterEach(() => {
+    closeLoginDialog()
+    document.body.innerHTML = ''
+    localStorage.clear()
+  })
+
+  it('group A: token message → stored + pushed to node + dialog closed', () => {
+    const { client, transport, storage } = makeClient()
+    client.auth.login()
+    expect(isLoginDialogOpen()).toBe(true)
 
     client.handleMessageEvent(eventLike(AUTH_ORIGIN, JSON.stringify(validEnvelope)))
     expect(storage.get()).toEqual({ id: 'u1', token: 'tok-1', nickname: 'Alice', expiresAt: 9999999999 })
     expect(transport.pushSession).toHaveBeenCalledWith(expect.objectContaining({ token: 'tok-1', id: 'u1' }))
-    expect(iframes[0]!.remove).toHaveBeenCalled() // closed after success
+    expect(isLoginDialogOpen()).toBe(false) // closed after success
   })
 
-  it('accepts a valid envelope from any origin and closes the overlay (offline deployment)', () => {
-    const { client, transport, storage, iframes } = makeClient()
+  it('accepts a valid envelope from any origin and closes the dialog (offline deployment)', () => {
+    const { client, transport, storage } = makeClient()
     client.auth.login()
     client.handleMessageEvent(eventLike('null', validEnvelope)) // opaque webview origin
     expect(storage.get()).toEqual({ id: 'u1', token: 'tok-1', nickname: 'Alice', expiresAt: 9999999999 })
     expect(transport.pushSession).toHaveBeenCalled()
-    expect(iframes[0]!.remove).toHaveBeenCalled()
+    expect(isLoginDialogOpen()).toBe(false)
   })
 
   it('accepts the REAL auth.eda.cn payload where userId/id are numbers (regression)', () => {
@@ -183,57 +368,21 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
     expect(transport.pushSession).toHaveBeenCalledWith(expect.objectContaining({ id: '6215935' }))
   })
 
-  it('still ignores malformed envelopes (no store, no push, iframe stays)', () => {
-    const { client, transport, storage, iframes } = makeClient()
+  it('still ignores malformed envelopes (no store, no push, dialog stays)', () => {
+    const { client, transport, storage } = makeClient()
     client.auth.login()
     client.handleMessageEvent(eventLike('https://evil.example', 'not an envelope'))
     expect(storage.get()).toBeNull()
     expect(transport.pushSession).not.toHaveBeenCalled()
-    expect(iframes[0]!.remove).not.toHaveBeenCalled()
+    expect(isLoginDialogOpen()).toBe(true)
   })
 
-  it('login() opens the transparent, click-outside-closable auth.eda.cn embed', () => {
-    const { client, iframes } = makeClient()
+  it('close_dialog postMessage closes the dialog', () => {
+    const { client } = makeClient()
     client.auth.login()
-    expect(iframes).toHaveLength(1)
-    const src = new URL(iframes[0]!.src)
-    expect(`${src.origin}${src.pathname}`).toBe('https://auth.eda.cn/')
-    expect(src.searchParams.get('clickOutsideToClose')).toBe('true')
-    expect(src.searchParams.get('transparent')).toBe('true')
-    // `fill=full` would repaint the embedded page's own background — never sent.
-    expect(src.searchParams.get('fill')).toBeNull()
-    expect(iframes[0]!.style.cssText).toContain('background:transparent')
-  })
-
-  it('the embed is transparent unconditionally — no option can make it opaque', () => {
-    const { client, iframes } = makeClient()
-    // @ts-expect-error `transparent` is gone: transparency is not optional.
-    client.auth.login({ transparent: false })
-    const src = new URL(iframes[0]!.src)
-    expect(src.searchParams.get('transparent')).toBe('true')
-    expect(src.searchParams.get('fill')).toBeNull()
-    expect(iframes[0]!.style.cssText).toContain('background:transparent')
-    expect(iframes[0]!.style.cssText).not.toContain('#fff')
-  })
-
-  it('login() forwards lang (both `lang` and `locale`) and theme to the embed', () => {
-    const { client, iframes } = makeClient()
-    client.auth.login({ lang: 'en', theme: 'dark' })
-    const src = new URL(iframes[0]!.src)
-    expect(src.searchParams.get('lang')).toBe('en')
-    // auth.eda.cn reads `locale`, and its ids are `cn` / `en`
-    // (eda-cn-login LanguageContext#getLangFromUrl) — hq-eda-ai sends only
-    // `lang=zh`, which the embed ignores.
-    expect(src.searchParams.get('locale')).toBe('en')
-    expect(src.searchParams.get('theme')).toBe('dark')
-  })
-
-  it('login() maps zh to the embed locale id `cn`', () => {
-    const { client, iframes } = makeClient()
-    client.auth.login({ lang: 'zh' })
-    const src = new URL(iframes[0]!.src)
-    expect(src.searchParams.get('lang')).toBe('zh')
-    expect(src.searchParams.get('locale')).toBe('cn')
+    expect(isLoginDialogOpen()).toBe(true)
+    client.handleMessageEvent(eventLike(AUTH_ORIGIN, JSON.stringify({ category: 1, data: { type: 'close_dialog', data: null } })))
+    expect(isLoginDialogOpen()).toBe(false)
   })
 
   it('group B: a new login overwrites the previous credentials', () => {
@@ -244,13 +393,16 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
     expect(storage.get()).toEqual({ id: 'u2', token: 'tok-2' })
   })
 
-  it('group C: logout clears local state and pushes logout to node', async () => {
+  it('group C: logout clears local state, pushes logout to node, and closes an open dialog', async () => {
     const { client, transport, storage } = makeClient()
     client.handleMessageEvent(eventLike(AUTH_ORIGIN, validEnvelope))
+    client.auth.login()
+    expect(isLoginDialogOpen()).toBe(true)
     await client.auth.logout()
     expect(storage.get()).toBeNull()
     expect(transport.pushLogout).toHaveBeenCalled()
     expect(await client.auth.getAccessToken()).toBeNull()
+    expect(isLoginDialogOpen()).toBe(false)
   })
 
   it('group D: restore() re-pushes persisted credentials on boot (reload restore)', async () => {

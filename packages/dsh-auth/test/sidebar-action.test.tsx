@@ -122,19 +122,17 @@ describe('HuaqiuAuthSidebarAction (logged out)', () => {
     expect(menu()).toBeNull()
   })
 
-  it('opens the transparent, click-outside-closable auth.eda.cn overlay on click', async () => {
+  it('opens the login dialog through auth.login on click', async () => {
     const container = await renderSettled()
     const auth = (await import('../src/client/auth-state.js')).getAuth() as unknown as {
       login: ReturnType<typeof vi.fn>
     }
     click(trigger(container))
-    // Transparency is unconditional (no `transparent` flag any more); the host
-    // language and color scheme ride along so the card matches the shell.
-    expect(auth.login).toHaveBeenCalledWith({
-      closeOnOutsideClick: true,
-      lang: 'zh',
-      theme: 'light',
-    })
+    // Transparency and click-outside-close are unconditional (the dialog owns
+    // the DOM and closes on backdrop click, Escape, the × button, and the
+    // embed's `close_dialog` postMessage). The host language and color
+    // scheme ride along so the card matches the shell.
+    expect(auth.login).toHaveBeenCalledWith({ lang: 'zh', theme: 'light' })
     // Logged out: clicking must NOT open the account menu.
     expect(menu()).toBeNull()
   })
@@ -146,26 +144,22 @@ describe('HuaqiuAuthSidebarAction (logged out)', () => {
       login: ReturnType<typeof vi.fn>
     }
     click(trigger(container))
-    expect(auth.login).toHaveBeenCalledWith({
-      closeOnOutsideClick: true,
-      lang: 'en',
-      theme: 'dark',
-    })
+    expect(auth.login).toHaveBeenCalledWith({ lang: 'en', theme: 'dark' })
   })
 
   it('localizes the trigger label (zh / en)', async () => {
     const zh = await renderSettled()
-    expect(trigger(zh).textContent).toContain('华秋EDA登录')
-    expect(trigger(zh).getAttribute('title')).toBe('登录华秋 EDA（eda.cn）账号')
+    expect(trigger(zh).textContent).toContain('华秋EDA AI登录')
+    expect(trigger(zh).getAttribute('title')).toBe('登录华秋 EDA AI（eda.cn）账号')
 
     act(() => {
       setHostEnv({ dark: false, lang: 'en' })
     })
     const en = await renderSettled()
-    expect(trigger(en).textContent).toContain('Huaqiu EDA login')
-    expect(trigger(en).getAttribute('title')).toBe('Sign in to your Huaqiu EDA (eda.cn) account')
+    expect(trigger(en).textContent).toContain('Huaqiu EDA AI login')
+    expect(trigger(en).getAttribute('title')).toBe('Sign in to your Huaqiu EDA AI (eda.cn) account')
     // The store is live: the trigger mounted BEFORE the switch re-rendered too.
-    expect(trigger(zh).textContent).toContain('Huaqiu EDA login')
+    expect(trigger(zh).textContent).toContain('Huaqiu EDA AI login')
   })
 })
 

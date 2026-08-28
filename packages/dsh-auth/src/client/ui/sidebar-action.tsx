@@ -2,11 +2,14 @@
  * `sidebar.footer.action` entry: the Huaqiu EDA account trigger at the bottom
  * of the DSH sidebar (beside Settings).
  *
- * - Not logged in: shows the HQ icon and opens the auth.eda.cn overlay through
- *   `auth.login({ closeOnOutsideClick: true, lang, theme })` — an ALWAYS
- *   TRANSPARENT full-viewport embed that posts `close_dialog` on an outside
- *   click (see `lib.ts#buildLoginUrl`), so the login card floats over the app
- *   instead of blanking it. `lang`/`theme` follow the host UI.
+ * - Not logged in: shows the HQ icon and opens the login dialog through
+ *   `auth.login({ lang, theme })` — a real modal (backdrop + centered card +
+ *   auth.eda.cn iframe) that is ALWAYS TRANSPARENT in the embed itself
+ *   (`fill=full` is never sent, see `lib.ts#buildLoginUrl`), and the card
+ *   surface masks Blink's white base canvas so the login card floats over
+ *   the dimmed app in both light and dark themes. `lang`/`theme` follow the
+ *   host UI. Click on the backdrop, the × button, or Escape closes it, and
+ *   auth.eda.cn's own `close_dialog` postMessage closes it as well.
  * - Logged in: the trigger becomes the user's AVATAR (`headimage` from the
  *   auth.eda.cn payload, HQ icon while it is missing/fails to load) and a click
  *   opens a context menu with「Go to profile」(the eda.cn account page, with
@@ -312,13 +315,12 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
         aria-expanded={menuOpen}
         onClick={() => {
           if (!authenticated) {
-            // Always-transparent embed that closes itself on an outside
-            // click, in the host's language and color scheme.
-            void auth.login({
-              closeOnOutsideClick: true,
-              lang: locale,
-              theme: dark ? 'dark' : 'light',
-            })
+            // Always-transparent embed in the host's language and color scheme;
+            // `closeOnOutsideClick` defaults to true. The login dialog owns
+            // the DOM (backdrop + card + iframe) and closes itself on
+            // backdrop click, Escape, the × button, or the embed's
+            // `close_dialog` postMessage.
+            void auth.login({ lang: locale, theme: dark ? 'dark' : 'light' })
             return
           }
           setMenuOpen((open) => !open)

@@ -32,6 +32,8 @@ const zh = {
   'card.loggedOut': '未登录 —— 请在上方登录华秋 EDA AI（eda.cn）账号，或点击左侧「华秋EDA AI登录」按钮；登录完成后让助手重试。',
   'card.tool': '工具：{tool}',
   'card.empty': '(无输出)',
+
+  'dialog.close': '关闭',
 } as const
 
 /** Every key of the zh dictionary — the contract both languages satisfy. */
@@ -52,6 +54,8 @@ const en: Record<AuthCopyKey, string> = {
   'card.loggedOut': 'Not logged in — sign in above, or use the Huaqiu EDA AI button in the sidebar, then ask the assistant to retry.',
   'card.tool': 'Tool: {tool}',
   'card.empty': '(no output)',
+
+  'dialog.close': 'Close',
 }
 
 const COPY: Record<AuthLocale, Record<AuthCopyKey, string>> = { zh, en }

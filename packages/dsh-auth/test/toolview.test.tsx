@@ -69,7 +69,16 @@ describe('HuaqiuToolView login card', () => {
     expect(src.searchParams.get('locale')).toBe('cn')
     expect(src.searchParams.get('lang')).toBe('zh')
     expect(src.searchParams.get('theme')).toBe('light')
-    expect(iframe(container).style.background).toBe('transparent')
+    // The embedded doc is transparent, but the iframe ELEMENT is painted
+    // with the card surface — that is what masks Blink's white base
+    // canvas behind the embedded doc's transparent grid strips so the
+    // card looks at home in both themes (a "transparent" element bg would
+    // let that white show as a glaring frame in dark mode).
+    expect(iframe(container).style.background).toBe('var(--dsw-alias-bg-layer-1, #ffffff)')
+    // The iframe is 440px tall — sized to the embed's actual painted height
+    // (~390px) + a small buffer for error states. Without this trim the card
+    // would show its own surface as a ~250px gap above and below the form.
+    expect(iframe(container).style.height).toBe('440px')
   })
 
   it('follows the dark palette and the English locale', () => {
@@ -78,14 +87,15 @@ describe('HuaqiuToolView login card', () => {
     const src = new URL(iframe(container).src)
     expect(src.searchParams.get('theme')).toBe('dark')
     expect(src.searchParams.get('locale')).toBe('en')
-    expect(container.textContent).toContain('Huaqiu EDA (eda.cn) login')
+    expect(container.textContent).toContain('Huaqiu EDA AI (eda.cn) login')
     expect(container.textContent).toContain('gen_symbol')
     expect(card(container).style.background).toBe('var(--dsw-alias-bg-layer-1, #20242c)')
+    expect(iframe(container).style.background).toBe('var(--dsw-alias-bg-layer-1, #20242c)')
   })
 
   it('renders the zh copy by default', () => {
     const container = render(needsAuthBlock())
-    expect(container.textContent).toContain('华秋 EDA（eda.cn）登录')
+    expect(container.textContent).toContain('华秋 EDA AI（eda.cn）登录')
     expect(container.textContent).toContain('未登录')
   })
 

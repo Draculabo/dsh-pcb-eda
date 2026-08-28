@@ -100,6 +100,22 @@ export const STATUS_STYLE: CSSProperties = {
 }
 
 /**
+ * Iframe height for both the dialog and the toolview card. Tuned to the
+ * auth.eda.cn login form's actual painted height (≈390px at 768px width,
+ * measured with a magenta iframe element background so the embedded doc's
+ * transparent top/bottom strips are obvious). The dialog and toolview both
+ * use this same number for consistency.
+ *
+ * Note: the auth.eda.cn page wrapper is `grid-rows-[20px_1fr_20px]`, so the
+ * embedded doc always leaves two 20px transparent strips above and below the
+ * form — they are NOT additional empty space we can shave off; they are
+ * always there in the embed's own layout. The 30px buffer above the 390px
+ * content (→ 440) gives the form room to grow slightly on error states
+ * without immediately overflowing.
+ */
+export const LOGIN_IFRAME_HEIGHT = 440
+
+/**
  * The embedded login iframe: painted with the same surface as the wrapping
  * card so the login box blends in both schemes.
  *
@@ -117,7 +133,7 @@ export const STATUS_STYLE: CSSProperties = {
 export function iframeStyle(palette: CardPalette): CSSProperties {
   return {
     width: '100%',
-    height: 520,
+    height: LOGIN_IFRAME_HEIGHT,
     border: `1px solid ${palette.border}`,
     borderRadius: 8,
     background: palette.surface,

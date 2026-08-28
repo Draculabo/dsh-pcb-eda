@@ -6,13 +6,11 @@ import {
   AUTH_ORIGIN,
   buildLoginUrl,
   handleAuthMessage,
-  HOST_SURFACE,
-  LOGIN_OVERLAY_BASE_STYLE,
   type AuthMessageEventLike,
   type AuthTokenPayload,
   type LoginOptions,
 } from './lib.js'
-import { getCurrentDark } from './ui-env.js'
+import { closeLoginDialog, isLoginDialogOpen, openLoginDialog } from './ui/login-dialog.js'
 import type { AuthStorage } from './storage.js'
 import type { AuthTransport } from './transport.js'
 
@@ -49,32 +47,39 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   const loginUrl = deps.loginUrl ?? `${AUTH_ORIGIN}/`
   const { storage, transport } = deps
   const listeners = new Set<(info: AuthTokenPayload | null) => void>()
-  let iframe: ReturnType<typeof deps.documentLike.createElement> | null = null
 
   const emit = (info: AuthTokenPayload | null): void => {
     for (const listener of listeners) listener(info)
   }
   const closeIframe = (): void => {
-    if (iframe) iframe.remove()
-    iframe = null
+    // The dialog module owns the DOM. Tear it down on any close path
+    // (token success, logout, close_dialog postMessage, dispose).
+    if (isLoginDialogOpen()) closeLoginDialog()
   }
   /**
-   * Open the full-viewport auth.eda.cn overlay.
+   * Open the login dialog (backdrop + centered card + auth.eda.cn iframe).
    *
-   * The iframe ELEMENT is painted with the host's app surface (DSH alias
-   * `--dsw-alias-bg-layer-1` with a per-scheme fallback). The embedded doc
-   * itself stays transparent (`fill=full` omitted, `data-iframe-mode` set
-   * there), so the login card paints on the host surface. The two together
-   * avoid Blink's white `BaseBackgroundColor()` default that would otherwise
-   * show as a white "frame" around the card in dark mode.
+   * The dialog is ALWAYS transparent (no `transparent` option exists): the
+   * embedded doc sets its own root to `background: transparent` (we never
+   * send `fill=full`), and the iframe sits inside a host-painted card so
+   * Blink's white base canvas never reaches the user. See the long header
+   * in `ui/login-dialog.ts` for the full why.
    */
   const openIframe = (options: LoginOptions = {}): void => {
-    if (iframe) return
-    const el = deps.documentLike.createElement('iframe')
-    el.src = buildLoginUrl({ baseUrl: loginUrl, ...options })
-    el.style.cssText = `${LOGIN_OVERLAY_BASE_STYLE}background:${HOST_SURFACE[getCurrentDark() ? 'dark' : 'light']};`
-    deps.documentLike.body.appendChild(el)
-    iframe = el
+    if (isLoginDialogOpen()) return
+    const baseUrl = loginUrl
+    openLoginDialog(
+      {
+        ...(options.lang ? { lang: options.lang } : {}),
+        ...(options.theme ? { theme: options.theme } : {}),
+      },
+      () => {
+        // Re-render safety: nothing to do here — the auth client's own state
+        // is just the dialog-open boolean, which `isLoginDialogOpen()` reads
+        // directly from the dialog module.
+        void baseUrl
+      },
+    )
   }
 
   const auth = {

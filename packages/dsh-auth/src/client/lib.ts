@@ -75,12 +75,13 @@ export const AUTH_LOCALE_ID: Record<AuthLocale, string> = { zh: 'cn', en: 'en' }
  * things make it work and neither is optional:
  *   1. the URL omits `fill=full` (auth.eda.cn's own transparent mode: the
  *      page then sets `data-iframe-mode` and paints
- *      `background: transparent`), and also sends `transparent=true`;
- *   2. the host `<iframe>` element gets `background: transparent`.
+ *      `background: transparent`);
+ *   2. the iframe sits inside a host-painted card in the login dialog
+ *      (`ui/login-dialog.ts`), which masks Blink's white base canvas.
  * Confirmed against `hq-eda-ai` (`LoginDialog.tsx`): it sends
- * `?v=20260409&clickOutsideToClose=true` with no `fill` at all and its dialog
- * content is `bg-transparent!` — transparency there likewise comes from the
- * ABSENCE of `fill=full`.
+ * `?v=20260409&clickOutsideToClose=true` with no `fill` at all and its
+ * dialog content is `bg-transparent!` — transparency there likewise comes
+ * from the ABSENCE of `fill=full`.
  */
 export interface LoginOptions {
   /** Ask auth.eda.cn to self-close on an outside click (default `true`). */
@@ -107,10 +108,13 @@ export interface AuthTokenPayload {
  * Build the auth.eda.cn embed URL.
  *
  * `fill=full` is deliberately NEVER sent: that is what keeps the embedded
- * page's own background transparent (`eda-cn-login/app/page.tsx` only applies
- * its `bg-transparent` class when `fill` is not `full`). `transparent=true` is
- * an explicit, forward-compatible hint — older auth.eda.cn builds ignore it
- * and are transparent by default anyway.
+ * page's own background transparent (the deployed page sets
+ * `data-iframe-mode` on `<html>` and the CSS rule
+ * `html[data-iframe-mode=true], html[data-iframe-mode=true] body
+ * { background: 0 0 !important }` makes its root transparent — confirmed by
+ * fetching the deployed chunks). The login dialog (`ui/login-dialog.ts`)
+ * then paints a host-colored card around the iframe so Blink's white base
+ * canvas never reaches the user.
  */
 export function buildLoginUrl(options: LoginOptions & { baseUrl?: string } = {}): string {
   const url = new URL(options.baseUrl ?? `${AUTH_ORIGIN}/`)
@@ -125,30 +129,6 @@ export function buildLoginUrl(options: LoginOptions & { baseUrl?: string } = {})
   url.searchParams.set('theme', options.theme ?? 'light')
   return url.toString()
 }
-
-/**
- * Color the iframe element itself, not just the embedded document.
- *
- * The embedded `data-iframe-mode` page sets its html/body to `background:
- * transparent`, but Blink's `BaseBackgroundColor()` falls back to WHITE
- * whenever the root element's background is transparent — that white shows
- * through wherever the document doesn't paint, producing an obvious white
- * "frame" around the login card in dark mode. Light mode hid this because
- * the white canvas happened to match the light host.
- *
- * Painting the iframe ELEMENT with the host's app surface (DSH's
- * `--dsw-alias-bg-layer-1` token, with a per-scheme fallback) puts a dark
- * sheet in dark mode and a light sheet in light mode, so the login card
- * sits on a surface that blends with the host in both schemes.
- */
-export const HOST_SURFACE = {
-  light: 'var(--dsw-alias-bg-layer-1, #ffffff)',
-  dark: 'var(--dsw-alias-bg-layer-1, #20242c)',
-} as const
-
-/** Base style of the full-viewport overlay iframe, WITHOUT the background. */
-export const LOGIN_OVERLAY_BASE_STYLE =
-  'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;'
 
 export type ParsedAuthMessage =
   | { kind: 'token'; info: AuthTokenPayload }

@@ -120,6 +120,14 @@ function subscribe(callback: () => void): () => void {
   }
 }
 
+/**
+ * Imperative subscription for non-React consumers (e.g. the login dialog's
+ * backdrop/card DOM). The callback fires on every theme or locale flip.
+ */
+export function subscribeUiEnv(callback: () => void): () => void {
+  return subscribe(callback)
+}
+
 const getDark = (): boolean => dark
 const getLocale = (): AuthLocale => locale
 
@@ -130,6 +138,11 @@ const getLocale = (): AuthLocale => locale
  */
 export function getCurrentDark(): boolean {
   return dark
+}
+
+/** Synchronous read of the current host UI locale. */
+export function getCurrentLocale(): AuthLocale {
+  return locale
 }
 
 /** Synchronous read of the current host surface color (matches the palette). */
