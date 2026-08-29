@@ -75,6 +75,12 @@ export function apply(ctx: ClientContext): () => void {
       toolName?: string
       block?: unknown
       sessionId?: string
+      /**
+       * Published as part of `ToolCallOwnerProps` and stable across the
+       * running and settled forms. Forwarded so the card can correlate with
+       * the node half's progress store.
+       */
+      callId?: string
       inspect?: () => void
     }> = (props) =>
       createElement(GenHit, {
@@ -82,6 +88,7 @@ export function apply(ctx: ClientContext): () => void {
         toolName: props.toolName ?? '',
         block: props.block as never,
         sessionId: props.sessionId,
+        callId: props.callId,
         sendPrompt,
         authState: readAuthState(),
       })

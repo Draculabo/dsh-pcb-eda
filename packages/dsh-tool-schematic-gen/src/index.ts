@@ -20,15 +20,24 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { HuaqiuAuthService } from '@huaqiu/dsh-auth'
 import type { HuaqiuArtifacts } from '@huaqiu/dsh-artifacts'
+import type {} from '@deepseek-ai/dsh-host-webserver'
 import { createSchematicGenTools, type SchematicGenDeps } from './tools.js'
 import { resolveConfig } from './config.js'
 import { HTTP_TIMEOUT_MS } from './sse.js'
+import { ProgressStore } from './progress.js'
+import { createProgressHandler, PROGRESS_ROUTE_PREFIX } from './routes.js'
 
 /** Plugin id — matches package.json. */
 export const name = '@huaqiu/dsh-tool-schematic-gen'
 
-/** Cordis services this half depends on. */
-export const inject = ['tools', 'huaqiuAuth', 'huaqiuArtifacts'] as const
+/**
+ * Cordis services this half depends on.
+ *
+ * `webServer` carries the live-progress route that the browser card polls.
+ * It is already transitively required, because `@huaqiu/dsh-artifacts`
+ * (which we inject as `huaqiuArtifacts) declares it too.
+ */
+export const inject = ['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer'] as const
 
 /** Console tag for filtering in logs. */
 const LOG_TAG = '[dsh-schematic-gen]'
@@ -70,12 +79,28 @@ export function apply(ctx: Context, config: SchematicGenPluginConfig = {}): () =
   if (config.exportZipUrl) configOverride.HQ_EDA_EXPORT_ZIP_URL = config.exportZipUrl
   const finalConfig = resolveConfig({ ...(typeof process !== 'undefined' ? process.env : undefined), ...configOverride })
 
+  // Live progress: an in-memory store the tool bodies write to and the browser
+  // card polls. Best-effort — when the webServer surface is missing the tools
+  // still generate, they simply cannot report progress.
+  const progress = new ProgressStore()
+  if (ctx.webServer && typeof ctx.webServer.register === 'function') {
+    ctx.effect(() => ctx.webServer.register({
+      kind: 'prefix',
+      path: PROGRESS_ROUTE_PREFIX,
+      handler: createProgressHandler(progress),
+    }))
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn(LOG_TAG, 'webServer unavailable — live progress reporting is disabled')
+  }
+
   const deps: SchematicGenDeps = {}
   const env = {
     config: finalConfig,
     auth: auth.auth,
     artifacts,
     timeoutMs: HTTP_TIMEOUT_MS,
+    progress,
     deps,
   }
 
@@ -97,6 +122,7 @@ export function apply(ctx: Context, config: SchematicGenPluginConfig = {}): () =
         // One failing unregister must not hide the others.
       }
     }
+    progress.sweep()
   }
 }
 

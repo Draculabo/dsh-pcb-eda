@@ -24,6 +24,7 @@ import {
 } from './ecad.js'
 import { useLocale, useTheme } from './theme.js'
 import { buildLoginUrl, loginIframeBackground } from './login-url.js'
+import { LiveProgress } from './stack-frame.jsx'
 
 /** Login-state view used by the needs_auth card (from the auth plugin's shared localStorage). */
 export interface AuthStateLike {
@@ -40,6 +41,14 @@ export interface GenHitProps {
   toolName: string
   block?: ToolBlockLike
   sessionId?: string
+  /**
+   * Tool call id from the `tool.call.toolview` slot. DSH guarantees it is
+   * "stable across running and settled forms", and it is the SAME string the
+   * node half receives as `ToolRunContext.callId` — which is exactly what the
+   * progress store is keyed by. No callId means no live stack, but the card
+   * still renders.
+   */
+  callId?: string
   inspect?: () => void
   authState?: AuthStateLike
   sendPrompt?: PromptSender
@@ -294,9 +303,16 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
 
   const headerKind = result?.kind ?? kindOf(props.toolName)
 
-  // generating
+  // generating — a run takes 10+ minutes, so show live progress rather than a
+  // frozen label. `LiveProgress` owns its own polling and degrades to the
+  // coarse stage ladder when the backend emits no trace events.
   if (state.phase === 'generating') {
-    return <div className="hq-sch">{header(headerKind, 'generating', t)}</div>
+    return (
+      <div className="hq-sch">
+        {header(headerKind, 'generating', t)}
+        <LiveProgress callId={props.callId} kind={headerKind === 'system' ? 'system' : 'schematic'} t={t} />
+      </div>
+    )
   }
 
   // failed

@@ -32,6 +32,8 @@ import {
   type SchematicGenConfig,
 } from './config.js'
 import { consumeCopilotkit, exportModuleGraphZip, HTTP_TIMEOUT_MS } from './sse.js'
+import type { RunProgress } from './progress.js'
+import type { TraceEvent } from './trace.js'
 
 /** Structural alias of the DSH `JsonValue` (see part-search Phase 1 §15.2.1). */
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
@@ -75,6 +77,12 @@ export interface SchematicGenEnv {
   /** `huaqiuArtifacts` node service — preview-artifact store. */
   artifacts: HuaqiuArtifacts
   timeoutMs: number
+  /**
+   * Optional live-progress sink, keyed by the tool call id. Absent in tests
+   * and when the `webServer` service is unavailable — progress reporting is
+   * best-effort and must never be able to fail a generation.
+   */
+  progress?: RunProgress | null
   deps?: SchematicGenDeps
 }
 
@@ -96,6 +104,48 @@ async function resolveAccount(auth: HuaqiuAuthService['auth']): Promise<EdaAccou
 /** Fresh run id, injectable for tests. */
 function newRunId(env: SchematicGenEnv): string {
   return typeof env.deps?.uuidImpl === 'function' ? env.deps.uuidImpl() : randomUUID()
+}
+
+/**
+ * Minimal structural view of DSH's `ToolRunContext`. We only need two fields:
+ * `signal` (cancellation) and `callId` — the tool-call identity that the
+ * `tool.call.toolview` slot hands to the browser component as `props.callId`.
+ * Typed structurally so tests can pass a plain object.
+ */
+export interface ToolExecLike {
+  signal?: AbortSignal
+  callId?: string
+}
+
+export interface RunProgressHandle {
+  onTrace(events: TraceEvent[]): void
+  onState(state: Record<string, unknown>): void
+  done(): void
+  failed(message: string): void
+}
+
+/**
+ * Bind one tool invocation to the progress store.
+ *
+ * Every returned callback is a no-op when there is no store or no `callId`,
+ * so a tool can call these unconditionally.
+ */
+function progressFor(
+  env: SchematicGenEnv,
+  exec: ToolExecLike | undefined,
+  toolName: string,
+  kind: 'schematic' | 'system',
+): RunProgressHandle {
+  const store = env.progress
+  const callId = typeof exec?.callId === 'string' && exec.callId.length > 0 ? exec.callId : ''
+  const live = store && callId ? { store, callId } : null
+  if (live) live.store.start(live.callId, toolName, kind)
+  return {
+    onTrace: (events) => { if (live) live.store.pushTrace(live.callId, events) },
+    onState: (state) => { if (live) live.store.updateState(live.callId, state) },
+    done: () => { if (live) live.store.finish(live.callId) },
+    failed: (message) => { if (live) live.store.fail(live.callId, message) },
+  }
 }
 
 /** Store a generated artifact in the user-wide preview store (in-process). */
@@ -231,7 +281,7 @@ export function needsAuth(kind: 'schematic' | 'system'): Record<string, unknown>
  */
 export async function runGenerateSchematic(
   args: Record<string, unknown>,
-  exec: { signal?: AbortSignal } | undefined,
+  exec: ToolExecLike | undefined,
   env: SchematicGenEnv,
 ): Promise<Record<string, unknown>> {
   const account = await resolveAccount(env.auth)
@@ -245,19 +295,35 @@ export async function runGenerateSchematic(
     typeof args.user_language === 'string' ? args.user_language : undefined,
     threadId,
   )
-  const { state, text } = await consumeCopilotkit(env.config.copilotkitUrl, body, buildHeaders(env.config, account, threadId), {
-    signal: exec?.signal,
-    timeoutMs: env.timeoutMs,
-    fetchImpl: env.deps?.fetchImpl,
-  })
+  const prog = progressFor(env, exec, 'generate_schematic_from_description', 'schematic')
+  let state: Record<string, unknown>
+  let text: string
+  try {
+    const res = await consumeCopilotkit(env.config.copilotkitUrl, body, buildHeaders(env.config, account, threadId), {
+      signal: exec?.signal,
+      timeoutMs: env.timeoutMs,
+      fetchImpl: env.deps?.fetchImpl,
+      onTrace: prog.onTrace,
+      onState: prog.onState,
+    })
+    state = res.state
+    text = res.text
+  } catch (err) {
+    prog.failed(String((err as Error)?.message || err))
+    throw err
+  }
   const extracted = extractSchematic(state)
   if (extracted.error) {
-    throw new Error('schematic-gen: the schematic agent finished with an error: ' + extracted.error +
-      (text ? ' — ' + text.slice(0, 300) : ''))
+    const message = 'schematic-gen: the schematic agent finished with an error: ' + extracted.error +
+      (text ? ' — ' + text.slice(0, 300) : '')
+    prog.failed(message)
+    throw new Error(message)
   }
   if (extracted.schFiles.length === 0) {
-    throw new Error('schematic-gen: the schematic agent produced no .kicad_sch files.' +
-      (text ? ' Assistant said: ' + text.slice(0, 300) : ''))
+    const message = 'schematic-gen: the schematic agent produced no .kicad_sch files.' +
+      (text ? ' Assistant said: ' + text.slice(0, 300) : '')
+    prog.failed(message)
+    throw new Error(message)
   }
   const materialized = await materializeSchematicArtifacts(env, extracted.schFiles)
   const result: Record<string, unknown> = {
@@ -270,6 +336,7 @@ export async function runGenerateSchematic(
     project_achieve_url: extracted.project_achieve_url,
   }
   if (materialized.note) result.note = materialized.note
+  prog.done()
   return result
 }
 
@@ -280,7 +347,7 @@ export async function runGenerateSchematic(
  */
 export async function runGenerateSystem(
   args: Record<string, unknown>,
-  exec: { signal?: AbortSignal } | undefined,
+  exec: ToolExecLike | undefined,
   env: SchematicGenEnv,
 ): Promise<Record<string, unknown>> {
   const account = await resolveAccount(env.auth)
@@ -294,23 +361,42 @@ export async function runGenerateSystem(
     typeof args.user_language === 'string' ? args.user_language : undefined,
     threadId,
   )
-  const { state, text } = await consumeCopilotkit(env.config.copilotkitUrl, body, buildHeaders(env.config, account, threadId), {
-    signal: exec?.signal,
-    timeoutMs: env.timeoutMs,
-    fetchImpl: env.deps?.fetchImpl,
-  })
+  const prog = progressFor(env, exec, 'generate_system_module_graph', 'system')
+  let state: Record<string, unknown>
+  let text: string
+  try {
+    const res = await consumeCopilotkit(env.config.copilotkitUrl, body, buildHeaders(env.config, account, threadId), {
+      signal: exec?.signal,
+      timeoutMs: env.timeoutMs,
+      fetchImpl: env.deps?.fetchImpl,
+      onTrace: prog.onTrace,
+      onState: prog.onState,
+    })
+    state = res.state
+    text = res.text
+  } catch (err) {
+    prog.failed(String((err as Error)?.message || err))
+    throw err
+  }
   const moduleGraph = extractModuleGraph(state)
   if (!moduleGraph) {
     const errState = typeof state.error === 'string' && state.error ? state.error : ''
-    throw new Error('schematic-gen: the system design agent produced no module_graph.' +
+    const message = 'schematic-gen: the system design agent produced no module_graph.' +
       (errState ? ' Error: ' + errState : '') +
-      (text ? ' Assistant said: ' + text.slice(0, 300) : ''))
+      (text ? ' Assistant said: ' + text.slice(0, 300) : '')
+    prog.failed(message)
+    throw new Error(message)
   }
 
+  // The stage ladder already reports "export" (module_graph is filled) while
+  // this POST runs, so no extra phase marker is needed here.
   const zipBuf = await exportModuleGraphZip(env.config.exportZipUrl, moduleGraph, env.config, account, {
     signal: exec?.signal,
     timeoutMs: env.timeoutMs,
     fetchImpl: env.deps?.fetchImpl,
+  }).catch((err: unknown) => {
+    prog.failed(String((err as Error)?.message || err))
+    throw err
   })
 
   const designName = typeof state.design_name === 'string' && state.design_name
@@ -372,6 +458,7 @@ export async function runGenerateSystem(
     }
   }
   if (notes.length > 0) result.note = notes.join(' ')
+  prog.done()
   return result
 }
 

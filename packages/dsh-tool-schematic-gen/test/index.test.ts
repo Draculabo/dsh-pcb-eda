@@ -6,9 +6,17 @@ type Tool = { name: string }
 
 function ctxStub() {
   const registered: unknown[] = []
+  const routes: Array<{ kind: string; path: string; handler?: unknown }> = []
   return {
     registered,
+    routes,
     ctx: {
+      // Cordis runs the callback immediately and keeps its return value as the
+      // disposer; the stub mirrors that so route registration is observable.
+      effect: (fn: () => unknown) => { fn() },
+      webServer: {
+        register: (spec: { kind: string; path: string; handler?: unknown }) => (routes.push(spec), () => {}),
+      },
       tools: { register: (d: unknown) => (registered.push(d), () => {}) },
       huaqiuAuth: {
         auth: {
@@ -34,7 +42,9 @@ function ctxStub() {
 describe('@huaqiu/dsh-tool-schematic-gen plugin', () => {
   it('exposes the expected node plugin shape', () => {
     expect(name).toBe('@huaqiu/dsh-tool-schematic-gen')
-    expect(inject).toEqual(['tools', 'huaqiuAuth', 'huaqiuArtifacts'])
+    // `webServer` mounts the progress route the browser card polls while a
+    // 10-minute generation runs.
+    expect(inject).toEqual(['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer'])
     expect(agentIds.SCHEMATIC).toBe('schemagen')
     expect(agentIds.SYSTEM).toBe('modular_circuit')
   })
@@ -58,6 +68,22 @@ describe('@huaqiu/dsh-tool-schematic-gen plugin', () => {
   it('throws loudly when the artifacts service is missing', () => {
     const { ctx } = ctxStub()
     expect(() => apply({ ...ctx, huaqiuArtifacts: undefined } as never)).toThrow(/huaqiuArtifacts/)
+  })
+
+  it('mounts the live-progress route when webServer is available', () => {
+    const { ctx, routes } = ctxStub()
+    const dispose = apply(ctx as never)
+    expect(routes).toMatchObject([{ kind: 'prefix', path: '/api/v1/huaqiu/schematic-gen/progress' }])
+    expect(typeof (routes[0] as { handler?: unknown }).handler).toBe('function')
+    dispose()
+  })
+
+  it('still registers the tools when webServer is unavailable (progress degrades, generation does not)', () => {
+    const { ctx, routes, registered } = ctxStub()
+    const dispose = apply({ ...ctx, webServer: undefined } as never)
+    expect(routes).toEqual([])
+    expect(registered).toHaveLength(2)
+    dispose()
   })
 
   it('has no @hqedge dependency and no demo credentials', async () => {

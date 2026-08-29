@@ -6,6 +6,7 @@
  */
 import type { EdaAccount, SchematicGenConfig } from './config.js'
 import { buildExportHeaders } from './config.js'
+import { collectTraceEvents, isTraceEventName, type TraceEvent } from './trace.js'
 
 /**
  * Overall SSE / zip budget — the eda.cn design agents routinely run 9–12+
@@ -41,6 +42,10 @@ export interface HandleEventResult {
   text?: string
   finished?: boolean
   error?: string
+  /** Execution-trace events decoded from an AG-UI `CUSTOM` frame. */
+  trace?: TraceEvent[]
+  /** Set when `state` was mutated, so the caller can resample progress. */
+  stateChanged?: boolean
 }
 
 /**
@@ -49,17 +54,32 @@ export interface HandleEventResult {
  */
 export function handleEvent(evt: unknown, state: Record<string, unknown>): HandleEventResult {
   if (!evt || typeof evt !== 'object') return {}
-  const record = evt as { type?: unknown; snapshot?: unknown; delta?: unknown; error?: unknown; message?: unknown }
+  const record = evt as {
+    type?: unknown
+    snapshot?: unknown
+    delta?: unknown
+    error?: unknown
+    message?: unknown
+    /** `CUSTOM` only — the custom event name, e.g. `SCHEMATIC_GENERATOR_TRACE`. */
+    name?: unknown
+    /** `CUSTOM` only — the payload; here one (or many) `TraceEvent`s. */
+    value?: unknown
+  }
   const type = record.type
   if (type === 'STATE_SNAPSHOT') {
     if (record.snapshot && typeof record.snapshot === 'object') {
       Object.assign(state, record.snapshot)
     }
-    return {}
+    return { stateChanged: true }
   }
   if (type === 'STATE_DELTA') {
     applyDelta(record.delta, state)
-    return {}
+    return { stateChanged: true }
+  }
+  if (type === 'CUSTOM') {
+    if (!isTraceEventName(record.name)) return {}
+    const events = collectTraceEvents(record.value)
+    return events.length > 0 ? { trace: events } : {}
   }
   if (type === 'TEXT_MESSAGE_CONTENT') {
     return { text: typeof (evt as { delta?: unknown }).delta === 'string' ? (evt as { delta: string }).delta : '' }
@@ -73,8 +93,24 @@ export function handleEvent(evt: unknown, state: Record<string, unknown>): Handl
   return {}
 }
 
+/**
+ * Live stream accumulator. The optional callbacks fire as each event arrives
+ * rather than only at the end — that is what makes a 10-minute run report
+ * progress while it is still running.
+ */
+interface Accumulator {
+  text: string
+  finished: boolean
+  error: string
+  trace: TraceEvent[]
+  /** Called with each batch of trace events, immediately as they decode. */
+  onTrace?: (events: TraceEvent[]) => void
+  /** Called after any state mutation, so the progress ladder can resample. */
+  onState?: (state: Record<string, unknown>) => void
+}
+
 /** Parse one `data: …` SSE block into event(s) and route them through `handleEvent`. */
-function dispatchRaw(raw: string, state: Record<string, unknown>, accumulate: { text: string; finished: boolean; error: string }): void {
+function dispatchRaw(raw: string, state: Record<string, unknown>, acc: Accumulator): void {
   const lines = raw.split(/\r?\n/)
   for (const line of lines) {
     const trimmed = line.trim()
@@ -88,15 +124,20 @@ function dispatchRaw(raw: string, state: Record<string, unknown>, accumulate: { 
       continue // keep-alives / comments are ignored
     }
     const r = handleEvent(evt, state)
-    if (r.text) accumulate.text += r.text
-    if (r.finished) accumulate.finished = true
-    if (r.error) accumulate.error = r.error
+    if (r.text) acc.text += r.text
+    if (r.finished) acc.finished = true
+    if (r.error) acc.error = r.error
+    if (r.trace && r.trace.length > 0) {
+      for (const ev of r.trace) acc.trace.push(ev)
+      acc.onTrace?.(r.trace)
+    }
+    if (r.stateChanged) acc.onState?.(state)
   }
 }
 
 /** Decode a chunk, split on SSE boundaries, dispatch complete events, return
  *  the unterminated remainder. */
-function feed(chunkStr: string, state: Record<string, unknown>, leftover: string, acc: { text: string; finished: boolean; error: string }): string {
+function feed(chunkStr: string, state: Record<string, unknown>, leftover: string, acc: Accumulator): string {
   const combined = leftover + chunkStr
   const parts = combined.split(/\r?\n\r?\n/)
   const newLeftover = parts.pop() || ''
@@ -111,6 +152,10 @@ export interface ConsumeOptions {
   signal?: AbortSignal | null
   timeoutMs?: number
   fetchImpl?: typeof fetch
+  /** Live execution-trace events, pushed as each `CUSTOM` frame decodes. */
+  onTrace?: (events: TraceEvent[]) => void
+  /** Called after every state mutation (snapshot or delta), for the stage ladder. */
+  onState?: (state: Record<string, unknown>) => void
 }
 
 /**
@@ -122,7 +167,7 @@ export async function consumeCopilotkit(
   body: Record<string, unknown>,
   headers: Record<string, string>,
   options: ConsumeOptions = {},
-): Promise<{ state: Record<string, unknown>; finished: boolean; text: string }> {
+): Promise<{ state: Record<string, unknown>; finished: boolean; text: string; trace: TraceEvent[] }> {
   const { signal, timeoutMs = HTTP_TIMEOUT_MS, fetchImpl = fetch } = options
   const controller = new AbortController()
   const timer = setTimeout(
@@ -168,7 +213,14 @@ export async function consumeCopilotkit(
   const decoder = new TextDecoder()
   let buf = ''
   const state: Record<string, unknown> = {}
-  const acc = { text: '', finished: false, error: '' }
+  const acc: Accumulator = {
+    text: '',
+    finished: false,
+    error: '',
+    trace: [],
+    onTrace: options.onTrace,
+    onState: options.onState,
+  }
 
   try {
     for (;;) {
@@ -188,7 +240,7 @@ export async function consumeCopilotkit(
     throw new Error('schematic-gen: the design agent reported an error: ' + acc.error +
       (acc.text ? ' — ' + acc.text.slice(0, 300) : ''))
   }
-  return { state, finished: acc.finished, text: acc.text }
+  return { state, finished: acc.finished, text: acc.text, trace: acc.trace }
 }
 
 export interface ExportZipOptions {
