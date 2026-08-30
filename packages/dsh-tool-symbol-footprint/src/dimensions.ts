@@ -60,7 +60,7 @@ export function normalizeDimensions(context: unknown): ExtractedDimensions {
  *
  * Two deliberate refusals:
  *   - a key the extractor did not return is NOT applied; it is reported.
- *   - a non-numeric value for a numeric slot is NOT applied; it is reported.
+ *   - an invalid value for a typed slot is NOT applied; it is reported.
  */
 export function parseDimensionOverrides(
   text: string,
@@ -96,6 +96,15 @@ export function parseDimensionOverrides(
         continue
       }
       overrides[key] = numeric
+      continue
+    }
+    if (typeof base[key] === 'boolean') {
+      const normalized = rawValue.toLowerCase()
+      if (normalized !== 'true' && normalized !== 'false') {
+        badValues.push(rawKey + '=' + rawValue)
+        continue
+      }
+      overrides[key] = normalized === 'true'
       continue
     }
     overrides[key] = rawValue
