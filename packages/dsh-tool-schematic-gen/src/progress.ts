@@ -41,10 +41,18 @@ export interface StageSpec {
 
 /** A non-empty value: null/empty-string/empty-array/empty-object/false are not. */
 function filled(v: unknown): boolean {
-  if (v === null || v === undefined || v === false) return false
-  if (typeof v === 'string') return v.trim().length > 0
-  if (Array.isArray(v)) return v.length > 0
-  if (typeof v === 'object') return Object.keys(v as Record<string, unknown>).length > 0
+  if (v === null || v === undefined || v === false) {
+    return false
+  }
+  if (typeof v === 'string') {
+    return v.trim().length > 0
+  }
+  if (Array.isArray(v)) {
+    return v.length > 0
+  }
+  if (typeof v === 'object') {
+    return Object.keys(v as Record<string, unknown>).length > 0
+  }
   return true
 }
 
@@ -87,10 +95,14 @@ export function stageOf(
   state: Record<string, unknown>,
 ): { index: number; total: number; key: string } | null {
   const ladder = STAGE_LADDERS[kind]
-  if (!ladder || ladder.length === 0) return null
+  if (!ladder || ladder.length === 0) {
+    return null
+  }
   let reached = 0
   for (const spec of ladder) {
-    if (!spec.reached(state)) break
+    if (!spec.reached(state)) {
+      break
+    }
     reached += 1
   }
   // `index` is the stage currently IN PROGRESS (0-based); clamp to the last
@@ -160,8 +172,12 @@ export class ProgressStore {
 
   /** Register a run. Safe to call twice for the same id (idempotent). */
   start(callId: string, toolName: string, kind: RunKind): void {
-    if (!callId) return
-    if (this.runs.has(callId)) return
+    if (!callId) {
+      return
+    }
+    if (this.runs.has(callId)) {
+      return
+    }
     const ts = this.now()
     this.runs.set(callId, {
       doc: {
@@ -183,8 +199,12 @@ export class ProgressStore {
   /** Append trace events and re-pair the frame list. */
   pushTrace(callId: string, events: readonly TraceEvent[]): void {
     const rec = this.runs.get(callId)
-    if (!rec || events.length === 0) return
-    for (const ev of events) rec.events.push(ev)
+    if (!rec || events.length === 0) {
+      return
+    }
+    for (const ev of events) {
+      rec.events.push(ev)
+    }
     if (rec.events.length > MAX_FRAMES * 4) {
       // Keep the tail: newer spans are what the user is waiting on. Frames
       // already derived from dropped starts simply stay unclosed.
@@ -197,7 +217,9 @@ export class ProgressStore {
   /** Merge an agent state snapshot and re-evaluate the stage ladder. */
   updateState(callId: string, state: Record<string, unknown>): void {
     const rec = this.runs.get(callId)
-    if (!rec) return
+    if (!rec) {
+      return
+    }
     Object.assign(rec.state, state)
     rec.doc.stage = stageOf(rec.doc.kind, rec.state)
     rec.doc.updatedAt = this.now()
@@ -205,7 +227,9 @@ export class ProgressStore {
 
   finish(callId: string): void {
     const rec = this.runs.get(callId)
-    if (!rec) return
+    if (!rec) {
+      return
+    }
     rec.doc.status = 'completed'
     rec.doc.updatedAt = this.now()
     // Close any span still open — the stream ended, so nothing is running.
@@ -219,7 +243,9 @@ export class ProgressStore {
 
   fail(callId: string, message: string): void {
     const rec = this.runs.get(callId)
-    if (!rec) return
+    if (!rec) {
+      return
+    }
     rec.doc.status = 'failed'
     rec.doc.error = message
     rec.doc.updatedAt = this.now()
@@ -236,7 +262,9 @@ export class ProgressStore {
   /** Snapshot for the HTTP route, or `null` when unknown/expired. */
   get(callId: string): ProgressDoc | null {
     const rec = this.runs.get(callId)
-    if (!rec) return null
+    if (!rec) {
+      return null
+    }
     if (this.now() - rec.doc.updatedAt > this.ttlMs) {
       this.runs.delete(callId)
       return null
@@ -249,7 +277,9 @@ export class ProgressStore {
     const out: ProgressDoc[] = []
     for (const callId of [...this.runs.keys()]) {
       const doc = this.get(callId)
-      if (doc) out.push(doc)
+      if (doc) {
+        out.push(doc)
+      }
     }
     return out
   }
