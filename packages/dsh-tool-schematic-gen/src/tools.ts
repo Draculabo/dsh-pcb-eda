@@ -32,7 +32,7 @@ import {
   type SchematicGenConfig,
 } from './config.js'
 import { consumeCopilotkit, exportModuleGraphZip, HTTP_TIMEOUT_MS } from './sse.js'
-import type { RunProgress } from './progress.js'
+import type { ProgressNote, RunProgress, TodoItem } from './progress.js'
 import type { TraceEvent } from './trace.js'
 
 /** Structural alias of the DSH `JsonValue` (see part-search Phase 1 §15.2.1). */
@@ -120,6 +120,8 @@ export interface ToolExecLike {
 export interface RunProgressHandle {
   onTrace(events: TraceEvent[]): void
   onState(state: Record<string, unknown>): void
+  onTodos(todos: TodoItem[]): void
+  onNote(note: ProgressNote): void
   done(): void
   failed(message: string): void
 }
@@ -143,6 +145,8 @@ function progressFor(
   return {
     onTrace: (events) => { if (live) live.store.pushTrace(live.callId, events) },
     onState: (state) => { if (live) live.store.updateState(live.callId, state) },
+    onTodos: (todos) => { if (live) live.store.setTodos(live.callId, todos) },
+    onNote: (note) => { if (live) live.store.setNote(live.callId, note) },
     done: () => { if (live) live.store.finish(live.callId) },
     failed: (message) => { if (live) live.store.fail(live.callId, message) },
   }
@@ -371,6 +375,12 @@ export async function runGenerateSystem(
       fetchImpl: env.deps?.fetchImpl,
       onTrace: prog.onTrace,
       onState: prog.onState,
+      onTodos: prog.onTodos,
+      onNote: prog.onNote,
+      // `modular_circuit` does NOT emit CUSTOM trace events — its stack
+      // arrives as the standard AG-UI tool-call lifecycle. Without this the
+      // system-design card reported no progress at all.
+      toolCallTrace: true,
     })
     state = res.state
     text = res.text

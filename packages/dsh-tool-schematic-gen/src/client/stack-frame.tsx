@@ -11,7 +11,7 @@
  * every visual decision lives in a DSH design token with a literal fallback.
  */
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import type { ProgressDoc, RunKind } from '../progress.js'
+import type { ProgressDoc, ProgressNote, RunKind, TodoItem } from '../progress.js'
 import { buildTree, countStatus, formatDuration, formatElapsed, type StackNode } from './trace-tree.js'
 import { useElapsed, useNow, useProgress } from './progress.js'
 import type { Translate } from './i18n.js'
@@ -56,6 +56,7 @@ const StackFrame = memo(function StackFrame({ node, now, running }: FrameProps):
       <span className={dotClass(node.status)} />
       <span className={nameClass} title={node.name}>{node.name}</span>
       <span className="hq-sch__frame-meta">
+        {node.repeat > 1 ? <span className="hq-sch__frame-count">×{node.repeat}</span> : null}
         {hasChildren && counts.total > 0
           ? <span className="hq-sch__frame-count">{counts.finished}/{counts.total}</span>
           : null}
@@ -124,6 +125,52 @@ function StageLadder({ stage, failed }: { stage: ProgressDoc['stage']; failed: b
   return <div className="hq-sch__ladder">{steps}</div>
 }
 
+// ── system-design extras ──────────────────────────────────────────────────
+
+/**
+ * The agent's own words about what it is doing.
+ *
+ * `modular_circuit` publishes these from its `emitWorkflowProgress`
+ * middleware — one `start` announcement when a stage opens and one `complete`
+ * when it closes. It is the only narrative signal the system agent gives us,
+ * and it is what makes a 10-minute wait feel attended to.
+ */
+function NoteLine({ note }: { note: ProgressNote }): ReactElement | null {
+  if (!note.message) return null
+  const cls = note.phase === 'error'
+    ? 'hq-sch__note-line hq-sch__note-line--error'
+    : note.phase === 'complete'
+      ? 'hq-sch__note-line hq-sch__note-line--complete'
+      : 'hq-sch__note-line'
+  return (
+    <div className={cls}>
+      {note.phase === 'start' ? <span className="hq-sch__note-spin" /> : null}
+      <span>{note.message}</span>
+    </div>
+  )
+}
+
+/** Mark glyph per todo status — no icon dependency in a client bundle. */
+function todoMark(status: TodoItem['status']): string {
+  if (status === 'completed') return '✓'
+  if (status === 'in_progress') return '▸'
+  return '·'
+}
+
+function TodoList({ todos }: { todos: TodoItem[] }): ReactElement | null {
+  if (todos.length === 0) return null
+  return (
+    <ul className="hq-sch__todos">
+      {todos.map((todo, i) => (
+        <li key={i} className={`hq-sch__todo hq-sch__todo--${todo.status}`}>
+          <span className="hq-sch__todo-mark">{todoMark(todo.status)}</span>
+          <span className="hq-sch__todo-text">{todo.content}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 // ── the whole live block ──────────────────────────────────────────────────
 
 export interface LiveProgressProps {
@@ -173,7 +220,9 @@ export function LiveProgress({ callId, kind, t }: LiveProgressProps): ReactEleme
         <span>{label}</span>
         <span className="hq-sch__progress-timer">{formatElapsed(elapsed)}</span>
       </div>
+      {doc?.note ? <NoteLine note={doc.note} /> : null}
       <StageLadder stage={doc?.stage ?? null} failed={doc?.status === 'failed'} />
+      {doc?.todos && doc.todos.length > 0 ? <TodoList todos={doc.todos} /> : null}
       {tree.length > 0
         ? <StackList nodes={tree} now={now} running={running} />
         : null}

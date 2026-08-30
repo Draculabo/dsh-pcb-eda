@@ -6,7 +6,11 @@
  */
 import type { EdaAccount, SchematicGenConfig } from './config.js'
 import { buildExportHeaders } from './config.js'
-import { collectTraceEvents, isTraceEventName, type TraceEvent } from './trace.js'
+import {
+  collectTraceEvents, isTraceEventName, ToolCallTracker,
+  type TraceEvent,
+} from './trace.js'
+import type { ProgressNote, TodoItem } from './progress.js'
 
 /**
  * Overall SSE / zip budget — the eda.cn design agents routinely run 9–12+
@@ -38,6 +42,49 @@ export function applyDelta(delta: unknown, state: Record<string, unknown>): void
   }
 }
 
+/**
+ * Custom-event name the `modular_circuit` (system design) agent uses for
+ * everything that is NOT a tool call: a rolling todo list and human-readable
+ * stage announcements (`packages/agents/system-design/src/utils/progress.ts`).
+ */
+export const SYSTEM_DESIGN_EVENT_NAME = 'SYSTEM_DESIGN_EVENT'
+
+/** Read a string field that may be camelCase (AG-UI) or snake_case (older builds). */
+function strField(rec: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const v = rec[key]
+    if (typeof v === 'string' && v.length > 0) return v
+  }
+  return ''
+}
+
+/** Parse one `todo_progress` entry; anything else is dropped. */
+function parseTodo(value: unknown): TodoItem | null {
+  if (!value || typeof value !== 'object') return null
+  const rec = value as Record<string, unknown>
+  const content = typeof rec['content'] === 'string' ? rec['content'] : ''
+  if (content.length === 0) return null
+  const status = rec['status']
+  return {
+    content,
+    status: status === 'completed' ? 'completed' : status === 'in_progress' ? 'in_progress' : 'pending',
+  }
+}
+
+/** Parse a design-stage announcement (`kind: "progress"`). */
+function parseNote(value: Record<string, unknown>): ProgressNote | null {
+  const message = typeof value['message'] === 'string' ? value['message'].trim() : ''
+  if (message.length === 0) return null
+  const phase = value['phase']
+  const stage = typeof value['stage'] === 'string' ? value['stage'] : ''
+  return {
+    phase: phase === 'complete' ? 'complete' : phase === 'error' ? 'error' : 'start',
+    stage,
+    message,
+    ts: typeof value['ts'] === 'number' && Number.isFinite(value['ts']) ? value['ts'] : Date.now(),
+  }
+}
+
 export interface HandleEventResult {
   text?: string
   finished?: boolean
@@ -46,13 +93,27 @@ export interface HandleEventResult {
   trace?: TraceEvent[]
   /** Set when `state` was mutated, so the caller can resample progress. */
   stateChanged?: boolean
+  /** Rolling todo list from the system-design agent. */
+  todos?: TodoItem[]
+  /** Human-readable stage announcement from the system-design agent. */
+  note?: ProgressNote
+  /** `RUN_STARTED` — reset any per-run bookkeeping. */
+  runStarted?: boolean
 }
 
 /**
  * Handle one decoded SSE event, mutating `state` and returning any text /
  * lifecycle signals for the caller to aggregate.
+ *
+ * `tracker` is required only for agents that report progress through the
+ * standard AG-UI tool-call lifecycle instead of `CUSTOM` trace events —
+ * that is, `modular_circuit` (system design).
  */
-export function handleEvent(evt: unknown, state: Record<string, unknown>): HandleEventResult {
+export function handleEvent(
+  evt: unknown,
+  state: Record<string, unknown>,
+  tracker?: ToolCallTracker,
+): HandleEventResult {
   if (!evt || typeof evt !== 'object') return {}
   const record = evt as {
     type?: unknown
@@ -65,6 +126,7 @@ export function handleEvent(evt: unknown, state: Record<string, unknown>): Handl
     /** `CUSTOM` only — the payload; here one (or many) `TraceEvent`s. */
     value?: unknown
   }
+  const rec = evt as Record<string, unknown>
   const type = record.type
   if (type === 'STATE_SNAPSHOT') {
     if (record.snapshot && typeof record.snapshot === 'object') {
@@ -76,8 +138,49 @@ export function handleEvent(evt: unknown, state: Record<string, unknown>): Handl
     applyDelta(record.delta, state)
     return { stateChanged: true }
   }
+  if (type === 'RUN_STARTED') {
+    tracker?.reset()
+    return { runStarted: true }
+  }
+  // ── standard AG-UI tool-call lifecycle ────────────────────────────────
+  // This is how `modular_circuit` reports its stack. The schematic agent uses
+  // CUSTOM trace events for the same purpose, so `tracker` is only supplied
+  // for the system tool and these branches stay inert otherwise.
+  if (type === 'TOOL_CALL_START' && tracker) {
+    const id = strField(rec, 'toolCallId', 'tool_call_id')
+    const name = strField(rec, 'toolCallName', 'tool_call_name') || 'unknown'
+    return { trace: [tracker.start(id, name)] }
+  }
+  if (type === 'TOOL_CALL_END' && tracker) {
+    const id = strField(rec, 'toolCallId', 'tool_call_id')
+    const ev = tracker.end(id)
+    return ev ? { trace: [ev] } : {}
+  }
   if (type === 'CUSTOM') {
-    if (!isTraceEventName(record.name)) return {}
+    const name = typeof record.name === 'string' ? record.name : ''
+    // System-design progress: a todo list and/or a stage announcement. Neither
+    // is a TraceEvent, so it must be checked BEFORE the trace-name test —
+    // `SYSTEM_DESIGN_EVENT` does not end in `_TRACE` and would be dropped.
+    if (name === SYSTEM_DESIGN_EVENT_NAME) {
+      const value = record.value
+      if (value && typeof value === 'object') {
+        const payload = value as Record<string, unknown>
+        if (payload['kind'] === 'todo_progress' && Array.isArray(payload['todos'])) {
+          const todos: TodoItem[] = []
+          for (const item of payload['todos']) {
+            const todo = parseTodo(item)
+            if (todo) todos.push(todo)
+          }
+          return todos.length > 0 ? { todos } : {}
+        }
+        if (payload['kind'] === 'progress') {
+          const note = parseNote(payload)
+          return note ? { note } : {}
+        }
+      }
+      return {}
+    }
+    if (!isTraceEventName(name)) return {}
     const events = collectTraceEvents(record.value)
     return events.length > 0 ? { trace: events } : {}
   }
@@ -107,6 +210,15 @@ interface Accumulator {
   onTrace?: (events: TraceEvent[]) => void
   /** Called after any state mutation, so the progress ladder can resample. */
   onState?: (state: Record<string, unknown>) => void
+  /** Called with a fresh todo list from the system-design agent. */
+  onTodos?: (todos: TodoItem[]) => void
+  /** Called with each stage announcement from the system-design agent. */
+  onNote?: (note: ProgressNote) => void
+  /**
+   * Tool-call lifecycle → trace adapter. Present only for agents that report
+   * their stack through `TOOL_CALL_START`/`TOOL_CALL_END`.
+   */
+  tracker?: ToolCallTracker
 }
 
 /** Parse one `data: …` SSE block into event(s) and route them through `handleEvent`. */
@@ -123,7 +235,7 @@ function dispatchRaw(raw: string, state: Record<string, unknown>, acc: Accumulat
     } catch {
       continue // keep-alives / comments are ignored
     }
-    const r = handleEvent(evt, state)
+    const r = handleEvent(evt, state, acc.tracker)
     if (r.text) acc.text += r.text
     if (r.finished) acc.finished = true
     if (r.error) acc.error = r.error
@@ -131,6 +243,8 @@ function dispatchRaw(raw: string, state: Record<string, unknown>, acc: Accumulat
       for (const ev of r.trace) acc.trace.push(ev)
       acc.onTrace?.(r.trace)
     }
+    if (r.todos && r.todos.length > 0) acc.onTodos?.(r.todos)
+    if (r.note) acc.onNote?.(r.note)
     if (r.stateChanged) acc.onState?.(state)
   }
 }
@@ -156,6 +270,19 @@ export interface ConsumeOptions {
   onTrace?: (events: TraceEvent[]) => void
   /** Called after every state mutation (snapshot or delta), for the stage ladder. */
   onState?: (state: Record<string, unknown>) => void
+  /** Called with a fresh todo list from the system-design agent. */
+  onTodos?: (todos: TodoItem[]) => void
+  /** Called with each human-readable stage announcement. */
+  onNote?: (note: ProgressNote) => void
+  /**
+   * Synthesize trace events from the standard AG-UI `TOOL_CALL_START` /
+   * `TOOL_CALL_END` lifecycle.
+   *
+   * **Only enable this for `modular_circuit` (system design).** The schematic
+   * agent reports the same calls through `CUSTOM` trace events, so enabling
+   * both would double every row in the stack.
+   */
+  toolCallTrace?: boolean
 }
 
 /**
@@ -220,6 +347,9 @@ export async function consumeCopilotkit(
     trace: [],
     onTrace: options.onTrace,
     onState: options.onState,
+    onTodos: options.onTodos,
+    onNote: options.onNote,
+    tracker: options.toolCallTrace ? new ToolCallTracker() : undefined,
   }
 
   try {

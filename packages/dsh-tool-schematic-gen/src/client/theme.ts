@@ -198,6 +198,18 @@ const CSS = `
 .hq-sch__frame-count { padding: 0 4px; border-radius: 999px; background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,0.14)); }
 .hq-sch__frame-children { border-left: 1px solid var(--dsw-alias-border-l1, rgba(127,127,127,0.25)); margin-left: 11px; }
 .hq-sch__progress-empty { padding: 2px 12px 12px; font: var(--dsw-font-xxs-12, 12px/1.4 system-ui, sans-serif); color: var(--dsw-alias-label-tertiary, currentColor); }
+
+/* ── system-design: stage announcement + live todo list ──────────────────── */
+.hq-sch__note-line { display: flex; align-items: flex-start; gap: 6px; padding: 0 12px 8px; font: var(--dsw-font-xxs-12, 12px/1.5 system-ui, sans-serif); color: var(--dsw-alias-label-primary, currentColor); }
+.hq-sch__note-line--complete { color: var(--dsw-alias-label-secondary, currentColor); }
+.hq-sch__note-line--error { color: var(--dsw-alias-state-error-primary, #d93025); }
+.hq-sch__note-spin { flex: none; width: 8px; height: 8px; margin-top: 4px; border-radius: 8px; background: var(--dsw-alias-state-running-primary, #1a73e8); animation: hq-sch-pulse 1.2s ease-in-out infinite; }
+.hq-sch__todos { list-style: none; margin: 0; padding: 4px 12px 10px; max-height: 168px; overflow-y: auto; }
+.hq-sch__todo { display: flex; align-items: flex-start; gap: 6px; padding: 2px 0; font: var(--dsw-font-xxs-12, 12px/1.5 system-ui, sans-serif); color: var(--dsw-alias-label-tertiary, currentColor); }
+.hq-sch__todo-mark { flex: none; width: 10px; text-align: center; line-height: 1.5; }
+.hq-sch__todo-text { min-width: 0; overflow-wrap: anywhere; }
+.hq-sch__todo--in_progress { color: var(--dsw-alias-label-primary, currentColor); font-weight: 600; }
+.hq-sch__todo--completed { color: var(--dsw-alias-label-secondary, currentColor); text-decoration: line-through; }
 @keyframes hq-sch-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 `
 

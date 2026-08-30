@@ -33,6 +33,31 @@ import { pairTraceEvents, type TraceEvent, type TraceFrame } from './trace.js'
 export type RunStatus = 'running' | 'completed' | 'failed'
 export type RunKind = 'schematic' | 'system'
 
+/**
+ * One item of the rolling todo list the system-design agent publishes
+ * (`SYSTEM_DESIGN_EVENT` / `kind: "todo_progress"`).
+ */
+export interface TodoItem {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
+/**
+ * A human-readable stage announcement from the system-design agent's
+ * `emitWorkflowProgress` middleware — e.g. "正在整理需求并生成系统设计方案。".
+ *
+ * This is the ONLY narrative progress signal the system agent gives us; the
+ * coarse ladder below is derived from state keys and says nothing about what
+ * the agent is actually doing right now.
+ */
+export interface ProgressNote {
+  phase: 'start' | 'complete' | 'error'
+  /** Tool/stage id, e.g. `design_plan_gen`. Empty when the agent omits it. */
+  stage: string
+  message: string
+  ts: number
+}
+
 /** One rung of the coarse progress ladder. `key` is an i18n key suffix. */
 export interface StageSpec {
   key: string
@@ -122,6 +147,8 @@ export interface RunProgress {
   start(callId: string, toolName: string, kind: RunKind): void
   pushTrace(callId: string, events: readonly TraceEvent[]): void
   updateState(callId: string, state: Record<string, unknown>): void
+  setTodos(callId: string, todos: readonly TodoItem[]): void
+  setNote(callId: string, note: ProgressNote): void
   finish(callId: string): void
   fail(callId: string, message: string): void
 }
@@ -138,6 +165,10 @@ export interface ProgressDoc {
   frames: TraceFrame[]
   /** Coarse ladder, always present while state has been seen. */
   stage: { index: number; total: number; key: string } | null
+  /** Rolling todo list. System-design only; `null` for schematic runs. */
+  todos: TodoItem[] | null
+  /** Latest stage announcement. System-design only; `null` until one arrives. */
+  note: ProgressNote | null
   /** Failure text, set by `fail`. */
   error: string | null
 }
@@ -189,6 +220,8 @@ export class ProgressStore {
         updatedAt: ts,
         frames: [],
         stage: null,
+        todos: null,
+        note: null,
         error: null,
       },
       events: [],
@@ -223,6 +256,29 @@ export class ProgressStore {
     Object.assign(rec.state, state)
     rec.doc.stage = stageOf(rec.doc.kind, rec.state)
     rec.doc.updatedAt = this.now()
+  }
+
+  /** Replace the todo list. Only ever set by the system-design agent. */
+  setTodos(callId: string, todos: readonly TodoItem[]): void {
+    const rec = this.runs.get(callId)
+    if (!rec) return
+    rec.doc.todos = todos.map((todo) => ({ ...todo }))
+    rec.doc.updatedAt = this.now()
+  }
+
+  /** Record the latest stage announcement. */
+  setNote(callId: string, note: ProgressNote): void {
+    const rec = this.runs.get(callId)
+    if (!rec) return
+    // A later revision always wins, but never let an older one clobber it.
+    if (rec.doc.note && note.ts < rec.doc.note.ts) return
+    rec.doc.note = { ...note }
+    rec.doc.updatedAt = this.now()
+    // An `error` announcement is the closest thing to a live failure reason.
+    if (note.phase === 'error' && rec.doc.status === 'running') {
+      rec.doc.status = 'failed'
+      rec.doc.error = note.message
+    }
   }
 
   finish(callId: string): void {

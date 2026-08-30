@@ -11,7 +11,7 @@
  * path segments that never emitted an event of their own — exactly the
  * "Recursive Depth Model" the prototype describes.
  */
-import type { TraceFrame, TraceStatus } from '../trace.js'
+import { hasTaskId, stripTaskIds, type TraceFrame, type TraceStatus } from '../trace.js'
 
 /** One node of the rendered call stack. */
 export interface StackNode {
@@ -25,6 +25,15 @@ export interface StackNode {
   startedAt: number
   finishedAt?: number
   children: StackNode[]
+  /**
+   * How many times this exact call ran. `1` for a one-off.
+   *
+   * Spans synthesized from the AG-UI tool-call lifecycle carry a hidden
+   * `::task:<id>` in their path, so a search tool invoked 200 times would
+   * otherwise produce 200 identical rows. They collapse into one row that
+   * shows the latest state plus a `×N` badge.
+   */
+  repeat: number
   /**
    * The frame this node was built from. `undefined` for synthesized
    * intermediate nodes, which exist only to hold the nesting shape.
@@ -49,20 +58,26 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
   for (const frame of frames) {
     const segments = frame.path.split('>').map((s) => s.trim()).filter((s) => s.length > 0)
     if (segments.length === 0) continue
+    // Lifecycle-synthesized spans carry `::task:<id>`; collapse their repeats.
+    const collapse = hasTaskId(frame.path)
 
     // 1. Walk every path prefix, creating intermediate nodes as needed.
     let parent: StackNode | null = null
     for (let i = 0; i < segments.length; i++) {
-      const pathId = segments.slice(0, i + 1).join('>')
+      const raw = segments.slice(0, i + 1).join('>')
+      // `::task:<id>` makes every invocation unique; key on the visible path
+      // so repeats land on one node instead of proliferating.
+      const pathId = hasTaskId(raw) ? stripTaskIds(raw) : raw
       let node = byPath.get(pathId)
       if (!node) {
         node = {
           id: `path:${pathId}`,
-          name: segments[i]!,
+          name: stripTaskIds(segments[i]!),
           status: 'running',
           depth: i,
           startedAt: frame.startedAt,
           children: [],
+          repeat: 1,
         }
         byPath.set(pathId, node)
         if (parent) parent.children.push(node)
@@ -85,8 +100,22 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
       continue
     }
 
-    // This path segment already owns a frame (a repeated call) — mint a
-    // sibling so the repeat is not lost.
+    // A lifecycle-synthesized repeat of a call we already show: latest state
+    // wins, and the counter surfaces how many times it actually ran.
+    if (collapse) {
+      parent.frame = frame
+      parent.name = frame.name
+      parent.status = frame.status
+      parent.startedAt = frame.startedAt
+      parent.repeat += 1
+      if (frame.finishedAt !== undefined) parent.finishedAt = frame.finishedAt
+      else delete parent.finishedAt
+      continue
+    }
+
+    // This path segment already owns a frame (a repeated call from CUSTOM
+    // trace events, which have no task id) — mint a sibling so the repeat is
+    // not lost.
     const node: StackNode = {
       id: frame.id || `frame-${minted++}`,
       name: frame.name,
@@ -94,6 +123,7 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
       depth: parent.depth + 1,
       startedAt: frame.startedAt,
       children: [],
+      repeat: 1,
       frame,
     }
     if (frame.finishedAt !== undefined) node.finishedAt = frame.finishedAt
