@@ -256,17 +256,24 @@ describe('buildTree — repeated lifecycle calls', () => {
     expect(tree[0]!.repeat).toBe(2)
   })
 
-  it('keeps CUSTOM-trace repeats as siblings (no task ids to collapse on)', () => {
+  it('collapses schematic CUSTOM-trace repeats (no task ids) into one row', () => {
+    // The schematic agent emits back-to-back start/end and a final start for
+    // `search_parts`; pairing leaves two frames (one finished, one still
+    // running). Both must collapse into a single row with ×2.
     const frames = pairTraceEvents([
       { kind: 'tool', phase: 'start', scope: 'schematicDesign', name: 'search_parts', ts: 1 },
       { kind: 'tool', phase: 'end', scope: 'schematicDesign', name: 'search_parts', ts: 2, ok: true },
       { kind: 'tool', phase: 'start', scope: 'schematicDesign', name: 'search_parts', ts: 3 },
     ])
+    expect(frames).toHaveLength(2)
     const tree = buildTree(frames)
-    const leaf = tree[0]!.children.length > 0 ? tree[0]! : tree[1]!
     expect(tree).toHaveLength(1)
-    expect(leaf.children).toHaveLength(1)
-    expect(leaf.repeat).toBe(1)
+    const leaf = tree[0]!.children[0]!
+    expect(leaf).toBeDefined()
+    expect(leaf!.children).toHaveLength(0)
+    expect(leaf!.repeat).toBe(2)
+    // Latest invocation is the still-running one — its status wins.
+    expect(leaf!.status).toBe('running')
   })
 })
 

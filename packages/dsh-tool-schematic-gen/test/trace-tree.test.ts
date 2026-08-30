@@ -64,13 +64,64 @@ describe('buildTree', () => {
     expect(rows(tree)).toEqual(['0:a', '1:node:b', '2:search_parts'])
   })
 
-  it('mints a sibling for a repeated call at the same path, so repeats are not lost', () => {
+  it('collapses repeated calls at the same path into one row with a ×N badge', () => {
+    // The schematic agent fires `search_parts` repeatedly without changing the
+    // path; hq-eda-ai shows ONE row growing a ×N pill. Verify we do the same.
     const tree = buildTree([
       frame('root>search', 'search_parts', 'finished'),
       frame('root>search', 'search_parts', 'finished'),
     ])
-    // The second call must NOT silently collapse into the first row.
-    expect(rows(tree)).toEqual(['0:root', '1:search_parts', '2:search_parts'])
+    expect(rows(tree)).toEqual(['0:root', '1:search_parts'])
+    expect(tree[0]?.children).toHaveLength(1)
+    expect(tree[0]?.children[0]?.repeat).toBe(2)
+  })
+
+  it('collapses 14 same-path calls into one row, with the latest call winning status', () => {
+    // Mirrors the screenshot: schematic agent fires `ic_search` fourteen times
+    // in a row under `root>plan>circuit`. Each call has a different duration.
+    const calls = [
+      133, 255, 30, 123, 145, 139, 139, 159, 128, 135, 1400, 1300, 0, 0,
+    ]
+    const frames = calls.map((dur, i) =>
+      frame(
+        'root>plan>circuit>ic_search',
+        'ic_search',
+        dur === 0 && i === calls.length - 1 ? 'running' : 'finished',
+        `ic-${i}`,
+      ),
+    )
+    // Override finished timestamps to mirror the durations; default fixture
+    // uses 0..100 which compresses everything.
+    const tuned = frames.map((f, i) => ({
+      ...f,
+      startedAt: i * 100,
+      finishedAt: f.status === 'finished' ? i * 100 + (calls[i] ?? 0) : undefined,
+    }))
+    const tree = buildTree(tuned)
+    const leaf = tree[0]!.children[0]!.children[0]!.children[0]!
+    // Synthesized intermediate nodes keep their bare path-segment name; only
+    // the leaf is decorated with the frame's display name.
+    expect(rows(tree)).toEqual(['0:root', '1:plan', '2:circuit', '3:ic_search'])
+    expect(leaf.repeat).toBe(14)
+    // The latest invocation is the one still running — its status wins.
+    expect(leaf.status).toBe('running')
+  })
+
+  it('keeps repeat-1 visible by leaving the ×N pill off', () => {
+    const tree = buildTree([frame('root>design', 'design_power', 'finished')])
+    expect(tree[0]!.children[0]!.repeat).toBe(1)
+  })
+
+  it('does not collapse two distinct tools at the same parent', () => {
+    // Two different sibling paths must stay two rows, even though they share
+    // a prefix.
+    const tree = buildTree([
+      frame('root>circuit>design_power', 'design_power', 'finished'),
+      frame('root>circuit>design_mcu', 'design_mcu', 'finished'),
+    ])
+    const circuit = tree[0]!.children[0]!
+    expect(circuit.children).toHaveLength(2)
+    expect(circuit.children.map((c) => c.name)).toEqual(['design_power', 'design_mcu'])
   })
 
   it('prefers the frame display name over the bare path segment', () => {

@@ -11,9 +11,18 @@
  * path segments that never emitted an event of their own — exactly the
  * "Recursive Depth Model" the prototype describes.
  */
-import { hasTaskId, stripTaskIds, type TraceFrame, type TraceStatus } from '../trace.js'
+import { stripTaskIds, type TraceFrame, type TraceStatus } from '../trace.js'
 
-/** One node of the rendered call stack. */
+/**
+ * One node of the rendered call stack.
+ *
+ * A row is collapsed — i.e. represents several invocations of the same
+ * logical call at the same visible scope — whenever `repeat > 1`. The runtime
+ * keeps the LATEST frame on `frame`, so the duration column shows the most
+ * recent call's time, and the ×N badge surfaces how many calls actually ran
+ * (the schematic agent fires `ic_search` fourteen times in a row to confirm
+ * the part pick; hq-eda-ai shows ONE row for that).
+ */
 export interface StackNode {
   /** Stable React key. Path-derived for synthesized nodes, frame id otherwise. */
   id: string
@@ -22,16 +31,21 @@ export interface StackNode {
   status: TraceStatus
   /** 0 for a root; each nesting level adds one. */
   depth: number
+  /**
+   * Start of the LATEST invocation. For a one-off this is also the start of
+   * the only invocation. The card uses this together with `finishedAt` to
+   * compute the latest call's duration.
+   */
   startedAt: number
   finishedAt?: number
   children: StackNode[]
   /**
    * How many times this exact call ran. `1` for a one-off.
    *
-   * Spans synthesized from the AG-UI tool-call lifecycle carry a hidden
-   * `::task:<id>` in their path, so a search tool invoked 200 times would
-   * otherwise produce 200 identical rows. They collapse into one row that
-   * shows the latest state plus a `×N` badge.
+   * Every repeat — whether from a LangGraph `*_TRACE` event with no task id
+   * (schematic) or from the AG-UI tool-call lifecycle with a hidden
+   * `::task:<id>` (system design) — lands on the same leaf, keyed on the
+   * STRIPPED visible path. The card surfaces the count via a `×N` pill.
    */
   repeat: number
   /**
@@ -44,32 +58,30 @@ export interface StackNode {
 /**
  * Build the call-stack tree.
  *
- * Path prefixes are shared, so a parent emitted by five different children is
- * one node, not five. A path segment that receives more than one frame of its
- * own (the same tool invoked repeatedly at the same scope — very common during
- * part search) gets a distinct sibling child per extra frame, so repeated
- * calls stay visible instead of silently collapsing into one row.
+ * Path prefixes are shared, so a parent emitted by five different children
+ * is one node, not five. Repeated calls of the same tool at the same scope
+ * collapse into one row — both the schematic CUSTOM-trace stream (no task
+ * ids) and the system-design AG-UI lifecycle (hidden `::task:<id>` in each
+ * instance path) end up with one node per logical call.
  */
 export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
   const roots: StackNode[] = []
   const byPath = new Map<string, StackNode>()
-  let minted = 0
 
   for (const frame of frames) {
     const segments = frame.path.split('>').map((s) => s.trim()).filter((s) => s.length > 0)
     if (segments.length === 0) {
       continue
     }
-    // Lifecycle-synthesized spans carry `::task:<id>`; collapse their repeats.
-    const collapse = hasTaskId(frame.path)
 
     // 1. Walk every path prefix, creating intermediate nodes as needed.
+    //    Key the map on the *visible* path (with any `::task:<id>` marker
+    //    stripped) so repeats land on one node instead of proliferating into
+    //    a sibling per invocation.
     let parent: StackNode | null = null
     for (let i = 0; i < segments.length; i++) {
       const raw = segments.slice(0, i + 1).join('>')
-      // `::task:<id>` makes every invocation unique; key on the visible path
-      // so repeats land on one node instead of proliferating.
-      const pathId = hasTaskId(raw) ? stripTaskIds(raw) : raw
+      const pathId = stripTaskIds(raw)
       let node = byPath.get(pathId)
       if (!node) {
         node = {
@@ -109,39 +121,18 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
       continue
     }
 
-    // A lifecycle-synthesized repeat of a call we already show: latest state
-    // wins, and the counter surfaces how many times it actually ran.
-    if (collapse) {
-      parent.frame = frame
-      parent.name = frame.name
-      parent.status = frame.status
-      parent.startedAt = frame.startedAt
-      parent.repeat += 1
-      if (frame.finishedAt !== undefined) {
-        parent.finishedAt = frame.finishedAt
-      } else {
-        delete parent.finishedAt
-      }
-      continue
-    }
-
-    // This path segment already owns a frame (a repeated call from CUSTOM
-    // trace events, which have no task id) — mint a sibling so the repeat is
-    // not lost.
-    const node: StackNode = {
-      id: frame.id || `frame-${minted++}`,
-      name: frame.name,
-      status: frame.status,
-      depth: parent.depth + 1,
-      startedAt: frame.startedAt,
-      children: [],
-      repeat: 1,
-      frame,
-    }
+    // A repeat of a call we already show: bump the counter and let the
+    // latest invocation win for status + duration.
+    parent.repeat += 1
+    parent.frame = frame
+    parent.name = frame.name
+    parent.status = frame.status
+    parent.startedAt = frame.startedAt
     if (frame.finishedAt !== undefined) {
-      node.finishedAt = frame.finishedAt
+      parent.finishedAt = frame.finishedAt
+    } else {
+      delete parent.finishedAt
     }
-    parent.children.push(node)
   }
 
   return roots
