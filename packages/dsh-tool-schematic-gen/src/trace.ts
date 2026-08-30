@@ -67,8 +67,12 @@ export const KNOWN_TRACE_EVENT_NAMES: readonly string[] = [
 ]
 
 export function isTraceEventName(name: unknown): boolean {
-  if (typeof name !== 'string' || name.length === 0) return false
-  if (KNOWN_TRACE_EVENT_NAMES.includes(name)) return true
+  if (typeof name !== 'string' || name.length === 0) {
+    return false
+  }
+  if (KNOWN_TRACE_EVENT_NAMES.includes(name)) {
+    return true
+  }
   return /_TRACE$/i.test(name)
 }
 
@@ -83,27 +87,39 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Returns `null` for anything else (interrupts, future event shapes).
  */
 export function parseTraceEvent(value: unknown): TraceEvent | null {
-  if (!isRecord(value)) return null
+  if (!isRecord(value)) {
+    return null
+  }
   const kind = value['kind']
   const phase = value['phase']
   const ts = value['ts']
-  if (phase !== 'start' && phase !== 'end') return null
+  if (phase !== 'start' && phase !== 'end') {
+    return null
+  }
   const timestamp = typeof ts === 'number' && Number.isFinite(ts) ? ts : Date.now()
 
   if (kind === 'node') {
     const node = value['node']
-    if (typeof node !== 'string' || node.length === 0) return null
+    if (typeof node !== 'string' || node.length === 0) {
+      return null
+    }
     const ev: NodeTraceEvent = { kind: 'node', phase, node, ts: timestamp }
     const scope = value['scope']
-    if (typeof scope === 'string' && scope.length > 0) ev.scope = scope
+    if (typeof scope === 'string' && scope.length > 0) {
+      ev.scope = scope
+    }
     const note = value['note']
-    if (typeof note === 'string' && note.length > 0) ev.note = note
+    if (typeof note === 'string' && note.length > 0) {
+      ev.note = note
+    }
     return ev
   }
 
   if (kind === 'tool') {
     const name = value['name']
-    if (typeof name !== 'string' || name.length === 0) return null
+    if (typeof name !== 'string' || name.length === 0) {
+      return null
+    }
     const scope = value['scope']
     const ev: ToolTraceEvent = {
       kind: 'tool',
@@ -113,7 +129,9 @@ export function parseTraceEvent(value: unknown): TraceEvent | null {
       name,
       ts: timestamp,
     }
-    if (value['ok'] === false) ev.ok = false
+    if (value['ok'] === false) {
+      ev.ok = false
+    }
     return ev
   }
 
@@ -130,7 +148,9 @@ export function collectTraceEvents(value: unknown): TraceEvent[] {
     const out: TraceEvent[] = []
     for (const item of value) {
       const ev = parseTraceEvent(item)
-      if (ev) out.push(ev)
+      if (ev) {
+        out.push(ev)
+      }
     }
     return out
   }
@@ -199,15 +219,20 @@ export function pairTraceEvents(events: readonly TraceEvent[]): TraceFrame[] {
     if (ev.phase === 'start') {
       const stack = open.get(key)
       const index = frames.length
-      if (stack) stack.push(index)
-      else open.set(key, [index])
+      if (stack) {
+        stack.push(index)
+      } else {
+        open.set(key, [index])
+      }
       frames.push({ id: `trace-${seq++}`, name, path, status: 'running', startedAt: ev.ts })
       continue
     }
 
     const stack = open.get(key)
     const index = stack?.pop()
-    if (index === undefined) continue // unpaired end — nothing to close
+    if (index === undefined) {
+      continue
+    }
     const failed = ev.kind === 'tool' && ev.ok === false
     frames[index] = {
       ...frames[index]!,
