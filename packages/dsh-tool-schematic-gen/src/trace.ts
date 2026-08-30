@@ -48,6 +48,13 @@ export interface ToolTraceEvent {
   scope: string
   name: string
   ts: number
+  /**
+   * Instance path (`parent>leaf::task:<toolCallId>`), present only for spans
+   * synthesized from the AG-UI tool-call lifecycle. The hidden `::task:` suffix
+   * makes repeated calls of the SAME tool distinct so retries are not lost,
+   * while {@link traceName} keeps the display name clean.
+   */
+  path?: string
   /** Absent means success; only `false` marks failure. */
   ok?: boolean
 }
@@ -113,6 +120,8 @@ export function parseTraceEvent(value: unknown): TraceEvent | null {
       name,
       ts: timestamp,
     }
+    const path = value['path']
+    if (typeof path === 'string' && path.length > 0) ev.path = path
     if (value['ok'] === false) ev.ok = false
     return ev
   }
@@ -151,6 +160,9 @@ export function tracePath(ev: TraceEvent): string {
   if (ev.kind === 'node') {
     return ev.scope && ev.scope.length > 0 ? ev.scope : ev.node
   }
+  // The instance path wins when present: it is the only breadcrumb that
+  // distinguishes two calls of the same tool at the same scope.
+  if (ev.path && ev.path.length > 0) return ev.path
   return ev.scope === ev.name ? ev.name : `${ev.scope}>${ev.name}`
 }
 
@@ -217,4 +229,108 @@ export function pairTraceEvents(events: readonly TraceEvent[]): TraceFrame[] {
   }
 
   return frames
+}
+
+// ── AG-UI tool-call lifecycle ──────────────────────────────────────────────
+
+/**
+ * Marker appended to the leaf of a synthesized instance path. It is invisible
+ * in the UI (stripped from display names and from the tree key) but makes each
+ * invocation of a repeated tool a distinct path.
+ */
+export const TASK_MARK_RE = /::task:[^>]*/g
+
+/** Strip the hidden `::task:<id>` suffixes from one path segment/path. */
+export function stripTaskIds(path: string): string {
+  return path.replace(TASK_MARK_RE, '')
+}
+
+/** True when a path was synthesized from the tool-call lifecycle. */
+export function hasTaskId(path: string): boolean {
+  return path.includes('::task:')
+}
+
+interface ActiveToolCall {
+  semanticPath: string
+  instancePath: string
+}
+
+/**
+ * Convert the **standard AG-UI tool-call lifecycle** (`TOOL_CALL_START` /
+ * `TOOL_CALL_END`) into {@link TraceEvent}s.
+ *
+ * This exists because the two eda.cn agents report progress differently:
+ *
+ *   - `schemagen` (schematic) emits LangGraph `custom`-stream `TraceEvent`s,
+ *     republished as AG-UI `CUSTOM` events named `SCHEMATIC_GENERATOR_TRACE`.
+ *   - `modular_circuit` (system design) does NOT emit those. Its stack is
+ *     rebuilt by the agent server from LangGraph *tasks* and published as the
+ *     ordinary AG-UI `TOOL_CALL_START` / `TOOL_CALL_END` pair — see
+ *     `ModuleGenTraceProvider.onToolCallStartEvent` in hq-eda-ai.
+ *
+ * Without this adapter the system-design tool reported no progress at all.
+ *
+ * Port of `createToolInstancePath` + `toToolTraceEvent` in
+ * `apps/web/src/lib/modular_circuit/context/ModuleGenTraceProvider.tsx`.
+ */
+export class ToolCallTracker {
+  private readonly active = new Map<string, ActiveToolCall>()
+
+  /** Forget every open call — invoke on `RUN_STARTED`. */
+  reset(): void {
+    this.active.clear()
+  }
+
+  /**
+   * Build an instance path, reusing the deepest currently-open call whose
+   * semantic path is a prefix of this one so nested tools nest properly.
+   */
+  private instancePath(semanticPath: string, toolCallId: string): string {
+    let parent: ActiveToolCall | undefined
+    for (const candidate of this.active.values()) {
+      if (!semanticPath.startsWith(`${candidate.semanticPath}>`)) continue
+      if (!parent || candidate.semanticPath.length > parent.semanticPath.length) {
+        parent = candidate
+      }
+    }
+    const relative = parent ? semanticPath.slice(parent.semanticPath.length + 1) : semanticPath
+    const segments = relative.split('>').map((s) => s.trim()).filter((s) => s.length > 0)
+    const leaf = segments.length - 1
+    if (leaf >= 0) segments[leaf] = `${segments[leaf]}::task:${toolCallId}`
+    const current = segments.join('>')
+    return parent ? `${parent.instancePath}>${current}` : current
+  }
+
+  /** Split a semantic path into its parent scope and leaf display name. */
+  private static split(semanticPath: string): { scope: string; name: string } {
+    const segments = semanticPath.split('>').map((s) => s.trim()).filter((s) => s.length > 0)
+    const name = segments[segments.length - 1] || 'unknown'
+    const scope = segments.length > 1 ? segments.slice(0, -1).join('>') : name
+    return { scope, name }
+  }
+
+  /** Open a tool call. Returns the `start` trace event. */
+  start(toolCallId: string, semanticPath: string, ts: number = Date.now()): TraceEvent {
+    const instancePath = this.instancePath(semanticPath, toolCallId)
+    if (toolCallId) this.active.set(toolCallId, { semanticPath, instancePath })
+    const { scope, name } = ToolCallTracker.split(semanticPath)
+    return { kind: 'tool', phase: 'start', scope, name, path: instancePath, ts }
+  }
+
+  /**
+   * Close a tool call. Returns the `end` trace event, or `null` when the id
+   * was never opened (a late/duplicate frame we must not invent a span for).
+   */
+  end(toolCallId: string, ts: number = Date.now()): TraceEvent | null {
+    const known = this.active.get(toolCallId)
+    if (!known) return null
+    this.active.delete(toolCallId)
+    const { scope, name } = ToolCallTracker.split(known.semanticPath)
+    return { kind: 'tool', phase: 'end', scope, name, path: known.instancePath, ts, ok: true }
+  }
+
+  /** Ids still open. Exposed for diagnostics/tests. */
+  get openIds(): string[] {
+    return [...this.active.keys()]
+  }
 }
