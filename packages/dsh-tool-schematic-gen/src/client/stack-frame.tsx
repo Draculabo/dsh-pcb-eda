@@ -19,8 +19,12 @@ import type { Translate } from './i18n.js'
 // ── one frame ──────────────────────────────────────────────────────────────
 
 function dotClass(status: string): string {
-  if (status === 'finished') return 'hq-sch__frame-dot hq-sch__frame-dot--finished'
-  if (status === 'failed') return 'hq-sch__frame-dot hq-sch__frame-dot--failed'
+  if (status === 'finished') {
+    return 'hq-sch__frame-dot hq-sch__frame-dot--finished'
+  }
+  if (status === 'failed') {
+    return 'hq-sch__frame-dot hq-sch__frame-dot--failed'
+  }
   return 'hq-sch__frame-dot hq-sch__frame-dot--running'
 }
 
@@ -65,7 +69,9 @@ const StackFrame = memo(function StackFrame({ node, now, running }: FrameProps):
     </div>
   )
 
-  if (!hasChildren || !open) return row
+  if (!hasChildren || !open) {
+    return row
+  }
 
   return (
     <div>
@@ -92,9 +98,13 @@ function StackList({ nodes, now, running }: { nodes: StackNode[]; now: number; r
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    if (!running) return
+    if (!running) {
+      return
+    }
     const el = ref.current
-    if (!el) return
+    if (!el) {
+      return
+    }
     el.scrollTop = el.scrollHeight
   }, [nodes, running])
 
@@ -111,13 +121,19 @@ function StackList({ nodes, now, running }: { nodes: StackNode[]; now: number; r
 
 function stepClass(index: number, active: number, failed: boolean): string {
   const base = 'hq-sch__ladder-step'
-  if (index < active) return `${base} hq-sch__ladder-step--done`
-  if (index > active) return base
+  if (index < active) {
+    return `${base} hq-sch__ladder-step--done`
+  }
+  if (index > active) {
+    return base
+  }
   return failed ? `${base} hq-sch__ladder-step--failed` : `${base} hq-sch__ladder-step--active`
 }
 
 function StageLadder({ stage, failed }: { stage: ProgressDoc['stage']; failed: boolean }): ReactElement | null {
-  if (!stage || stage.total <= 0) return null
+  if (!stage || stage.total <= 0) {
+    return null
+  }
   const steps: ReactElement[] = []
   for (let i = 0; i < stage.total; i++) {
     steps.push(<span key={i} className={stepClass(i, stage.index, failed)} />)
@@ -136,7 +152,9 @@ function StageLadder({ stage, failed }: { stage: ProgressDoc['stage']; failed: b
  * and it is what makes a 10-minute wait feel attended to.
  */
 function NoteLine({ note }: { note: ProgressNote }): ReactElement | null {
-  if (!note.message) return null
+  if (!note.message) {
+    return null
+  }
   const cls = note.phase === 'error'
     ? 'hq-sch__note-line hq-sch__note-line--error'
     : note.phase === 'complete'
@@ -152,13 +170,19 @@ function NoteLine({ note }: { note: ProgressNote }): ReactElement | null {
 
 /** Mark glyph per todo status — no icon dependency in a client bundle. */
 function todoMark(status: TodoItem['status']): string {
-  if (status === 'completed') return '✓'
-  if (status === 'in_progress') return '▸'
+  if (status === 'completed') {
+    return '✓'
+  }
+  if (status === 'in_progress') {
+    return '▸'
+  }
   return '·'
 }
 
 function TodoList({ todos }: { todos: TodoItem[] }): ReactElement | null {
-  if (todos.length === 0) return null
+  if (todos.length === 0) {
+    return null
+  }
   return (
     <ul className="hq-sch__todos">
       {todos.map((todo, i) => (
