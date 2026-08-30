@@ -57,7 +57,9 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
 
   for (const frame of frames) {
     const segments = frame.path.split('>').map((s) => s.trim()).filter((s) => s.length > 0)
-    if (segments.length === 0) continue
+    if (segments.length === 0) {
+      continue
+    }
     // Lifecycle-synthesized spans carry `::task:<id>`; collapse their repeats.
     const collapse = hasTaskId(frame.path)
 
@@ -80,13 +82,18 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
           repeat: 1,
         }
         byPath.set(pathId, node)
-        if (parent) parent.children.push(node)
-        else roots.push(node)
+        if (parent) {
+          parent.children.push(node)
+        } else {
+          roots.push(node)
+        }
       }
       parent = node
     }
 
-    if (!parent) continue
+    if (!parent) {
+      continue
+    }
 
     // 2. Decorate the leaf with this frame.
     if (!parent.frame) {
@@ -96,7 +103,9 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
       parent.name = frame.name
       parent.status = frame.status
       parent.startedAt = frame.startedAt
-      if (frame.finishedAt !== undefined) parent.finishedAt = frame.finishedAt
+      if (frame.finishedAt !== undefined) {
+        parent.finishedAt = frame.finishedAt
+      }
       continue
     }
 
@@ -108,8 +117,11 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
       parent.status = frame.status
       parent.startedAt = frame.startedAt
       parent.repeat += 1
-      if (frame.finishedAt !== undefined) parent.finishedAt = frame.finishedAt
-      else delete parent.finishedAt
+      if (frame.finishedAt !== undefined) {
+        parent.finishedAt = frame.finishedAt
+      } else {
+        delete parent.finishedAt
+      }
       continue
     }
 
@@ -126,7 +138,9 @@ export function buildTree(frames: readonly TraceFrame[]): StackNode[] {
       repeat: 1,
       frame,
     }
-    if (frame.finishedAt !== undefined) node.finishedAt = frame.finishedAt
+    if (frame.finishedAt !== undefined) {
+      node.finishedAt = frame.finishedAt
+    }
     parent.children.push(node)
   }
 
@@ -141,8 +155,12 @@ export function countStatus(node: StackNode): { finished: number; total: number;
   const walk = (n: StackNode): void => {
     for (const child of n.children) {
       total += 1
-      if (child.status === 'finished') finished += 1
-      if (child.status === 'failed') failed += 1
+      if (child.status === 'finished') {
+        finished += 1
+      }
+      if (child.status === 'failed') {
+        failed += 1
+      }
       walk(child)
     }
   }
@@ -155,14 +173,20 @@ export function countStatus(node: StackNode): { finished: number; total: number;
  * prototype's duration formatter.
  */
 export function formatDuration(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return ''
-  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) {
+    return ''
+  }
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`
+  }
   return `${(ms / 1000).toFixed(1)}s`
 }
 
 /** Format an elapsed wall-clock span as `m:ss` — used by the run timer. */
 export function formatElapsed(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return '0:00'
+  if (!Number.isFinite(ms) || ms < 0) {
+    return '0:00'
+  }
   const total = Math.floor(ms / 1000)
   const m = Math.floor(total / 60)
   const s = total % 60
