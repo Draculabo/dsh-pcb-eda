@@ -121,6 +121,41 @@ describe('ProgressStore', () => {
     expect(store.get('c1')?.stage?.key).toBe('bom')
   })
 
+  it('stores todo snapshots without retaining caller-owned objects', () => {
+    const store = new ProgressStore({ now: () => 2000 })
+    const todos = [{ content: 'Draft power tree', status: 'in_progress' as const }]
+
+    store.start('c1', 't', 'system')
+    store.setTodos('c1', todos)
+    todos[0]!.content = 'mutated outside the store'
+
+    expect(store.get('c1')).toMatchObject({
+      updatedAt: 2000,
+      todos: [{ content: 'Draft power tree', status: 'in_progress' }],
+    })
+  })
+
+  it('keeps the newest progress note and turns live error notes into failures', () => {
+    const store = new ProgressStore({ now: () => 3000 })
+    store.start('c1', 't', 'system')
+    store.setNote('c1', { phase: 'start', stage: 'plan', message: 'Planning', ts: 20 })
+    store.setNote('c1', { phase: 'complete', stage: 'plan', message: 'Stale', ts: 10 })
+
+    expect(store.get('c1')).toMatchObject({
+      status: 'running',
+      note: { phase: 'start', stage: 'plan', message: 'Planning', ts: 20 },
+    })
+
+    store.setNote('c1', { phase: 'error', stage: 'plan', message: 'Planning failed', ts: 30 })
+
+    expect(store.get('c1')).toMatchObject({
+      status: 'failed',
+      error: 'Planning failed',
+      updatedAt: 3000,
+      note: { phase: 'error', stage: 'plan', message: 'Planning failed', ts: 30 },
+    })
+  })
+
   it('finish() closes every still-open span', () => {
     const store = new ProgressStore({ now: () => 9000 })
     store.start('c1', 't', 'schematic')
