@@ -220,7 +220,10 @@ export function extractModuleGraph(state: Record<string, unknown>): Record<strin
 interface MaterializedSchematic {
   schFiles: Array<{ filename: string; content?: string }>
   schArtifacts?: Array<{ id: string; type: string; filename: string; size: number }>
+  /** User-safe status detail — the client card renders this. */
   note?: string
+  /** Agent-only explanation/directive — the client card MUST NOT render it. */
+  agentNote?: string
 }
 
 /**
@@ -251,7 +254,11 @@ async function materializeSchematicArtifacts(env: SchematicGenEnv, schFiles: Sch
   const result: MaterializedSchematic = { schFiles: outFiles }
   if (artifacts.length > 0) result.schArtifacts = artifacts
   if (anyFailed) {
-    result.note = 'Preview artifact storage partially or fully unavailable (' + errorNote + '). ' +
+    // Split by audience: the degraded state is worth telling the human, but
+    // "the result card can render them directly / the full source is in the
+    // zip" is an explanation for the agent about why it need not worry.
+    result.note = 'Preview artifact storage partially or fully unavailable (' + errorNote + ').'
+    result.agentNote =
       'Sheets without an artifact id still carry their source inline, so the result card can ' +
       'render them directly. Full source is always in the project zip/export.'
   }
@@ -340,6 +347,7 @@ export async function runGenerateSchematic(
     project_achieve_url: extracted.project_achieve_url,
   }
   if (materialized.note) result.note = materialized.note
+  if (materialized.agentNote) result.agentNote = materialized.agentNote
   prog.done()
   return result
 }

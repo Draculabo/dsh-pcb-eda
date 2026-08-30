@@ -131,7 +131,11 @@ describe('runGenerateSchematic', () => {
     const result = await runGenerateSchematic({ description: 'x' }, undefined, env)
     expect(result.status).toBe('generated')
     expect((result.schFiles as Array<{ filename: string; content?: string }>)[0]!.content).toBe('(kicad)')
-    expect(result.note).toMatch(/inline/)
+    // Degraded state is split by audience: the human gets the status line, the
+    // agent gets the "source is still inline / in the zip" explanation on
+    // `agentNote`, which the card never renders.
+    expect(result.note).toMatch(/storage partially or fully unavailable/)
+    expect(result.agentNote).toMatch(/inline/)
   })
 
   it('throws when the agent produced no files', async () => {

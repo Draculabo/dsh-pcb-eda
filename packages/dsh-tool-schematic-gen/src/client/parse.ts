@@ -38,7 +38,13 @@ export interface SchResult {
   fileCount: number | null
   moduleCount: number | null
   connectionCount: number | null
+  /** User-safe status detail — rendered by the card. */
   note: string | null
+  /**
+   * Agent-only directive/explanation. Parsed only so the shape is explicit;
+   * the card deliberately never renders it.
+   */
+  agentNote: string | null
 }
 
 export type ProjectedPhase =
@@ -109,6 +115,7 @@ export function parseSchResult(text: string): SchResult | null {
     moduleCount: typeof o.module_count === 'number' ? o.module_count : null,
     connectionCount: typeof o.connection_count === 'number' ? o.connection_count : null,
     note: typeof o.note === 'string' ? o.note : null,
+    agentNote: typeof o.agentNote === 'string' ? o.agentNote : null,
   }
 }
 

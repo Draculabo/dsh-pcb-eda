@@ -753,7 +753,6 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
     return (
       <div className="hq-genhit">
         {genHitHeader(headerKind, state.phase, t)}
-        {state.phase === 'cancelled' && result?.note ? <div className="hq-genhit__note">{result.note}</div> : null}
       </div>
     )
   }
@@ -794,7 +793,9 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
     return (
       <div className="hq-genhit">
         {genHitHeader(result.kind, 'needs_confirmation', t)}
-        {result.note ? <div className="hq-genhit__note">{result.note}</div> : null}
+        {/* `result.agentNote` is an AGENT-ONLY directive — never render it.
+            The human-facing equivalent is this localized hint. */}
+        <div className="hq-genhit__note">{t('card.editor.hint')}</div>
         {result.dimensions && typeof result.dimensions === 'object'
           ? (
             <HqEdaDimensionEditor

@@ -7,9 +7,12 @@
  *
  * Result shapes produced by the node half (`src/tools.ts`):
  *   { status:'generated', kind, fileUrl, filename, artifact:{id,type,filename,size}, content?, pkgType?, dimensions?, note?, serviceMessage? }
- *   { status:'needs_confirmation', kind:'footprint', pkgType, fileName, dimensions, note }
+ *   { status:'needs_confirmation', kind:'footprint', pkgType, fileName, dimensions, agentNote }
  *   { status:'cancelled', kind:'footprint', pkgType, fileName, ... }
  *   { status:'needs_auth', kind:'symbol'|'footprint', hint }
+ *
+ * `note` is user-safe status detail; `agentNote` is an agent-only directive and
+ * is deliberately NOT rendered (see the `src/tools.ts` module header).
  */
 
 import { FIELD_LABEL_KEY, type Translate } from './i18n.js'
@@ -43,7 +46,13 @@ export interface GenResult {
   pkgType: string | null
   fileName: string | null
   dimensions: Record<string, unknown> | null
+  /** Safe to show a human: degradation / status detail. */
   note: string | null
+  /**
+   * Agent-only directive (what to call next, what not to repeat in the reply).
+   * The card MUST NOT render this — see `src/tools.ts` module header.
+   */
+  agentNote: string | null
   serviceMessage: string | null
 }
 
@@ -130,6 +139,7 @@ export function parseGenResult(text: string): GenResult | null {
     fileName: typeof obj.fileName === 'string' ? obj.fileName : null,
     dimensions,
     note: typeof obj.note === 'string' ? obj.note : null,
+    agentNote: typeof obj.agentNote === 'string' ? obj.agentNote : null,
     serviceMessage: typeof obj.serviceMessage === 'string' ? obj.serviceMessage : null,
   }
 }
