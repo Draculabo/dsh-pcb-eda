@@ -4,8 +4,12 @@
 import { useCallback } from 'react'
 import { useLocale } from './theme.js'
 
-const COPY: Record<string, Record<string, string>> = {
-  zh: {
+/**
+ * Chinese is the source of truth: `CopyKey` is derived from it and `EN` is
+ * typed against it, so a key added to `ZH` but missing from `EN` is a COMPILE
+ * error instead of a silent Chinese fallback at runtime.
+ */
+const ZH = {
     'card.title.schematic': '生成原理图',
     'card.title.system': '生成系统设计',
     'card.kind.schematic': '原理图',
@@ -50,8 +54,15 @@ const COPY: Record<string, Record<string, string>> = {
     'card.auth.desc': '工具「{tool}」需要登录华秋 EDA AI 账号才能继续。请在下方的登录框完成登录（或点击左侧「华秋EDA AI登录」按钮）；登录完成后，回复助手「已登录，请重试」，助手会自动重新调用该工具。',
     'card.auth.loggedIn': '✓ 已登录{nickname}—— 现在可以回复助手「已登录，请重试」，助手会重新调用工具。',
     'card.auth.loggedOut': '未登录 —— 请在上方登录华秋 EDA AI（eda.cn）账号，或点击左侧「华秋EDA AI 登录」按钮；登录完成后让助手重试。',
-  },
-  en: {
+    // Substituted into `{nickname}` by `card.auth.loggedIn`. zh uses a
+    // full-width colon, en a half-width one plus a space — hardcoding '：'
+    // made the English card read "Logged in：John".
+    'card.nicknameSep': '：{nickname}',
+  } as const
+
+export type CopyKey = keyof typeof ZH
+
+const EN: Record<CopyKey, string> = {
     'card.title.schematic': 'Generated schematic',
     'card.title.system': 'Generated system design',
     'card.kind.schematic': 'schematic',
@@ -90,18 +101,25 @@ const COPY: Record<string, Record<string, string>> = {
     'card.regeneratePrompt.schematic': 'Please regenerate the schematic above',
     'card.regeneratePrompt.system': 'Please regenerate the system design above',
     'card.auth.title': 'Huaqiu EDA AI (eda.cn) login',
-    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA AI login. Complete the login below (or use the 华秋EDA AI sidebar button); then reply "已登录，请重试" so the assistant can retry the tool.',
-    'card.auth.loggedIn': '✓ Logged in{nickname} — reply "已登录，请重试" and the assistant will retry.',
+    // The reply phrase was hardcoded to the Chinese "已登录，请重试" even in
+    // this English string, telling an English-speaking user to type Chinese.
+    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA AI login. Complete the login below (or use the 华秋EDA AI sidebar button); then reply "I have logged in, please retry" so the assistant can retry the tool.',
+    'card.auth.loggedIn': '✓ Logged in{nickname} — reply "I have logged in, please retry" and the assistant will retry.',
     'card.auth.loggedOut': 'Not logged in — complete the login above, or use the 华秋EDA AI sidebar button.',
-  },
+    'card.nicknameSep': ': {nickname}',
 }
+
+const COPY: Record<'zh' | 'en', Record<CopyKey, string>> = { zh: ZH, en: EN }
+
+/** Every copy key, in declaration order (used to assert bilingual balance). */
+export const COPY_KEYS = Object.keys(ZH) as CopyKey[]
 
 export type Translate = (key: string, params?: Record<string, unknown>) => string
 
 export function translate(lang: 'zh' | 'en', key: string, params?: Record<string, unknown>): string {
-  const dict = lang === 'en' ? COPY.en! : COPY.zh!
-  let v = dict[key]
-  if (v === undefined) v = COPY.zh![key]
+  const dict = lang === 'en' ? COPY.en : COPY.zh
+  let v = dict[key as CopyKey]
+  if (v === undefined) v = COPY.zh[key as CopyKey]
   if (v === undefined) v = key
   if (params) {
     for (const k of Object.keys(params)) {

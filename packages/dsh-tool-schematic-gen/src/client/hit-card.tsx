@@ -204,7 +204,9 @@ function LoginCard({ toolName, authState, t }: { toolName: string; authState?: A
         <p className="hq-sch__login-desc">{t('card.auth.desc', { tool: toolName })}</p>
         <p className="hq-sch__login-status" style={{ color: authState?.authenticated ? '#1677ff' : '#d4380d' }}>
           {authState?.authenticated
-            ? t('card.auth.loggedIn', { nickname: authState.nickname ? `：${authState.nickname}` : '' })
+            ? t('card.auth.loggedIn', {
+                nickname: authState.nickname ? t('card.nicknameSep', { nickname: authState.nickname }) : '',
+              })
             : t('card.auth.loggedOut')}
         </p>
         <iframe

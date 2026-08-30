@@ -149,6 +149,40 @@ describe('symbol-footprint tool bodies', () => {
     expect(result.artifact).toMatchObject({ type: 'footprint', filename: 'SOIC8.kicad_mod' })
   })
 
+  it('renders the direct-footprint question in the configured HITL language', async () => {
+    const captured: Record<string, unknown>[] = []
+    const userQuestions = {
+      ask: async (options: Record<string, unknown>) => {
+        captured.push(options)
+        return { answers: [{ selected: ['使用'] }] }
+      },
+    }
+    const directEnv = {
+      deps: {
+        processEnv: {},
+        random: () => 0.1234567,
+        socketFactory: emitOnOpen({ action: 'footprint_button', context: { params: '{"fileUrl":"https://x/auto.kicad_mod"}' } }),
+        fetchImpl: FETCH_OK,
+      },
+      getUserQuestions: () => userQuestions,
+    }
+
+    // No `hitlLanguage` → the package default (zh), matching the card copy.
+    const zh = await runGenerateFootprintFromImage({ image_url: 'data:image/png;base64,AAAA' }, undefined, stubEnv(directEnv))
+    expect(zh.status).toBe('generated')
+    expect(zh.confirmedByUser).toBe(true)
+    expect(captured[0]).toBeDefined()
+    expect((captured[0]!.questions as Array<{ header: string }>)[0]!.header).toBe('封装')
+
+    captured.length = 0
+    await runGenerateFootprintFromImage(
+      { image_url: 'data:image/png;base64,AAAA' },
+      undefined,
+      stubEnv(Object.assign({}, directEnv, { hitlLanguage: 'en' as const })),
+    )
+    expect((captured[0]!.questions as Array<{ header: string }>)[0]!.header).toBe('Footprint')
+  })
+
   it('the direct footprint path falls back to a generated result when no user-questions channel', async () => {
     const env = stubEnv({
       deps: {

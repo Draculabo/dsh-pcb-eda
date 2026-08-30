@@ -26,11 +26,23 @@ export const DEFAULT_COPILOTKIT_URL = 'https://gen.eda.cn/api/copilotkit'
 /** Default production export-zip endpoint. */
 export const DEFAULT_EXPORT_ZIP_URL = 'https://gen.eda.cn/api/modular_circuit/export-zip'
 
+/**
+ * Language hint sent to the agent when the caller omits `user_language`.
+ *
+ * This was a bare `'简体中文'` literal inside `buildRunBody`, which pinned every
+ * agent reply to Chinese even for an English UI. The node half has no way to
+ * read the host UI locale (the tool is invoked by the model, not the browser),
+ * so the value is a named, overridable default instead of an inline literal.
+ */
+export const DEFAULT_AGENT_LANGUAGE = '简体中文'
+
 /** Resolved runtime config — endpoints only; the account is per-call via auth. */
 export interface SchematicGenConfig {
   copilotkitUrl: string
   exportZipUrl: string
   cookie: string | null
+  /** Fallback agent language; see `DEFAULT_AGENT_LANGUAGE`. */
+  defaultLanguage: string
 }
 
 /** The eda.cn account derived from `huaqiuAuth` per call. */
@@ -52,6 +64,7 @@ export function resolveConfig(env?: Record<string, string | undefined>): Schemat
     cookie: typeof e['HQ_EDA_COOKIE'] === 'string' && e['HQ_EDA_COOKIE'].length > 0
       ? e['HQ_EDA_COOKIE']
       : null,
+    defaultLanguage: get('HQ_EDA_DEFAULT_LANGUAGE', DEFAULT_AGENT_LANGUAGE),
   }
 }
 
@@ -153,7 +166,7 @@ export function buildRunBody(
   const tid = typeof threadId === 'string' && threadId.length > 0 ? threadId : randomUUID()
   const runId = randomUUID()
   const msgId = randomUUID()
-  const lang = typeof language === 'string' && language.length > 0 ? language : '简体中文'
+  const lang = typeof language === 'string' && language.length > 0 ? language : config.defaultLanguage
   const state = agentId === agentIds.SCHEMATIC
     ? emptySchematicState(config, account, lang)
     : emptySystemState(config, account, lang)

@@ -3,6 +3,7 @@ import {
   agentIds,
   buildHeaders,
   buildRunBody,
+  DEFAULT_AGENT_LANGUAGE,
   DEFAULT_COPILOTKIT_URL,
   resolveConfig,
   sanitizeZipBaseName,
@@ -25,6 +26,15 @@ describe('resolveConfig', () => {
     const c = resolveConfig({ HQ_EDA_COPILOTKIT_URL: 'https://stg.example/api/copilotkit', HQ_EDA_COOKIE: 'a=1' })
     expect(c.copilotkitUrl).toBe('https://stg.example/api/copilotkit')
     expect(c.cookie).toBe('a=1')
+  })
+
+  it('lets a deployment override the agent-language default', () => {
+    // `buildRunBody` used to inline a bare '简体中文' literal here, which pinned
+    // every agent reply to Chinese even under an English UI. The node half
+    // cannot read the host UI locale (the model invokes the tool, not the
+    // browser), so the fallback is deployment config instead.
+    expect(resolveConfig({}).defaultLanguage).toBe(DEFAULT_AGENT_LANGUAGE)
+    expect(resolveConfig({ HQ_EDA_DEFAULT_LANGUAGE: 'English' }).defaultLanguage).toBe('English')
   })
 })
 
@@ -60,6 +70,20 @@ describe('buildRunBody', () => {
     expect(state.module_graph).toBeNull()
     expect(state.user_language).toBe('简体中文')
     expect(state.design_name).toBeNull()
+  })
+
+  it('falls back to config.defaultLanguage rather than a hardcoded literal', () => {
+    const config = resolveConfig({ HQ_EDA_DEFAULT_LANGUAGE: 'English' })
+    const body = buildRunBody(agentIds.SYSTEM, 'an alarm clock', config, ACCOUNT, undefined, 'thr-3')
+    const state = (body.body as Record<string, unknown>).state as Record<string, unknown>
+    expect(state.user_language).toBe('English')
+  })
+
+  it('still prefers an explicit language over the configured default', () => {
+    const config = resolveConfig({ HQ_EDA_DEFAULT_LANGUAGE: 'English' })
+    const body = buildRunBody(agentIds.SYSTEM, 'an alarm clock', config, ACCOUNT, '日本語', 'thr-4')
+    const state = (body.body as Record<string, unknown>).state as Record<string, unknown>
+    expect(state.user_language).toBe('日本語')
   })
 })
 

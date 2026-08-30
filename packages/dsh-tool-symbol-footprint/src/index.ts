@@ -30,6 +30,7 @@ import type { HuaqiuArtifacts } from '@huaqiu/dsh-artifacts'
 import type { HuaqiuAuthService } from '@huaqiu/dsh-auth'
 import { createSymbolFootprintTools } from './tools.js'
 import type { UserQuestionsLike } from './dimensions.js'
+import { resolveHitlLocale } from './hitl-i18n.js'
 import { resolveEndpoint, packageTypes } from './protocol.js'
 
 /** Plugin id — matches package.json. */
@@ -46,6 +47,15 @@ export interface SymbolFootprintConfig {
   /** Endpoint override, env-backed (`HQ_EDA_COMPONENT_WS_URL`); still
    *  whitelist-checked. */
   endpoint?: string
+  /**
+   * UI language for the human-in-the-loop prompt (the accept/decline question
+   * shown through the `userQuestions` seam). The node half has no DOM, so it
+   * cannot read `<html lang>` the way the browser card does — this is the
+   * deployment-side equivalent. Accepts `zh` / `en` (or a BCP-47 tag such as
+   * `zh-CN`); falls back to the package default, which is zh to match the
+   * card copy. Also settable via `HQ_EDA_HITL_LANGUAGE`.
+   */
+  hitlLanguage?: string
 }
 
 /**
@@ -75,9 +85,17 @@ export function apply(ctx: Context, config: SymbolFootprintConfig = {}): () => v
   // Fail fast at load time on a misconfigured endpoint override.
   const endpoint = resolveEndpoint(config.endpoint ? { HQ_EDA_COMPONENT_WS_URL: config.endpoint } : undefined)
 
+  // Config wins over env; both go through `resolveHitlLocale`, which coerces
+  // tags (`zh-CN`) to an id and falls back to the package default.
+  const hitlLanguage = resolveHitlLocale(
+    config.hitlLanguage ??
+      (typeof process !== 'undefined' ? process.env['HQ_EDA_HITL_LANGUAGE'] : undefined),
+  )
+
   const env = {
     auth: auth.auth,
     artifacts,
+    hitlLanguage,
     deps: { processEnv: typeof process !== 'undefined' ? process.env : undefined },
     getUserQuestions: (): UserQuestionsLike | undefined => {
       try {

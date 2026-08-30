@@ -14,7 +14,7 @@
  *   - previews render from the artifact content via the bundled ecad-renderer.
  */
 import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { projectToolCall, resultTextOf, humanizeKey, defaultFilenameFor, formatBytes, hashString, type GenResult, type ToolBlockLike } from './parse.js'
+import { projectToolCall, resultTextOf, fieldLabel, defaultFilenameFor, formatBytes, hashString, type GenResult, type ToolBlockLike } from './parse.js'
 import {
   bgaGrid, classifyDimensions, clampDimension, dimensionBounds, dimensionConfirmMessage,
   dimensionDeclineMessage, formatDimension, normalizeDimensions, numVal, parseDimension,
@@ -320,7 +320,7 @@ function HqEdaDimensionEditor(props: HqEdaDimensionEditorProps): ReactElement {
   const VIEW_H = 230
   const PAD = 34
   const geom = rectFromValues(values, widthKey, heightKey, VIEW_W, VIEW_H, PAD)
-  const labelFor = (key: string): string => humanizeKey(key)
+  const labelFor = (key: string): string => fieldLabel(key, t)
   const fieldUnit = (key: string): string => (COUNT_KEYS.has(key) ? '' : t('card.editor.unit'))
 
   const withKey = (obj: Record<string, number>, key: string, value: number): Record<string, number> => {
@@ -620,7 +620,9 @@ function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
         <p className="hq-genhit__login-desc">{t('card.auth.desc', { tool: toolName })}</p>
         <p className="hq-genhit__login-status" style={{ color: authState?.authenticated ? '#1677ff' : '#d4380d' }}>
           {authState?.authenticated
-            ? t('card.auth.loggedIn', { nickname: authState.nickname ? `：${authState.nickname}` : '' })
+            ? t('card.auth.loggedIn', {
+                nickname: authState.nickname ? t('card.nicknameSep', { nickname: authState.nickname }) : '',
+              })
             : t('card.auth.loggedOut')}
         </p>
         <iframe

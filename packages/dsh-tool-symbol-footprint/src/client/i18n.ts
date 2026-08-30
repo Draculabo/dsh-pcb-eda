@@ -6,8 +6,13 @@
 import { useCallback } from 'react'
 import { useLocale } from './theme.js'
 
-const COPY: Record<string, Record<string, string>> = {
-  zh: {
+/**
+ * Chinese is the source of truth: `CopyKey` is derived from it, and `EN` is
+ * typed against it. A key added to `ZH` but missing from `EN` is a COMPILE
+ * error, which is what stops a half-translated pack from silently falling
+ * back to Chinese at runtime.
+ */
+const ZH = {
     'card.title.symbol': '生成符号',
     'card.title.footprint': '生成封装',
     'card.title.generic': '生成结果',
@@ -58,8 +63,45 @@ const COPY: Record<string, Record<string, string>> = {
     'card.auth.desc': '工具「{tool}」需要登录华秋 EDA 账号才能继续。请在下方的登录框完成登录（或点击左侧「华秋EDA登录」按钮）；登录完成后，回复助手「已登录，请重试」，助手会自动重新调用该工具。',
     'card.auth.loggedIn': '✓ 已登录{nickname}—— 现在可以回复助手「已登录，请重试」，助手会重新调用工具。',
     'card.auth.loggedOut': '未登录 —— 请在上方登录华秋 EDA（eda.cn）账号，或点击左侧「华秋EDA登录」按钮；登录完成后让助手重试。',
-  },
-  en: {
+    // Rendered inside `{nickname}` by `card.auth.loggedIn`. The separator is
+    // locale-specific punctuation: zh uses a full-width colon, en a half-width
+    // one followed by a space. Hardcoding '：' made en read "：John".
+    'card.nicknameSep': '：{nickname}',
+    // ── dimension field labels ────────────────────────────────────────────
+    'field.maxOf': '{field}（最大）',
+    'field.minOf': '{field}（最小）',
+    'field.width': '宽',
+    'field.height': '高',
+    'field.length': '长',
+    'field.depth': '深度',
+    'field.span': '跨距',
+    'field.bodyWidth': '本体宽',
+    'field.bodyLength': '本体长',
+    'field.bodyHeight': '本体高',
+    'field.boardWidth': '板宽',
+    'field.boardHeight': '板高',
+    'field.overallWidth': '总宽',
+    'field.overallLength': '总长',
+    'field.overallHeight': '总高',
+    'field.pitch': '间距',
+    'field.pitchX': 'X 向间距',
+    'field.pitchY': 'Y 向间距',
+    'field.leadPitch': '引脚间距',
+    'field.padWidth': '焊盘宽',
+    'field.padLength': '焊盘长',
+    'field.padHeight': '焊盘高',
+    'field.leadWidth': '引脚宽',
+    'field.leadLength': '引脚长',
+    'field.leadSpan': '引脚跨距',
+    'field.pinCount': '引脚数',
+    'field.rows': '行数',
+    'field.columns': '列数',
+    'field.standoff': '抬升高度',
+  } as const
+
+export type CopyKey = keyof typeof ZH
+
+const EN: Record<CopyKey, string> = {
     'card.title.symbol': 'Generated symbol',
     'card.title.footprint': 'Generated footprint',
     'card.title.generic': 'Generated result',
@@ -107,18 +149,109 @@ const COPY: Record<string, Record<string, string>> = {
     'card.editor.issueOutOfRange': 'outside allowed range',
     'card.editor.issueMinGtMax': 'min is greater than max',
     'card.auth.title': 'Huaqiu EDA (eda.cn) login',
-    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA login. Complete the login below (or use the 华秋EDA AI login button in the sidebar); then reply "已登录，请重试" so the assistant can retry the tool.',
-    'card.auth.loggedIn': '✓ Logged in{nickname} — reply "已登录，请重试" and the assistant will retry.',
+    // The reply phrase was hardcoded to the Chinese "已登录，请重试" even in
+    // this English string, telling an English-speaking user to type Chinese.
+    'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA login. Complete the login below (or use the 华秋EDA AI login button in the sidebar); then reply "I have logged in, please retry" so the assistant can retry the tool.',
+    'card.auth.loggedIn': '✓ Logged in{nickname} — reply "I have logged in, please retry" and the assistant will retry.',
     'card.auth.loggedOut': 'Not logged in — complete the login above, or use the 华秋EDA AI sidebar button.',
-  },
+    'card.nicknameSep': ': {nickname}',
+    'field.maxOf': '{field} (max)',
+    'field.minOf': '{field} (min)',
+    'field.width': 'Width',
+    'field.height': 'Height',
+    'field.length': 'Length',
+    'field.depth': 'Depth',
+    'field.span': 'Span',
+    'field.bodyWidth': 'Body width',
+    'field.bodyLength': 'Body length',
+    'field.bodyHeight': 'Body height',
+    'field.boardWidth': 'Board width',
+    'field.boardHeight': 'Board height',
+    'field.overallWidth': 'Overall width',
+    'field.overallLength': 'Overall length',
+    'field.overallHeight': 'Overall height',
+    'field.pitch': 'Pitch',
+    'field.pitchX': 'Pitch X',
+    'field.pitchY': 'Pitch Y',
+    'field.leadPitch': 'Lead pitch',
+    'field.padWidth': 'Pad width',
+    'field.padLength': 'Pad length',
+    'field.padHeight': 'Pad height',
+    'field.leadWidth': 'Lead width',
+    'field.leadLength': 'Lead length',
+    'field.leadSpan': 'Lead span',
+    'field.pinCount': 'Pin count',
+    'field.rows': 'Rows',
+    'field.columns': 'Columns',
+    'field.standoff': 'Standoff',
+}
+
+const COPY: Record<'zh' | 'en', Record<CopyKey, string>> = { zh: ZH, en: EN }
+
+/** Every copy key, in declaration order (used to assert bilingual balance). */
+export const COPY_KEYS = Object.keys(ZH) as CopyKey[]
+
+/**
+ * Canonical dimension key → i18n copy key.
+ *
+ * Keys are lowercased with separators stripped, so `body_width`, `bodyWidth`
+ * and `Body Width` all resolve to `bodywidth`. Unknown keys fall back to
+ * `humanizeKey()`, which is why this map only needs the common vocabulary —
+ * the agent can emit arbitrary dimension names.
+ */
+export const FIELD_LABEL_KEY: Record<string, CopyKey> = {
+  w: 'field.width',
+  width: 'field.width',
+  h: 'field.height',
+  height: 'field.height',
+  l: 'field.length',
+  length: 'field.length',
+  d: 'field.depth',
+  depth: 'field.depth',
+  e: 'field.span',
+  span: 'field.span',
+  bodywidth: 'field.bodyWidth',
+  bodylength: 'field.bodyLength',
+  bodyheight: 'field.bodyHeight',
+  boardwidth: 'field.boardWidth',
+  boardheight: 'field.boardHeight',
+  overallwidth: 'field.overallWidth',
+  overalllength: 'field.overallLength',
+  overallheight: 'field.overallHeight',
+  pitch: 'field.pitch',
+  pitchx: 'field.pitchX',
+  pitchy: 'field.pitchY',
+  pitchd: 'field.pitch',
+  pitche: 'field.pitch',
+  leadpitch: 'field.leadPitch',
+  padwidth: 'field.padWidth',
+  padlength: 'field.padLength',
+  padheight: 'field.padHeight',
+  leadwidth: 'field.leadWidth',
+  leadlength: 'field.leadLength',
+  leadspan: 'field.leadSpan',
+  pincount: 'field.pinCount',
+  pins: 'field.pinCount',
+  totalpins: 'field.pinCount',
+  n: 'field.pinCount',
+  nmax: 'field.pinCount',
+  rows: 'field.rows',
+  row: 'field.rows',
+  columns: 'field.columns',
+  column: 'field.columns',
+  col: 'field.columns',
+  cols: 'field.columns',
+  standoff: 'field.standoff',
 }
 
 export type Translate = (key: string, params?: Record<string, unknown>) => string
 
 export function translate(lang: 'zh' | 'en', key: string, params?: Record<string, unknown>): string {
-  const dict = lang === 'en' ? COPY.en! : COPY.zh!
-  let v = dict[key]
-  if (v === undefined) v = COPY.zh![key]
+  const dict = lang === 'en' ? COPY.en : COPY.zh
+  let v = dict[key as CopyKey]
+  // `EN` is typed against `ZH`, so a key cannot be missing at compile time.
+  // This stays as a runtime net for keys built dynamically at a call site.
+  if (v === undefined) v = COPY.zh[key as CopyKey]
   if (v === undefined) v = key
   if (params) {
     for (const k of Object.keys(params)) {

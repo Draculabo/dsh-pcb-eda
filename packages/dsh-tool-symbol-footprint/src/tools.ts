@@ -43,6 +43,7 @@ import {
   type ExtractedDimensions,
   type UserQuestionsLike,
 } from './dimensions.js'
+import type { HitlLocale } from './hitl-i18n.js'
 
 /** Structural alias of the DSH `JsonValue` (see part-search Phase 1 §15.2.1). */
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
@@ -84,6 +85,11 @@ export interface SymbolFootprintEnv {
   /** `huaqiuArtifacts` node service — preview-artifact store. */
   artifacts: HuaqiuArtifacts
   deps?: SymbolFootprintDeps
+  /**
+   * UI language for the HIL prompt copy. Deployment-level (the node half has
+   * no DOM to read the host locale from); see `SymbolFootprintConfig`.
+   */
+  hitlLanguage?: HitlLocale
   /** Opportunistic HIL seam — resolved per call, not injected. */
   getUserQuestions?: () => UserQuestionsLike | undefined
 }
@@ -233,7 +239,14 @@ async function handleDirectFootprint(
 
   let decision
   try {
-    decision = await confirmDirectFootprintWithHuman(userQuestions, generated, exec)
+    // Merge the deployment locale into the execution context rather than
+    // passing a 5th positional arg: `locale` is not part of the tool-exec
+    // seam, it is only read by the HIL helpers.
+    decision = await confirmDirectFootprintWithHuman(
+      userQuestions,
+      generated,
+      Object.assign({}, exec, { locale: env.hitlLanguage }),
+    )
   } catch (err) {
     console.warn(LOG_TAG, 'direct-footprint confirmation unavailable', String((err as Error)?.message || err))
     return Object.assign(
@@ -436,8 +449,10 @@ const AUTH_GATE_NOTE =
   'status "needs_auth", the web client is showing a login card with an embedded ' +
   'eda.cn login iframe (the human-in-the-loop step). Ask the user to complete the ' +
   'login there or via the 华秋EDA login button in the sidebar (you may use ' +
-  'ask_user_question with options "已登录，请重试" / "取消" to wait), then call this ' +
-  'tool again. Never invent credentials and never claim success when the result ' +
+  'ask_user_question to wait, offering a "retry now that I have logged in" ' +
+  'option and a "cancel" option — phrase BOTH in the language the user is ' +
+  'writing in), then call this tool again. Never invent credentials and never ' +
+  'claim success when the result ' +
   'is needs_auth.'
 
 function createGenerateSymbolTool(env: SymbolFootprintEnv) {

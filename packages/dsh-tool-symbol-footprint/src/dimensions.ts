@@ -12,6 +12,13 @@
  *
  * @module @huaqiu/dsh-tool-symbol-footprint
  */
+import {
+  HITL_LABELS,
+  hitlT,
+  resolveHitlLocale,
+  type HitlLocale,
+  type HitlTranslate,
+} from './hitl-i18n.js'
 
 /** Normalized `footprint_dimensions` context shape. */
 export interface ExtractedDimensions {
@@ -103,20 +110,71 @@ export function parseDimensionOverrides(
   return { overrides, unknownKeys, badValues }
 }
 
-/** Render dimensions as `key = value` lines for a confirmation prompt. */
-export function renderDimensionsForHuman(dimensions: Record<string, string | number | boolean>): string {
+/**
+ * Render dimensions as `key = value` lines for a confirmation prompt.
+ *
+ * @param locale - UI language for the empty-state line; see `hitl-i18n.ts`.
+ */
+export function renderDimensionsForHuman(
+  dimensions: Record<string, string | number | boolean>,
+  locale?: HitlLocale,
+): string {
   const keys = Object.keys(dimensions || {})
-  if (keys.length === 0) return '(the extractor returned no dimension values)'
+  if (keys.length === 0) return hitlT(locale)('render.empty')
   return keys.map((key) => key + ' = ' + String(dimensions[key])).join('\n')
 }
 
-/** Option labels of the confirmation question — also the answer vocabulary. */
+/**
+ * Option labels of the confirmation question — also the answer vocabulary.
+ *
+ * These stay ENGLISH for backwards compatibility (they are part of the
+ * module's public surface and of the answer check below). A localized run
+ * renders `HIL_LABELS[locale]` instead; `matchesAny()` accepts either, so a
+ * host that echoes back the English constant still resolves correctly.
+ */
 export const HIL_CONFIRM = 'Confirm'
 export const HIL_EDIT = 'Edit values'
 export const HIL_CANCEL = 'Cancel'
 /** Option labels for the direct-footprint (service auto-generated) question. */
 export const HIL_ACCEPT = 'Accept'
 export const HIL_DECLINE = 'Decline'
+
+/**
+ * Localized answer vocabulary, keyed by locale.
+ *
+ * Re-exported from `hitl-i18n.js` (where it is derived from the copy packs)
+ * so the HIL_* names stay together in this module's public surface. The `en`
+ * row equals the `HIL_*` constants below — `HITL_LABELS` is the single source,
+ * and a test asserts the two agree.
+ */
+export const HIL_LABELS = HITL_LABELS
+
+/**
+ * Does the human's selection include any of `candidates`?
+ *
+ * Trimmed and case-insensitive, and every locale's label for the same action
+ * is passed in — so a host echoing the English constant, the localized label,
+ * or a differently-cased version all resolve to the same verdict.
+ */
+function matchesAny(selected: string[], candidates: string[]): boolean {
+  if (selected.length === 0) return false
+  const wanted = new Set(candidates.map((c) => c.trim().toLowerCase()))
+  for (const value of selected) {
+    if (wanted.has(String(value).trim().toLowerCase())) return true
+  }
+  return false
+}
+
+/** Cancel / decline in every locale, plus the English constants. */
+function cancelCandidates(t: HitlTranslate): string[] {
+  return [HIL_LABELS.zh.cancel, HIL_LABELS.en.cancel, t('confirm.opt.cancel')]
+}
+function declineCandidates(t: HitlTranslate): string[] {
+  return [HIL_LABELS.zh.decline, HIL_LABELS.en.decline, t('direct.opt.decline')]
+}
+function editCandidates(t: HitlTranslate): string[] {
+  return [HIL_LABELS.zh.edit, HIL_LABELS.en.edit, t('confirm.opt.edit')]
+}
 
 /** Minimal structural shape of the `userQuestions.ask()` result we consume. */
 export interface UserQuestionAnswer {
@@ -130,6 +188,12 @@ export interface UserQuestionsLike {
 export interface ExecutionLike {
   agent?: unknown
   signal?: AbortSignal
+  /**
+   * UI language for the human-in-the-loop prompt copy. Accepts a locale id or
+   * a BCP-47 tag (`zh-CN`, `en-US`); anything unresolved falls back to the
+   * package default (zh) — see `hitl-i18n.ts`.
+   */
+  locale?: HitlLocale | string
 }
 
 export type DimensionConfirmResult =
@@ -148,22 +212,26 @@ export async function confirmDimensionsWithHuman(
   extracted: ExtractedDimensions,
   exec?: ExecutionLike,
 ): Promise<DimensionConfirmResult> {
-  const pkg = extracted.pkgType ? extracted.pkgType.toUpperCase() : 'the package'
-  const detail =
-    'Extracted ' + pkg + ' dimensions:\n\n' + renderDimensionsForHuman(extracted.dimensions) +
-    '\n\nTo change values, choose "' + HIL_EDIT + '" and type corrections as ' +
-    'key=value pairs, e.g. "W=6.2, pitch=1.27".'
+  const locale = resolveHitlLocale(exec?.locale)
+  const t = hitlT(locale)
+  const labels = HIL_LABELS[locale]
+  const pkg = extracted.pkgType ? extracted.pkgType.toUpperCase() : t('confirm.pkgFallback')
+  const detail = t('confirm.detail', {
+    pkg,
+    dims: renderDimensionsForHuman(extracted.dimensions, locale),
+    edit: labels.edit,
+  })
 
   const askOptions: Record<string, unknown> = {
     questions: [{
       id: 'footprint-dimensions',
-      header: 'Footprint',
-      question: 'Are these extracted ' + pkg + ' dimensions correct?',
+      header: t('header'),
+      question: t('confirm.question', { pkg }),
       detail,
       options: [
-        { label: HIL_CONFIRM, description: 'Generate the footprint using these dimensions.' },
-        { label: HIL_EDIT, description: 'Correct one or more values before generating.' },
-        { label: HIL_CANCEL, description: 'Do not generate a footprint.' },
+        { label: labels.confirm, description: t('confirm.opt.confirm.desc') },
+        { label: labels.edit, description: t('confirm.opt.edit.desc') },
+        { label: labels.cancel, description: t('confirm.opt.cancel.desc') },
       ],
     }],
   }
@@ -175,19 +243,19 @@ export async function confirmDimensionsWithHuman(
   const selected = first && Array.isArray(first.selected) ? first.selected : []
   const custom = first && typeof first.custom === 'string' ? first.custom : ''
 
-  if (selected.includes(HIL_CANCEL)) {
+  if (matchesAny(selected, cancelCandidates(t))) {
     return { verdict: 'cancelled', dimensions: extracted.dimensions, edited: false, unknownKeys: [], badValues: [] }
   }
 
   // Free text always counts as an edit, whichever option was highlighted.
   let correction = custom
-  if (correction.trim().length === 0 && selected.includes(HIL_EDIT)) {
+  if (correction.trim().length === 0 && matchesAny(selected, editCandidates(t))) {
     const followUpOptions: Record<string, unknown> = {
       questions: [{
         id: 'footprint-dimensions-edit',
-        header: 'Footprint',
-        question: 'Type the corrected values as key=value pairs (or leave empty to keep the extracted ones).',
-        detail: renderDimensionsForHuman(extracted.dimensions),
+        header: t('header'),
+        question: t('confirm.edit.question'),
+        detail: renderDimensionsForHuman(extracted.dimensions, locale),
       }],
     }
     if (exec && exec.agent !== undefined) followUpOptions.agent = exec.agent
@@ -223,16 +291,22 @@ export async function confirmDirectFootprintWithHuman(
   generated: { fileUrl?: string },
   exec?: ExecutionLike,
 ): Promise<DirectFootprintDecision> {
+  const locale = resolveHitlLocale(exec?.locale)
+  const t = hitlT(locale)
+  const labels = HIL_LABELS[locale]
   const askOptions: Record<string, unknown> = {
     questions: [{
       id: 'footprint-direct',
-      header: 'Footprint',
-      question: 'The service recognised this as a standard package and auto-generated a footprint. Use it?',
-      detail: 'Generated file: ' + (generated.fileUrl || '(unknown)') + '\n\nChoose "' + HIL_ACCEPT +
-        '" to use the auto-generated footprint, or "' + HIL_DECLINE + '" to provide dimensions manually.',
+      header: t('header'),
+      question: t('direct.question'),
+      detail: t('direct.detail', {
+        file: generated.fileUrl || t('direct.unknown'),
+        accept: labels.accept,
+        decline: labels.decline,
+      }),
       options: [
-        { label: HIL_ACCEPT, description: 'Use the auto-generated footprint.' },
-        { label: HIL_DECLINE, description: 'Decline; provide package_type and dimensions manually.' },
+        { label: labels.accept, description: t('direct.opt.accept.desc') },
+        { label: labels.decline, description: t('direct.opt.decline.desc') },
       ],
     }],
   }
@@ -243,7 +317,7 @@ export async function confirmDirectFootprintWithHuman(
   const first = answer && Array.isArray(answer.answers) ? answer.answers[0] : undefined
   const selected = first && Array.isArray(first.selected) ? first.selected : []
 
-  if (selected.includes(HIL_DECLINE)) {
+  if (matchesAny(selected, declineCandidates(t))) {
     return { verdict: 'declined' }
   }
   return { verdict: 'accepted' }

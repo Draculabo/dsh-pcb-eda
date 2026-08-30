@@ -14,6 +14,7 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'r
 import type { ProgressDoc, ProgressNote, RunKind, TodoItem } from '../progress.js'
 import { buildTree, countStatus, formatDuration, formatElapsed, type StackNode } from './trace-tree.js'
 import { useElapsed, useNow, useProgress } from './progress.js'
+import { useTraceNames } from './trace-names.js'
 import type { Translate } from './i18n.js'
 
 // ── one frame ──────────────────────────────────────────────────────────────
@@ -32,12 +33,18 @@ interface FrameProps {
   node: StackNode
   now: number
   running: boolean
+  /**
+   * Identifier → display name. The stack otherwise renders the raw backend
+   * identifiers (`node:schematicDesign`, `es_rag_search`) verbatim.
+   */
+  resolve: (name: string) => string
 }
 
-const StackFrame = memo(function StackFrame({ node, now, running }: FrameProps): ReactElement {
+const StackFrame = memo(function StackFrame({ node, now, running, resolve }: FrameProps): ReactElement {
   const [open, setOpen] = useState(true)
   const hasChildren = node.children.length > 0
   const counts = countStatus(node)
+  const label = resolve(node.name)
 
   const isRunning = node.status === 'running'
   const endedAt = node.finishedAt
@@ -58,7 +65,7 @@ const StackFrame = memo(function StackFrame({ node, now, running }: FrameProps):
     >
       <span className="hq-sch__frame-chev">{hasChildren ? (open ? '▾' : '▸') : ''}</span>
       <span className={dotClass(node.status)} />
-      <span className={nameClass} title={node.name}>{node.name}</span>
+      <span className={nameClass} title={label}>{label}</span>
       <span className="hq-sch__frame-meta">
         {node.repeat > 1 ? <span className="hq-sch__frame-count">×{node.repeat}</span> : null}
         {hasChildren && counts.total > 0
@@ -78,7 +85,7 @@ const StackFrame = memo(function StackFrame({ node, now, running }: FrameProps):
       {row}
       <div className="hq-sch__frame-children">
         {node.children.map((child) => (
-          <StackFrame key={child.id} node={child} now={now} running={running} />
+          <StackFrame key={child.id} node={child} now={now} running={running} resolve={resolve} />
         ))}
       </div>
     </div>
@@ -94,7 +101,9 @@ const StackFrame = memo(function StackFrame({ node, now, running }: FrameProps):
  * (capped at 320px) would sit pinned at the top showing work finished minutes
  * ago.
  */
-function StackList({ nodes, now, running }: { nodes: StackNode[]; now: number; running: boolean }): ReactElement {
+function StackList(
+  { nodes, now, running, resolve }: { nodes: StackNode[]; now: number; running: boolean; resolve: (name: string) => string },
+): ReactElement {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -111,7 +120,7 @@ function StackList({ nodes, now, running }: { nodes: StackNode[]; now: number; r
   return (
     <div className="hq-sch__stack" ref={ref}>
       {nodes.map((node) => (
-        <StackFrame key={node.id} node={node} now={now} running={running} />
+        <StackFrame key={node.id} node={node} now={now} running={running} resolve={resolve} />
       ))}
     </div>
   )
@@ -234,6 +243,11 @@ export function LiveProgress({ callId, kind, t }: LiveProgressProps): ReactEleme
     return buildTree(doc?.frames ?? [])
   }, [doc, kind])
 
+  // The stack renders the backend's own identifiers (`node:schematicDesign`,
+  // `es_rag_search`). Resolve them to copy in the host UI's language. The
+  // document knows the real run kind; the prop is only the caller's guess.
+  const resolve = useTraceNames(doc?.kind ?? kind)
+
   const label = doc?.stage
     ? t(`card.stage.${doc.stage.key}`)
     : t('card.progress.waiting')
@@ -248,7 +262,7 @@ export function LiveProgress({ callId, kind, t }: LiveProgressProps): ReactEleme
       <StageLadder stage={doc?.stage ?? null} failed={doc?.status === 'failed'} />
       {doc?.todos && doc.todos.length > 0 ? <TodoList todos={doc.todos} /> : null}
       {tree.length > 0
-        ? <StackList nodes={tree} now={now} running={running} />
+        ? <StackList nodes={tree} now={now} running={running} resolve={resolve} />
         : null}
     </div>
   )

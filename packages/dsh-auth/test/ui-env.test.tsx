@@ -190,4 +190,21 @@ describe('i18n', () => {
     // A key missing from both dictionaries stays visible (fail loud, not blank).
     expect(t('nope.missing' as AuthCopyKey)).toBe('nope.missing')
   })
+
+  it('localizes the nickname separator instead of hardcoding the full-width colon', () => {
+    // zh uses '：' (no space); en uses ': ' — hardcoding one made the other
+    // locale read "Logged in：John" / "已登录: John".
+    expect(translate('zh', 'card.nicknameSep', { nickname: '老铁' })).toBe('：老铁')
+    expect(translate('en', 'card.nicknameSep', { nickname: 'John' })).toBe(': John')
+  })
+
+  it('phrases the "I have logged in" reply in the reader\'s language', () => {
+    // Regression guard: the en string used to embed the Chinese literal
+    // "已登录，请重试", telling an English-speaking user to type Chinese.
+    for (const key of ['card.desc', 'card.loggedIn'] as AuthCopyKey[]) {
+      expect(translate('en', key, { tool: 'x', nickname: '' })).toContain('I have logged in, please retry')
+      expect(translate('en', key, { tool: 'x', nickname: '' })).not.toMatch(/已登录/)
+      expect(translate('zh', key, { tool: 'x', nickname: '' })).toContain('已登录，请重试')
+    }
+  })
 })

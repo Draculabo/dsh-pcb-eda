@@ -155,7 +155,9 @@ export function StatusLine({
   if (authenticated) {
     return (
       <p style={{ ...STATUS_STYLE, color: palette.success }}>
-        {t('card.loggedIn', { nickname: nickname ? `：${nickname}` : '' })}
+        {t('card.loggedIn', {
+          nickname: nickname ? t('card.nicknameSep', { nickname }) : '',
+        })}
       </p>
     )
   }

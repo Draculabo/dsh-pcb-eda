@@ -481,9 +481,10 @@ const AUTH_GATE_NOTE =
   'status "needs_auth", the web client is showing a login card with an embedded ' +
   'eda.cn login iframe (the human-in-the-loop step). Ask the user to complete the ' +
   'login there or via the 华秋EDA login button in the sidebar (you may use ' +
-  'ask_user_question with options "已登录，请重试" / "取消" to wait), then call this ' +
-  'tool again. Never invent credentials and never claim success when the result ' +
-  'is needs_auth.'
+  'ask_user_question to wait, offering a "retry now that I have logged in" ' +
+  'option and a "cancel" option — phrase BOTH in the language the user is ' +
+  'writing in), then call this tool again. Never invent credentials and never ' +
+  'claim success when the result is needs_auth.'
 
 // ── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -514,7 +515,10 @@ function createSchematicTool(env: SchematicGenEnv) {
       },
       user_language: {
         type: 'string',
-        description: 'Optional UI/language hint for the agent (e.g. "简体中文" or "English"). Defaults to 简体中文.',
+        // The fallback is deliberately NOT spelled out here: it is deployment
+        // config (`HQ_EDA_DEFAULT_LANGUAGE`), so quoting a literal default in
+        // agent-facing copy would go stale the moment it is overridden.
+        description: 'Optional language hint for the agent — pass the language the user is writing in (e.g. "简体中文" or "English"). Omit to use the deployment default.',
       },
     },
     output: { schema: { type: 'json' }, render: renderJson },
@@ -553,7 +557,10 @@ function createSystemTool(env: SchematicGenEnv) {
       },
       user_language: {
         type: 'string',
-        description: 'Optional UI/language hint for the agent (e.g. "简体中文" or "English"). Defaults to 简体中文.',
+        // The fallback is deliberately NOT spelled out here: it is deployment
+        // config (`HQ_EDA_DEFAULT_LANGUAGE`), so quoting a literal default in
+        // agent-facing copy would go stale the moment it is overridden.
+        description: 'Optional language hint for the agent — pass the language the user is writing in (e.g. "简体中文" or "English"). Omit to use the deployment default.',
       },
     },
     output: { schema: { type: 'json' }, render: renderJson },

@@ -32,6 +32,10 @@ const zh = {
   'card.loggedOut': '未登录 —— 请在上方登录华秋 EDA AI（eda.cn）账号，或点击左侧「华秋EDA AI登录」按钮；登录完成后让助手重试。',
   'card.tool': '工具：{tool}',
   'card.empty': '(无输出)',
+  // Substituted into `{nickname}` by `card.loggedIn`. zh uses a full-width
+  // colon, en a half-width one plus a space; hardcoding '：' made the English
+  // card read "Logged in：John".
+  'card.nicknameSep': '：{nickname}',
 
   'dialog.close': '关闭',
 } as const
@@ -49,11 +53,14 @@ const en: Record<AuthCopyKey, string> = {
   'menu.logout': 'Log out',
 
   'card.title': 'Huaqiu EDA AI (eda.cn) login',
-  'card.desc': 'Tool "{tool}" needs a Huaqiu EDA AI account. Complete the login below (or use the Huaqiu EDA AI button in the sidebar), then reply "已登录，请重试" so the assistant can retry the tool.',
-  'card.loggedIn': '✓ Logged in{nickname} — reply "已登录，请重试" and the assistant will retry the tool.',
+  // The reply phrase used to be hardcoded to the Chinese "已登录，请重试" even
+  // in these English strings, telling an English-speaking user to type Chinese.
+  'card.desc': 'Tool "{tool}" needs a Huaqiu EDA AI account. Complete the login below (or use the Huaqiu EDA AI button in the sidebar), then reply "I have logged in, please retry" so the assistant can retry the tool.',
+  'card.loggedIn': '✓ Logged in{nickname} — reply "I have logged in, please retry" and the assistant will retry the tool.',
   'card.loggedOut': 'Not logged in — sign in above, or use the Huaqiu EDA AI button in the sidebar, then ask the assistant to retry.',
   'card.tool': 'Tool: {tool}',
   'card.empty': '(no output)',
+  'card.nicknameSep': ': {nickname}',
 
   'dialog.close': 'Close',
 }

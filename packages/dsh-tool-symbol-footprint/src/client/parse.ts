@@ -12,6 +12,8 @@
  *   { status:'needs_auth', kind:'symbol'|'footprint', hint }
  */
 
+import { FIELD_LABEL_KEY, type Translate } from './i18n.js'
+
 /** Minimal tool-call block read by the card (frozen wire shape subset). */
 export interface ContentBlockLike {
   type?: string
@@ -175,6 +177,31 @@ export function humanizeKey(key: string): string {
     .replace(/[_-]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/^\w/, (c) => c.toUpperCase())
+}
+
+/**
+ * Localized label for a dimension key.
+ *
+ * `humanizeKey()` alone always produced English ("body_length" → "Body
+ * length") even in a Chinese UI, because the label was derived from the key's
+ * spelling rather than looked up in the locale pack. This resolves the key
+ * against `FIELD_LABEL_KEY` first and only falls back to `humanizeKey()` for
+ * names the agent invented.
+ *
+ * A `_max` / `_min` suffix is split off and re-applied through
+ * `field.maxOf` / `field.minOf`, so `d_max` and `d_min` share one translated
+ * base label instead of needing their own entries.
+ */
+export function fieldLabel(key: string, t: Translate): string {
+  const raw = String(key)
+  const bounds = /^(.*?)_(max|min)$/i.exec(raw)
+  if (bounds) {
+    const base = fieldLabel(bounds[1]!, t)
+    return t(bounds[2]!.toLowerCase() === 'max' ? 'field.maxOf' : 'field.minOf', { field: base })
+  }
+  const canonical = raw.toLowerCase().replace(/[\s_-]+/g, '')
+  const copyKey = FIELD_LABEL_KEY[canonical]
+  return copyKey ? t(copyKey) : humanizeKey(raw)
 }
 
 /** Default download filename for a kind when the result has none. */
