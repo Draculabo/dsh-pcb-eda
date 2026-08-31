@@ -78,6 +78,33 @@ describe('auth webServer routes (browser→node transport)', () => {
     expect(svc.auth.isAuthenticated()).toBe(false)
   })
 
+  it('rejects oversized session request bodies without changing auth state', async () => {
+    const res = await new Promise<{ status: number; text: string }>((resolve, reject) => {
+      const req = http.request(
+        base + `${AUTH_ROUTE_PREFIX}/session`,
+        { method: 'POST', headers: { 'content-type': 'application/json' } },
+        (response) => {
+          const chunks: Buffer[] = []
+          response.on('data', (chunk) => chunks.push(chunk))
+          response.on('end', () => {
+            resolve({
+              status: response.statusCode ?? 0,
+              text: Buffer.concat(chunks).toString('utf8'),
+            })
+          })
+        },
+      )
+      req.on('error', reject)
+      req.end(JSON.stringify({ token: 't'.repeat(128 * 1024), userId: 'u' }))
+    })
+
+    expect(res).toEqual({
+      status: 413,
+      text: JSON.stringify({ error: 'request body too large' }),
+    })
+    expect(svc.auth.isAuthenticated()).toBe(false)
+  })
+
   it('404s unknown paths', async () => {
     expect((await get(`${AUTH_ROUTE_PREFIX}/nope`)).status).toBe(404)
     expect((await post(`${AUTH_ROUTE_PREFIX}/nope`, {})).status).toBe(404)
