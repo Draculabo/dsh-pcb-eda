@@ -22,49 +22,24 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PartIdentifier } from '@huaqiu/part-search'
 import type { PartSearchServiceLike } from './service.js'
 
-/**
- * Structural alias of the DSH `JsonValue` (dsh-session). Kept local so the
- * plugin does not need `@deepseek-ai/dsh-session` as a direct dependency for
- * a type only; the alias is structurally identical to `JsonValue`, which is
- * what `defineTool`'s `{ type: 'json' }` output infers.
- */
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
 
-/** Per-tool cooperative execution budget (ms). The upstream may be a fresh
- *  fetch (~15s); give headroom so `exec.signal` aborts gracefully. */
 const TOOL_TIMEOUT_MS = 30_000
 
-/** Deterministic model content for every canonical part-search value. The value
- *  is already the normalized domain model from `@huaqiu/part-search`. */
 function renderJson(_args: unknown, value: unknown) {
   return [{ type: 'text' as const, text: JSON.stringify(value) }]
 }
 
-/**
- * The normalized domain model is plain JSON **except** that optional fields
- * are present as `undefined`, which is not lossless JSON and fails the DSH
- * runtime's canonical-value validation. The JSON round-trip strips
- * `undefined` properties (and array holes → null) so the canonical value is
- * always valid lossless JSON.
- */
 function asJson<T>(value: T): Json {
   return JSON.parse(JSON.stringify(value)) as Json
 }
 
-/** The language param shared by detail / models lookups. */
 const LANGUAGE_PARAM = {
   type: 'string',
   enum: ['en', 'zh'],
   description: 'Response language. Default "zh".',
 } as const
 
-/**
- * Build the four part-search tool definitions.
- *
- * @param service - the Huaqiu part-search service the tools call. Pass the
- *   shared instance from `index.ts` (or a stub in tests).
- * @returns the four registry-ready tool definitions.
- */
 export function createPartSearchTools(service: PartSearchServiceLike) {
   return [
     defineTool({
@@ -200,6 +175,7 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
         parts: {
           type: 'array',
           required: true,
+          minItems: 1,
           description: 'Array of parts to look up supply-chain offers for.',
           items: {
             type: 'object',
@@ -224,7 +200,6 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
   ]
 }
 
-/** Narrow the shared `manufacturer_id` + `mpn` args into a PartIdentifier. */
 function toPartIdentifier(args: { manufacturer_id: string; mpn: string }): PartIdentifier {
   return { manufacturerId: args.manufacturer_id, mpn: args.mpn }
 }
