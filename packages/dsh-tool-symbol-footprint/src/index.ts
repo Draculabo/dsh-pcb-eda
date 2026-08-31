@@ -81,22 +81,25 @@ export function apply(ctx: Context, config: SymbolFootprintConfig = {}): () => v
 
   const auth: HuaqiuAuthService = ctx.huaqiuAuth
   const artifacts: HuaqiuArtifacts = ctx.huaqiuArtifacts
+  const processEnv = typeof process !== 'undefined' ? process.env : undefined
+  const endpointEnv = config.endpoint
+    ? Object.assign({}, processEnv, { HQ_EDA_COMPONENT_WS_URL: config.endpoint })
+    : processEnv
 
   // Fail fast at load time on a misconfigured endpoint override.
-  const endpoint = resolveEndpoint(config.endpoint ? { HQ_EDA_COMPONENT_WS_URL: config.endpoint } : undefined)
+  const endpoint = resolveEndpoint(endpointEnv)
 
   // Config wins over env; both go through `resolveHitlLocale`, which coerces
   // tags (`zh-CN`) to an id and falls back to the package default.
   const hitlLanguage = resolveHitlLocale(
-    config.hitlLanguage ??
-      (typeof process !== 'undefined' ? process.env['HQ_EDA_HITL_LANGUAGE'] : undefined),
+    config.hitlLanguage ?? processEnv?.['HQ_EDA_HITL_LANGUAGE'],
   )
 
   const env = {
     auth: auth.auth,
     artifacts,
     hitlLanguage,
-    deps: { processEnv: typeof process !== 'undefined' ? process.env : undefined },
+    deps: { processEnv: endpointEnv },
     getUserQuestions: (): UserQuestionsLike | undefined => {
       try {
         return ctx.get('userQuestions') as UserQuestionsLike | undefined
