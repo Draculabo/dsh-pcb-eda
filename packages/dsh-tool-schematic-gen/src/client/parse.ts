@@ -132,7 +132,7 @@ export function projectToolCall(block: ToolBlockLike | undefined): ProjectedPhas
   if (!parsed) return { phase: 'failed', message: firstLine(text) || 'unparseable tool result' }
   if (parsed.status === 'generated') return { phase: 'completed', result: parsed }
   if (parsed.status === 'needs_auth') return { phase: 'needs_auth', result: parsed }
-  if (parsed.kind) return { phase: 'completed', result: parsed }
+  if (parsed.status === null && parsed.kind) return { phase: 'completed', result: parsed }
   return { phase: 'failed', message: `unexpected tool status: ${parsed.status}` }
 }
 
