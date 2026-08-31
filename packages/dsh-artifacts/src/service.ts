@@ -149,6 +149,9 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
     if (typeof input.filename !== 'string' || input.filename.length === 0) {
       throw new Error('filename is required')
     }
+    if (input.ttlSeconds !== undefined && (!Number.isFinite(input.ttlSeconds) || input.ttlSeconds <= 0)) {
+      throw new Error('ttlSeconds must be a positive finite number')
+    }
     const buf = toBytes(input.content, input.contentEncoding)
     if (buf.byteLength > this.maxBytes) {
       throw new Error(`artifact content exceeds max size (${buf.byteLength} > ${this.maxBytes})`)
@@ -164,7 +167,7 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
       size: buf.byteLength,
       createdAt: now.toISOString(),
     }
-    if (typeof input.ttlSeconds === 'number' && Number.isFinite(input.ttlSeconds) && input.ttlSeconds > 0) {
+    if (input.ttlSeconds !== undefined) {
       meta.expiresAt = new Date(now.getTime() + input.ttlSeconds * 1000).toISOString()
     }
 
