@@ -125,7 +125,10 @@ export const HITL_LABELS: Record<HitlLocale, {
  * case-insensitively; anything else falls back to `DEFAULT_HITL_LOCALE`.
  */
 export function resolveHitlLocale(value: unknown): HitlLocale {
-  if (typeof value !== 'string') return DEFAULT_HITL_LOCALE
+  if (typeof value !== 'string') {
+    return DEFAULT_HITL_LOCALE
+  }
+
   const primary = value.trim().toLowerCase().replace(/_/g, '-').split('-')[0]
   return primary === 'en' || primary === 'zh' ? primary : DEFAULT_HITL_LOCALE
 }
