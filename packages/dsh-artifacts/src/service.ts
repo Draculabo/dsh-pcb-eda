@@ -126,7 +126,11 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
 
   constructor(options: ArtifactsServiceOptions = {}) {
     this.baseDir = options.baseDir ?? dshHomePath('artifacts')
-    this.maxBytes = options.maxBytes ?? 16 * 1024 * 1024
+    const maxBytes = options.maxBytes ?? 16 * 1024 * 1024
+    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+      throw new Error('maxBytes must be a positive safe integer')
+    }
+    this.maxBytes = maxBytes
   }
 
   private artifactsRoot(): string {
