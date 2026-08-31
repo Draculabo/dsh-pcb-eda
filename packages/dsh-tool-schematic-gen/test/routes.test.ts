@@ -106,6 +106,7 @@ describe('progress route', () => {
     const { res, out } = stubRes()
     await handler(req('POST', `${PROGRESS_ROUTE_PREFIX}/call-1`), res)
     expect(out.status).toBe(405)
+    expect(out.headers.allow).toBe('GET, HEAD')
   })
 
   it('answers HEAD without a body', async () => {
