@@ -55,6 +55,26 @@ describe('HuaqiuArtifactService', () => {
     await expect(svc.delete('../x')).resolves.toBeUndefined()
   })
 
+  it('rejects persisted metadata that violates the artifact contract', async () => {
+    const artifact = await svc.create({ type: 'schematic', filename: 'board.kicad_sch', content: 'x' })
+    const metaPath = path.join(root, 'dsh-artifacts', artifact.id, 'meta.json')
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+    const invalidMetas = [
+      { ...meta, id: 'art_deadbeef' },
+      { ...meta, type: 'unknown' },
+      { ...meta, filename: '' },
+      { ...meta, mimeType: '' },
+      { ...meta, size: -1 },
+      { ...meta, createdAt: 'not-a-date' },
+    ]
+
+    for (const invalidMeta of invalidMetas) {
+      fs.writeFileSync(metaPath, JSON.stringify(invalidMeta))
+      expect(await svc.get(artifact.id)).toBeNull()
+      expect(await svc.readContent(artifact.id)).toBeNull()
+    }
+  })
+
   it('never lets filename affect the storage path', async () => {
     const evil = await svc.create({ type: 'zip', filename: '../../escape.zip', content: 'x' })
     // content round-trips even with a path-looking filename
