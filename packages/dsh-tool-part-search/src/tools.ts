@@ -200,6 +200,7 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
         parts: {
           type: 'array',
           required: true,
+          minItems: 1,
           description: 'Array of parts to look up supply-chain offers for.',
           items: {
             type: 'object',
