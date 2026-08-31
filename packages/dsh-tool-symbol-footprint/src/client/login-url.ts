@@ -70,10 +70,11 @@ export function buildLoginUrl(options: LoginUrlOptions = {}): string {
   url.searchParams.set('clickOutsideToClose', 'true')
   // Fill mode: the card IS the surface, so let the embed paint it.
   url.searchParams.set('fill', 'full')
-  const lang = options.lang ?? 'zh'
+  const lang: AuthLocale = options.lang === 'en' ? 'en' : 'zh'
+  const theme: AuthTheme = options.theme === 'dark' ? 'dark' : 'light'
   url.searchParams.set('locale', AUTH_LOCALE_ID[lang])
   url.searchParams.set('lang', lang)
-  url.searchParams.set('theme', options.theme ?? 'light')
+  url.searchParams.set('theme', theme)
   return url.toString()
 }
 
