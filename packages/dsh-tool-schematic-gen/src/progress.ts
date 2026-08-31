@@ -185,7 +185,11 @@ export class ProgressStore {
   private readonly now: () => number
 
   constructor(options: ProgressStoreOptions = {}) {
-    this.ttlMs = options.ttlMs ?? 30 * 60 * 1000
+    const ttlMs = options.ttlMs ?? 30 * 60 * 1000
+    if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
+      throw new Error('ttlMs must be a positive finite number')
+    }
+    this.ttlMs = ttlMs
     this.now = options.now ?? (() => Date.now())
   }
 
