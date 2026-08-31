@@ -53,6 +53,12 @@ export const DIALOG_CLOSE_ATTR = 'data-hq-auth-dialog-close'
 const IFRAME_HEIGHT = LOGIN_IFRAME_HEIGHT
 const CARD_MAX_WIDTH = 768
 
+type LoginDialogOptions = {
+  baseUrl?: string
+  lang?: AuthLocale
+  theme?: AuthTheme
+}
+
 let container: HTMLDivElement | null = null
 let unsubscribe: (() => void) | null = null
 let onCloseRequested: (() => void) | null = null
@@ -64,7 +70,7 @@ let onCloseRequested: (() => void) | null = null
  * button, postMessage, programmatic close) — the auth client uses it to
  * unblock its own `isOpen` state.
  */
-export function openLoginDialog(options: { lang?: AuthLocale; theme?: AuthTheme } = {}, onClose?: () => void): void {
+export function openLoginDialog(options: LoginDialogOptions = {}, onClose?: () => void): void {
   if (container) return
   // The ui-env module reads the DOM once at import time. Re-read here so
   // the dialog picks up the current theme even if no React component has
@@ -142,7 +148,7 @@ export function openLoginDialog(options: { lang?: AuthLocale; theme?: AuthTheme 
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute(DIALOG_IFRAME_ATTR, '')
-  iframe.src = buildLoginUrl({ lang: options.lang, theme: options.theme })
+  iframe.src = buildLoginUrl({ baseUrl: options.baseUrl, lang: options.lang, theme: options.theme })
   iframe.title = translate(locale, 'card.title')
   iframe.allow = 'clipboard-write'
   // The iframe element background = the card surface. That is what masks
