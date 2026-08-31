@@ -15,9 +15,11 @@ export function createWebServerAuthTransport(
   base: string = '/api/v1/huaqiu/auth',
   doFetch: typeof fetch = globalThis.fetch.bind(globalThis),
 ): AuthTransport {
+  const routeBase = base.replace(/\/+$/, '')
+
   return {
     async pushSession(info) {
-      const res = await doFetch(`${base}/session`, {
+      const res = await doFetch(`${routeBase}/session`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -29,7 +31,7 @@ export function createWebServerAuthTransport(
       if (!res.ok) throw new Error(`auth push failed: HTTP ${res.status}`)
     },
     async pushLogout() {
-      const res = await doFetch(`${base}/logout`, { method: 'POST' })
+      const res = await doFetch(`${routeBase}/logout`, { method: 'POST' })
       if (!res.ok) throw new Error(`auth logout push failed: HTTP ${res.status}`)
     },
   }
