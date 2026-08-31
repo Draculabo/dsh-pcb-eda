@@ -84,6 +84,26 @@ function isValidArtifactType(v: unknown): v is ArtifactType {
 /** Opaque id we mint ourselves — hardened against any path use. */
 const ARTIFACT_ID_PATTERN = /^art_[0-9a-f]+$/
 
+function isArtifactMeta(value: unknown, expectedId: string): value is ArtifactMeta {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const meta = value as Record<string, unknown>
+  return meta.id === expectedId
+    && isValidArtifactType(meta.type)
+    && typeof meta.filename === 'string'
+    && meta.filename.length > 0
+    && typeof meta.mimeType === 'string'
+    && meta.mimeType.length > 0
+    && typeof meta.size === 'number'
+    && Number.isSafeInteger(meta.size)
+    && meta.size >= 0
+    && typeof meta.createdAt === 'string'
+    && Number.isFinite(Date.parse(meta.createdAt))
+    && (meta.expiresAt === undefined || typeof meta.expiresAt === 'string')
+}
+
 function mimeTypeFor(type: ArtifactType, filename: string): string {
   const lower = filename.toLowerCase()
   if (lower.endsWith('.kicad_sym')) return 'application/x.kicad-symbol'
@@ -189,7 +209,10 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
       const dir = this.artifactDir(id)
       const fp = path.join(dir, 'meta.json')
       const raw = await fs.promises.readFile(fp, 'utf8')
-      const meta = JSON.parse(raw) as ArtifactMeta
+      const meta: unknown = JSON.parse(raw)
+      if (!isArtifactMeta(meta, id)) {
+        return null
+      }
       if (this.isExpired(meta)) {
         void this.delete(id) // best-effort cleanup, non-fatal
         return null
@@ -234,8 +257,8 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
         if (onlyExpired) {
           try {
             const raw = await fs.promises.readFile(path.join(root, entry.name, 'meta.json'), 'utf8')
-            const meta = JSON.parse(raw) as ArtifactMeta
-            if (!this.isExpired(meta)) continue
+            const meta: unknown = JSON.parse(raw)
+            if (!isArtifactMeta(meta, entry.name) || !this.isExpired(meta)) continue
           } catch {
             continue // missing/corrupt meta — leave to admin cleanup
           }
