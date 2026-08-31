@@ -51,6 +51,15 @@ describe('buildLoginUrl (symbol-footprint login card)', () => {
     expect(p.get('theme')).toBe('dark')
   })
 
+  it('falls back to supported values for unexpected runtime options', () => {
+    const p = paramsOf(buildLoginUrl({ lang: 'fr', theme: 'sepia' } as never))
+    expect({
+      locale: p.get('locale'),
+      lang: p.get('lang'),
+      theme: p.get('theme'),
+    }).toEqual({ locale: 'cn', lang: 'zh', theme: 'light' })
+  })
+
   it('paints the iframe element with the host surface in both schemes', () => {
     // Blink falls back to WHITE until the embed's own CSS applies, which
     // flashes a white block in dark mode if the element is left unpainted.
