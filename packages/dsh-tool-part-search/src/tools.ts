@@ -81,6 +81,7 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
         query: {
           type: 'string',
           required: true,
+          maxLength: 200,
           description:
             'Search keyword: a partial MPN (e.g. "STM32F103"), a description ' +
             '("32-bit microcontroller 72MHz"), or a combined value ("0402 10k resistor"). ' +
@@ -88,10 +89,13 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
         },
         page: {
           type: 'integer',
+          minimum: 1,
           description: '1-based page index. Default 1.',
         },
         page_size: {
           type: 'integer',
+          minimum: 1,
+          maximum: 50,
           description: 'Page size, 1-50. Default 10.',
         },
         require_eda_model: {
