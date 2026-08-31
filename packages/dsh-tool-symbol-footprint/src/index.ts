@@ -106,7 +106,22 @@ export function apply(ctx: Context, config: SymbolFootprintConfig = {}): () => v
     },
   }
 
-  const disposers = createSymbolFootprintTools(env).map((tool) => ctx.tools.register(tool))
+  const disposers: Array<() => void> = []
+
+  try {
+    for (const tool of createSymbolFootprintTools(env)) {
+      disposers.push(ctx.tools.register(tool))
+    }
+  } catch (error) {
+    for (const disposeTool of disposers.reverse()) {
+      try {
+        disposeTool()
+      } catch {
+        // Registration failure remains the primary error.
+      }
+    }
+    throw error
+  }
 
   // eslint-disable-next-line no-console
   console.log(LOG_TAG, 'registered agent tools', {
