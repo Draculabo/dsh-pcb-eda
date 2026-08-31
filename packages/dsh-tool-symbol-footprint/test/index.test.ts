@@ -60,6 +60,55 @@ describe('@huaqiu/dsh-tool-symbol-footprint plugin', () => {
     ])
   })
 
+  it('uses the configured endpoint when registered tools execute', async () => {
+    const previousEndpoint = process.env.HQ_EDA_COMPONENT_WS_URL
+    process.env.HQ_EDA_COMPONENT_WS_URL = 'wss://www.eda.cn/from-env'
+    const socketUrls: string[] = []
+
+    class FakeWebSocket {
+      onopen: ((event: unknown) => void) | null = null
+      onmessage: ((event: { data: unknown }) => void) | null = null
+      onerror: ((event: { message?: string }) => void) | null = null
+      onclose: (() => void) | null = null
+
+      constructor(url: string | URL) {
+        socketUrls.push(String(url))
+        queueMicrotask(() => {
+          this.onopen?.(null)
+          this.onmessage?.({
+            data: JSON.stringify({
+              type: 6,
+              action: 'symbol_button',
+              context: { params: '{"fileUrl":"https://x/generated.kicad_sym"}' },
+            }),
+          })
+        })
+      }
+
+      send() {}
+      close() {}
+    }
+
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    vi.stubGlobal('fetch', async () => new Response('(kicad (version 20231118))'))
+
+    try {
+      const { ctx, registered } = ctxStub()
+      apply(ctx as never, { endpoint: 'wss://www.fdatasheets.com/from-config' })
+      await (registered[0] as Tool).execute({ image_url: 'data:image/png;base64,AAAA' })
+
+      expect(socketUrls).toHaveLength(1)
+      expect(socketUrls[0]).toMatch(/^wss:\/\/www\.fdatasheets\.com\/from-config\//)
+    } finally {
+      vi.unstubAllGlobals()
+      if (previousEndpoint === undefined) {
+        delete process.env.HQ_EDA_COMPONENT_WS_URL
+      } else {
+        process.env.HQ_EDA_COMPONENT_WS_URL = previousEndpoint
+      }
+    }
+  })
+
   it('throws loudly when the tools service is missing', () => {
     expect(() => apply({} as never)).toThrow(/requires the DSH/)
   })
