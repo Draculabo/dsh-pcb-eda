@@ -36,12 +36,16 @@ describe('auth webServer routes (browser→node transport)', () => {
     })
   }
 
-  async function get(p: string): Promise<{ status: number; text: string }> {
+  async function get(p: string): Promise<{ status: number; text: string; allow?: string }> {
     return new Promise((resolve, reject) => {
       const req = http.get(base + p, (res) => {
         const chunks: Buffer[] = []
         res.on('data', (c) => chunks.push(c))
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString('utf8') }))
+        res.on('end', () => resolve({
+          status: res.statusCode ?? 0,
+          text: Buffer.concat(chunks).toString('utf8'),
+          allow: res.headers.allow,
+        }))
       })
       req.on('error', reject)
     })
@@ -76,6 +80,21 @@ describe('auth webServer routes (browser→node transport)', () => {
     expect((await post(`${AUTH_ROUTE_PREFIX}/session`, { token: '' })).status).toBe(400)
     expect((await post(`${AUTH_ROUTE_PREFIX}/session`, { userId: 'u' })).status).toBe(400)
     expect(svc.auth.isAuthenticated()).toBe(false)
+  })
+
+  it('reports allowed methods for known auth routes', async () => {
+    const logout = await get(`${AUTH_ROUTE_PREFIX}/logout`)
+    expect({ status: logout.status, allow: logout.allow }).toEqual({ status: 405, allow: 'POST' })
+
+    const session = await new Promise<{ status: number; allow?: string }>((resolve, reject) => {
+      const req = http.request(base + `${AUTH_ROUTE_PREFIX}/session`, { method: 'DELETE' }, (res) => {
+        res.resume()
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, allow: res.headers.allow }))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    expect(session).toEqual({ status: 405, allow: 'GET, POST' })
   })
 
   it('404s unknown paths', async () => {
