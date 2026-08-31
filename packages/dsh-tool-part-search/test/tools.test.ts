@@ -38,6 +38,7 @@ type Tool = {
   name: string
   execute(args: unknown): Promise<unknown>
   output: { render(args: unknown, value: unknown): unknown[] }
+  parameters: Record<string, Record<string, unknown>>
 }
 
 describe('createPartSearchTools', () => {
@@ -50,6 +51,14 @@ describe('createPartSearchTools', () => {
       'get_hqsch_part_models',
       'get_hqsch_supply_chain',
     ])
+  })
+
+  it('encodes documented search bounds in the tool schema', () => {
+    const { service } = createStubService()
+    const [searchTool] = createPartSearchTools(service) as unknown as Tool[]
+    expect(searchTool!.parameters.query).toMatchObject({ maxLength: 200 })
+    expect(searchTool!.parameters.page).toMatchObject({ minimum: 1 })
+    expect(searchTool!.parameters.page_size).toMatchObject({ minimum: 1, maximum: 50 })
   })
 
   it('maps snake_case args to the service for search', async () => {
