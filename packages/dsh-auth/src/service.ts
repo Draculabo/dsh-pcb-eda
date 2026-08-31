@@ -55,7 +55,9 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
   }
 
   invalidate(): void {
-    if (this.current === null) return
+    if (this.current === null) {
+      return
+    }
     this.current = null
     this.emit()
   }
@@ -66,6 +68,8 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
   }
 
   private emit(): void {
-    for (const listener of this.listeners) listener(this.current)
+    for (const listener of this.listeners) {
+      listener(this.current)
+    }
   }
 }
