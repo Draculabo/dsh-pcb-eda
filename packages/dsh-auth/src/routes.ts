@@ -10,15 +10,15 @@
  * smallest supported extension point — `apiProxy`'s dispatch table is closed,
  * so a plugin-owned `webServer` route is the documented channel).
  */
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:http'
 import type { HuaqiuAuthService, HuaqiuUserInfo } from './service.js'
 
 export const AUTH_ROUTE_PREFIX = '/api/v1/huaqiu/auth'
 
 export type AuthHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+function sendJson(res: ServerResponse, status: number, body: unknown, headers?: OutgoingHttpHeaders): void {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...headers })
   res.end(JSON.stringify(body))
 }
 
@@ -73,6 +73,16 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
         const user = await service.auth.getUserInfo()
         const authenticated = service.auth.isAuthenticated()
         sendJson(res, 200, { authenticated, user })
+        return
+      }
+
+      if (pathname === `${AUTH_ROUTE_PREFIX}/session`) {
+        sendJson(res, 405, { error: 'method not allowed' }, { allow: 'GET, POST' })
+        return
+      }
+
+      if (pathname === `${AUTH_ROUTE_PREFIX}/logout`) {
+        sendJson(res, 405, { error: 'method not allowed' }, { allow: 'POST' })
         return
       }
 
