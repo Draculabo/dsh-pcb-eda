@@ -4,7 +4,6 @@
  */
 import {
   AUTH_ORIGIN,
-  buildLoginUrl,
   handleAuthMessage,
   type AuthMessageEventLike,
   type AuthTokenPayload,
@@ -66,20 +65,15 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
    * in `ui/login-dialog.ts` for the full why.
    */
   const openIframe = (options: LoginOptions = {}): void => {
-    if (isLoginDialogOpen()) return
-    const baseUrl = loginUrl
-    openLoginDialog(
-      {
-        ...(options.lang ? { lang: options.lang } : {}),
-        ...(options.theme ? { theme: options.theme } : {}),
-      },
-      () => {
-        // Re-render safety: nothing to do here — the auth client's own state
-        // is just the dialog-open boolean, which `isLoginDialogOpen()` reads
-        // directly from the dialog module.
-        void baseUrl
-      },
-    )
+    if (isLoginDialogOpen()) {
+      return
+    }
+
+    openLoginDialog({
+      baseUrl: loginUrl,
+      ...(options.lang ? { lang: options.lang } : {}),
+      ...(options.theme ? { theme: options.theme } : {}),
+    })
   }
 
   const auth = {
