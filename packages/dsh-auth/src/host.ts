@@ -44,9 +44,10 @@ export function resolveHostConfig(
   const baseUrl = config?.hqEdgeBaseUrl
     ?? env.HQ_EDGE_BASE_URL
     ?? ''
-  const hostAuthPath = config?.hostAuthPath
+  const hostAuthPathRaw = config?.hostAuthPath
     ?? env.HQ_EDGE_AUTH_PATH
     ?? DEFAULT_HOST_AUTH_PATH
+  const hostAuthPath = hostAuthPathRaw.trim() || DEFAULT_HOST_AUTH_PATH
   const ttlRaw = config?.hostSessionTtlSeconds ?? env.HQ_EDGE_HOST_TTL_SECONDS
   let ttl = DEFAULT_HOST_TTL_SECONDS
   if (typeof ttlRaw === 'number' && Number.isFinite(ttlRaw) && ttlRaw > 0) {
