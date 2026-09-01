@@ -41,9 +41,9 @@ export function resolveHostConfig(
   config?: Partial<HuaqiuAuthConfig> | null,
   env: NodeJS.ProcessEnv = process.env,
 ): HuaqiuAuthConfig {
-  const baseUrl = config?.hqEdgeBaseUrl
+  const baseUrl = (config?.hqEdgeBaseUrl
     ?? env.HQ_EDGE_BASE_URL
-    ?? ''
+    ?? '').trim()
   const hostAuthPath = config?.hostAuthPath
     ?? env.HQ_EDGE_AUTH_PATH
     ?? DEFAULT_HOST_AUTH_PATH
