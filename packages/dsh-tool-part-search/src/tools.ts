@@ -214,6 +214,10 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
       output: { schema: { type: 'json' }, render: renderJson },
       timeoutMs: TOOL_TIMEOUT_MS,
       async execute(args) {
+        if (args.parts.length === 0) {
+          throw new Error('At least one part is required')
+        }
+
         const parts: PartIdentifier[] = args.parts.map((part) => ({
           manufacturerId: part.manufacturer_id,
           mpn: part.mpn,

@@ -99,6 +99,14 @@ describe('createPartSearchTools', () => {
     expect(calls).toEqual(['getSupplyChain:2'])
   })
 
+  it('rejects empty supply-chain batches before calling the service', async () => {
+    const { service, calls } = createStubService()
+    const tools = createPartSearchTools(service) as unknown as Tool[]
+
+    await expect(tools[3]!.execute({ parts: [] })).rejects.toThrow('At least one part is required')
+    expect(calls).toEqual([])
+  })
+
   it('renders every canonical value as a single text block', async () => {
     const { service } = createStubService()
     const tools = createPartSearchTools(service) as unknown as Tool[]
