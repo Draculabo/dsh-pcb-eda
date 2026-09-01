@@ -82,6 +82,19 @@ describe('HostSessionResolver', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
+  it('returns isolated snapshots from the host session cache', async () => {
+    const fetchImpl = fakeFetchOnce({ token: 'tok', userId: 'u', nickname: 'Al' })
+    const r = new HostSessionResolver('http://hq', '/api/v1/auth/token', 300_000, fetchImpl)
+    const first = await r.resolve()
+    expect(first).toEqual({ id: 'u', token: 'tok', nickname: 'Al' })
+
+    first!.token = 'mutated'
+    first!.nickname = 'Changed'
+
+    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', nickname: 'Al' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('clear() forces a re-fetch', async () => {
     const fetchImpl = fakeFetchOnce({ token: 'tok', userId: 'u' })
     const r = new HostSessionResolver('http://hq', '/api/v1/auth/token', 300_000, fetchImpl)
