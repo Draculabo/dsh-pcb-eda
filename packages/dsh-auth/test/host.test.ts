@@ -82,6 +82,24 @@ describe('HostSessionResolver', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
+  it('resolves the auth path without duplicating URL separators', async () => {
+    const fetchImpl = fakeFetchOnce({ token: 'tok', userId: 'u' })
+    const r = new HostSessionResolver('http://hq/', '/api/v1/auth/token', 300_000, fetchImpl)
+
+    await r.resolve()
+
+    expect(fetchImpl.mock.calls.map(([url, init]) => ({
+      url: String(url),
+      init,
+    }))).toEqual([{
+      url: 'http://hq/api/v1/auth/token',
+      init: {
+        method: 'GET',
+        headers: { accept: 'application/json' },
+      },
+    }])
+  })
+
   it('clear() forces a re-fetch', async () => {
     const fetchImpl = fakeFetchOnce({ token: 'tok', userId: 'u' })
     const r = new HostSessionResolver('http://hq', '/api/v1/auth/token', 300_000, fetchImpl)
