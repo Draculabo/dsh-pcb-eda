@@ -118,21 +118,27 @@ export class HostSessionResolver {
 }
 
 function asId(raw: unknown): string | null {
-  if (typeof raw === 'string' && raw.length > 0) return raw
-  if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    return raw
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return String(raw)
+  }
   return null
 }
 
 /** Parse the host route payload into a credential, tolerating key-name drift. */
 export function normalizeHostUser(data: Record<string, unknown>): ResolvedHostUser | null {
-  const token = typeof data.token === 'string' && data.token.length > 0
+  const token = typeof data.token === 'string' && data.token.trim().length > 0
     ? data.token
     : null
   const id = asId(data.userId)
     ?? asId(data.id)
     ?? asId(data.user_id)
-  if (!token || !id) return null
-  const nickname = typeof data.nickname === 'string' && data.nickname.length > 0
+  if (!token || !id) {
+    return null
+  }
+  const nickname = typeof data.nickname === 'string' && data.nickname.trim().length > 0
     ? data.nickname
     : undefined
   return { id, token, ...(nickname ? { nickname } : {}) }
