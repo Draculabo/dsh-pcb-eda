@@ -109,7 +109,7 @@ function toBytes(content: string | Uint8Array, encoding: 'utf8' | 'base64' | und
   return content instanceof Uint8Array ? content : new Uint8Array(content)
 }
 
-function log(level: 'debug' | 'warn', msg: string, extra?: Record<string, unknown>): void {
+export function log(level: 'debug' | 'warn', msg: string, extra?: Record<string, unknown>): void {
   // Minimal, dependency-free logger. DSH plugins should not pull a logger lib.
   if (level === 'warn' || process.env.DSH_ARTIFACTS_DEBUG) {
     const line = `[dsh-artifacts] ${msg}${extra ? ' ' + JSON.stringify(extra) : ''}`

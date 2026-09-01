@@ -1,8 +1,17 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import * as http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 import { InMemoryHuaqiuAuthService } from '../src/service.js'
 import { AUTH_ROUTE_PREFIX, createAuthHandler } from '../src/routes.js'
+
+// Isolate the persisted-session directory to a temp dir so the standalone
+// (browser-login) tests never read a real `~/.dsh/auth/session.json` left by
+// another run — `isAuthenticated()` consults that file as a fallback.
+const TMP = join(tmpdir(), `dsh-auth-routes-test-${process.pid}`)
+vi.mock('@deepseek-ai/dsh-home-paths', () => ({ dshHomePath: () => TMP }))
 
 describe('auth webServer routes (browser→node transport)', () => {
   let server: http.Server
@@ -10,6 +19,7 @@ describe('auth webServer routes (browser→node transport)', () => {
   let svc: InMemoryHuaqiuAuthService
 
   beforeEach(async () => {
+    rmSync(TMP, { recursive: true, force: true })
     svc = new InMemoryHuaqiuAuthService()
     server = http.createServer(createAuthHandler(svc))
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -17,6 +27,7 @@ describe('auth webServer routes (browser→node transport)', () => {
   })
   afterEach(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
+    rmSync(TMP, { recursive: true, force: true })
   })
 
   async function post(p: string, body?: unknown): Promise<{ status: number; text: string }> {

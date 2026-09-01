@@ -184,6 +184,12 @@ export interface CallComponentAgentOptions {
   signal?: AbortSignal | null
   timeoutMs?: number
   socketFactory?: (url: string) => SocketLike
+  /**
+   * Invoked once when the component service reports a token-expired frame. Hook
+   * for reactive invalidation: the caller clears its credential cache so the
+   * next request re-resolves instead of replaying a dead token (spec §6.5).
+   */
+  onTokenExpired?: () => void
 }
 
 export interface ComponentCallResult {
@@ -300,6 +306,7 @@ export function callComponentAgent(options: CallComponentAgentOptions): Promise<
       }
       consumeFrame(frame, acc)
       if (acc.tokenExpired) {
+        try { options.onTokenExpired?.() } catch { /* invalidation is best-effort */ }
         finish(new Error(
           'symbol-footprint: the HQ EDA session token was rejected by the component service ' +
           '(expired or invalid). Sign in to HQ EDA again and retry.'))

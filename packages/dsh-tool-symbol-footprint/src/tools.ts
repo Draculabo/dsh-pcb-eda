@@ -319,6 +319,10 @@ export async function runGenerateSymbol(
     awaitActions: [agentActions.SYMBOL_BUTTON],
     signal: exec?.signal,
     socketFactory: env.deps?.socketFactory,
+    // Reactive invalidation (spec §6.5): a token-expired frame means the cached
+    // credential is dead. Clear it so the next call re-resolves (and the UI
+    // re-prompts for login) instead of replaying the same token forever.
+    onTokenExpired: () => { void env.auth.logout() },
   })
 
   const generated = await finishGeneration('symbol', response, env)
@@ -360,6 +364,10 @@ export async function runGenerateFootprintFromDimensions(
     awaitActions: [agentActions.FOOTPRINT_BUTTON],
     signal: exec?.signal,
     socketFactory: env.deps?.socketFactory,
+    // Reactive invalidation (spec §6.5): a token-expired frame means the cached
+    // credential is dead. Clear it so the next call re-resolves (and the UI
+    // re-prompts for login) instead of replaying the same token forever.
+    onTokenExpired: () => { void env.auth.logout() },
   })
 
   const generated = await finishGeneration('footprint', response, env)
@@ -407,6 +415,10 @@ export async function runGenerateFootprintFromImage(
     awaitActions: [agentActions.FOOTPRINT_DIMENSIONS, agentActions.FOOTPRINT_BUTTON],
     signal: exec?.signal,
     socketFactory: env.deps?.socketFactory,
+    // Reactive invalidation (spec §6.5): a token-expired frame means the cached
+    // credential is dead. Clear it so the next call re-resolves (and the UI
+    // re-prompts for login) instead of replaying the same token forever.
+    onTokenExpired: () => { void env.auth.logout() },
   })
 
   if (extraction.action === null) {

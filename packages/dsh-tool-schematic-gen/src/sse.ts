@@ -275,6 +275,13 @@ export interface ConsumeOptions {
   /** Called with each human-readable stage announcement. */
   onNote?: (note: ProgressNote) => void
   /**
+   * Invoked once when the design API rejects the request with HTTP 401, i.e. the
+   * supplied `x-user-token` is dead. Hook for reactive invalidation: the caller
+   * clears its credential cache so the next request re-resolves instead of
+   * replaying a dead token (spec §6.5).
+   */
+  onUnauthorized?: () => void
+  /**
    * Synthesize trace events from the standard AG-UI `TOOL_CALL_START` /
    * `TOOL_CALL_END` lifecycle.
    *
@@ -327,6 +334,9 @@ export async function consumeCopilotkit(
   if (!res || !res.ok) {
     clearTimeout(timer)
     if (onAbort && signal) signal.removeEventListener('abort', onAbort)
+    if (res && res.status === 401) {
+      try { options.onUnauthorized?.() } catch { /* invalidation is best-effort */ }
+    }
     throw new Error('schematic-gen: the design API returned HTTP ' +
       String(res && res.status) + ' (expected 200 with an SSE stream)')
   }

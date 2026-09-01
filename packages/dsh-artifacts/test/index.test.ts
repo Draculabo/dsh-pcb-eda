@@ -106,6 +106,32 @@ describe('HuaqiuArtifactService', () => {
   })
 })
 
+describe('apply() boot sweep', () => {
+  it('removes expired artifacts at startup so storage cannot grow unbounded', async () => {
+    const root = tmpRoot()
+    const seed = new HuaqiuArtifactService({ baseDir: root })
+    const kept = await seed.create({ type: 'zip', filename: 'keep.zip', content: 'k' })
+    const exp = await seed.create({ type: 'zip', filename: 'exp.zip', content: 'e', ttlSeconds: 3600 })
+    const expDir = path.join(root, 'dsh-artifacts', exp.id)
+    const meta = JSON.parse(fs.readFileSync(path.join(expDir, 'meta.json'), 'utf8'))
+    meta.expiresAt = new Date(Date.now() - 1000).toISOString()
+    fs.writeFileSync(path.join(expDir, 'meta.json'), JSON.stringify(meta))
+
+    // Bring the plugin up through apply(); its boot effect runs the expired sweep.
+    const ctx = {
+      effect: (fn: () => void | (() => void)) => { fn(); return () => {} },
+      provide: () => () => {},
+      webServer: { register: () => () => {} },
+    } as unknown as Parameters<typeof apply>[0]
+    apply(ctx, { baseDir: root })
+    // the sweep is fire-and-forget; yield a microtask so it settles
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(await seed.get(exp.id)).toBeNull()
+    expect(await seed.get(kept.id)).not.toBeNull()
+  })
+})
+
 describe('artifacts HTTP routes', () => {
   let root: string
   let server: http.Server

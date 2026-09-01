@@ -7,7 +7,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import { HuaqiuArtifactService, type HuaqiuArtifacts } from './service.js'
+import { HuaqiuArtifactService, log, type HuaqiuArtifacts } from './service.js'
 import { ARTIFACTS_ROUTE_PREFIX, createArtifactsHandler } from './routes.js'
 
 export type {
@@ -41,4 +41,15 @@ export function apply(ctx: Context, config: HuaqiuArtifactsConfig = {}): void {
     path: ARTIFACTS_ROUTE_PREFIX,
     handler: createArtifactsHandler(service),
   }))
+
+  // Boot-time GC: `deleteAll({ onlyExpired: true })` is implemented but nothing
+  // ever calls it, so `~/.dsh/artifacts/` (and any migrated location) grows
+  // without bound (spec risk R6). Sweep once at startup; never fail startup on a
+  // disk error, and never block activation on the scan.
+  ctx.effect(() => {
+    void service.deleteAll({ onlyExpired: true })
+      .then((removed) => { if (removed > 0) log('debug', 'artifacts: expired sweep removed', { removed }) })
+      .catch((err) => log('warn', 'artifacts: expired sweep failed', { err }))
+    return () => {}
+  })
 }

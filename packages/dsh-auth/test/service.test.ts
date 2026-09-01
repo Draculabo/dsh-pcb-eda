@@ -1,7 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 import { InMemoryHuaqiuAuthService } from '../src/service.js'
 
+// Isolate the persisted-session directory so `isAuthenticated()`'s file fallback
+// never reads a stray `~/.dsh/auth/session.json` from another run.
+const TMP = join(tmpdir(), `dsh-auth-service-test-${process.pid}`)
+vi.mock('@deepseek-ai/dsh-home-paths', () => ({ dshHomePath: () => TMP }))
+
 describe('InMemoryHuaqiuAuthService', () => {
+  beforeEach(() => rmSync(TMP, { recursive: true, force: true }))
+  afterEach(() => rmSync(TMP, { recursive: true, force: true }))
+
   it('starts unauthenticated and reports null credentials', async () => {
     const svc = new InMemoryHuaqiuAuthService()
     expect(svc.auth.isAuthenticated()).toBe(false)

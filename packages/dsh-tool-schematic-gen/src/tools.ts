@@ -316,6 +316,7 @@ export async function runGenerateSchematic(
       fetchImpl: env.deps?.fetchImpl,
       onTrace: prog.onTrace,
       onState: prog.onState,
+      onUnauthorized: () => { void env.auth.logout() },
     })
     state = res.state
     text = res.text
@@ -389,6 +390,7 @@ export async function runGenerateSystem(
       // arrives as the standard AG-UI tool-call lifecycle. Without this the
       // system-design card reported no progress at all.
       toolCallTrace: true,
+      onUnauthorized: () => { void env.auth.logout() },
     })
     state = res.state
     text = res.text
