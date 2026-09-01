@@ -88,8 +88,8 @@ export function createArtifactsHandler(service: HuaqiuArtifacts): ArtifactsHandl
         size: meta.size,
         createdAt: meta.createdAt,
       })
-    } catch (err) {
-      sendJson(res, 500, { error: 'internal error resolving artifact', detail: String(err) })
+    } catch {
+      sendJson(res, 500, { error: 'internal error resolving artifact' })
     }
   }
 }
