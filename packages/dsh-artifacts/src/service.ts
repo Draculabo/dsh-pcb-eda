@@ -170,14 +170,19 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
 
     const dir = this.artifactDir(id)
     await fs.promises.mkdir(dir, { recursive: true })
-    // Write content FIRST so an interrupted write never leaves a "valid" meta
-    // pointing at partial bytes. Both writes are atomic (tmp + rename).
-    const tmpContent = path.join(dir, 'content.tmp')
-    await fs.promises.writeFile(tmpContent, buf)
-    await fs.promises.rename(tmpContent, path.join(dir, 'content'))
-    const tmpMeta = path.join(dir, 'meta.json.tmp')
-    await fs.promises.writeFile(tmpMeta, JSON.stringify(meta, null, 2), 'utf8')
-    await fs.promises.rename(tmpMeta, path.join(dir, 'meta.json'))
+    try {
+      // Write content FIRST so an interrupted write never leaves a "valid" meta
+      // pointing at partial bytes. Both writes are atomic (tmp + rename).
+      const tmpContent = path.join(dir, 'content.tmp')
+      await fs.promises.writeFile(tmpContent, buf)
+      await fs.promises.rename(tmpContent, path.join(dir, 'content'))
+      const tmpMeta = path.join(dir, 'meta.json.tmp')
+      await fs.promises.writeFile(tmpMeta, JSON.stringify(meta, null, 2), 'utf8')
+      await fs.promises.rename(tmpMeta, path.join(dir, 'meta.json'))
+    } catch (err) {
+      await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => undefined)
+      throw err
+    }
 
     log('debug', 'created', { id, type: input.type, size: buf.byteLength })
     return { id, type: meta.type, filename: meta.filename, size: meta.size }
