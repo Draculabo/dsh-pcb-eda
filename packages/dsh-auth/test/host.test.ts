@@ -43,6 +43,19 @@ describe('resolveHostConfig', () => {
     expect(c.hostAuthPath).toBe('/x')
   })
 
+  it('normalizes host auth path configuration', () => {
+    const padded = resolveHostConfig(undefined, { HQ_EDGE_AUTH_PATH: ' /custom/token ' })
+    const blank = resolveHostConfig(undefined, { HQ_EDGE_AUTH_PATH: '   ' })
+
+    expect({
+      padded: padded.hostAuthPath,
+      blank: blank.hostAuthPath,
+    }).toEqual({
+      padded: '/custom/token',
+      blank: '/api/v1/auth/token',
+    })
+  })
+
   it('applies defaults when nothing is configured', () => {
     const c = resolveHostConfig(undefined, {})
     expect(c.hqEdgeBaseUrl).toBe('')
