@@ -190,6 +190,9 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
       const fp = path.join(dir, 'meta.json')
       const raw = await fs.promises.readFile(fp, 'utf8')
       const meta = JSON.parse(raw) as ArtifactMeta
+      if (meta.id !== id) {
+        return null
+      }
       if (this.isExpired(meta)) {
         void this.delete(id) // best-effort cleanup, non-fatal
         return null
