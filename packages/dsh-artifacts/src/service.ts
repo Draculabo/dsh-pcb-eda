@@ -104,7 +104,17 @@ function mimeTypeFor(type: ArtifactType, filename: string): string {
 
 function toBytes(content: string | Uint8Array, encoding: 'utf8' | 'base64' | undefined): Uint8Array {
   if (typeof content === 'string') {
-    return encoding === 'base64' ? Buffer.from(content, 'base64') : Buffer.from(content, 'utf8')
+    if (encoding === 'base64') {
+      const normalized = content.replace(/\s/g, '')
+      const hasValidAlphabet = /^[A-Za-z0-9+/]*={0,2}$/.test(normalized)
+      const remainder = normalized.length % 4
+      const hasValidLength = normalized.includes('=') ? remainder === 0 : remainder !== 1
+      if (!hasValidAlphabet || !hasValidLength) {
+        throw new Error('invalid base64 artifact content')
+      }
+      return Buffer.from(normalized, 'base64')
+    }
+    return Buffer.from(content, 'utf8')
   }
   return content instanceof Uint8Array ? content : new Uint8Array(content)
 }
