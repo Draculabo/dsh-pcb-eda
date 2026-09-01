@@ -101,6 +101,13 @@ describe('progress route', () => {
     expect(out.status).toBe(404)
   })
 
+  it('rejects empty path segments instead of collapsing them', async () => {
+    const handler = createProgressHandler(seededStore())
+    const { res, out } = stubRes()
+    await handler(req('GET', `${PROGRESS_ROUTE_PREFIX}//call-1`), res)
+    expect(out.status).toBe(404)
+  })
+
   it('rejects non-GET methods', async () => {
     const handler = createProgressHandler(seededStore())
     const { res, out } = stubRes()
