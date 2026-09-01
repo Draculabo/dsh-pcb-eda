@@ -43,6 +43,35 @@ describe('resolveHostConfig', () => {
     expect(c.hostAuthPath).toBe('/x')
   })
 
+  it('normalizes host base URL whitespace', () => {
+    const env = {
+      HQ_EDGE_AUTH_PATH: '/x',
+      HQ_EDGE_HOST_TTL_SECONDS: '99',
+    }
+
+    expect({
+      padded: resolveHostConfig(undefined, {
+        ...env,
+        HQ_EDGE_BASE_URL: '  http://env:2  ',
+      }),
+      blank: resolveHostConfig(undefined, {
+        ...env,
+        HQ_EDGE_BASE_URL: '   ',
+      }),
+    }).toEqual({
+      padded: {
+        hqEdgeBaseUrl: 'http://env:2',
+        hostAuthPath: '/x',
+        hostSessionTtlSeconds: 99,
+      },
+      blank: {
+        hqEdgeBaseUrl: '',
+        hostAuthPath: '/x',
+        hostSessionTtlSeconds: 99,
+      },
+    })
+  })
+
   it('applies defaults when nothing is configured', () => {
     const c = resolveHostConfig(undefined, {})
     expect(c.hqEdgeBaseUrl).toBe('')
