@@ -57,7 +57,10 @@ export interface EdaAccount {
  */
 export function resolveConfig(env?: Record<string, string | undefined>): SchematicGenConfig {
   const e = env && typeof env === 'object' ? env : {}
-  const get = (k: string, d: string) => (typeof e[k] === 'string' && e[k].length > 0 ? e[k]! : d)
+  const get = (k: string, d: string) => {
+    const value = e[k]
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : d
+  }
   return {
     copilotkitUrl: get('HQ_EDA_COPILOTKIT_URL', DEFAULT_COPILOTKIT_URL),
     exportZipUrl: get('HQ_EDA_EXPORT_ZIP_URL', DEFAULT_EXPORT_ZIP_URL),
