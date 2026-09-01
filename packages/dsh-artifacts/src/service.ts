@@ -205,7 +205,11 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
     const meta = await this.get(id)
     if (!meta) return null
     try {
-      return new Uint8Array(await fs.promises.readFile(path.join(this.artifactDir(id), 'content')))
+      const content = new Uint8Array(await fs.promises.readFile(path.join(this.artifactDir(id), 'content')))
+      if (content.byteLength !== meta.size) {
+        return null
+      }
+      return content
     } catch {
       return null
     }
