@@ -95,7 +95,8 @@ export class HostSessionResolver {
       return this.cache.info
     }
     try {
-      const res = await this.doFetch(`${this.baseUrl}${this.path}`, {
+      const url = new URL(this.path, this.baseUrl)
+      const res = await this.doFetch(url, {
         method: 'GET',
         headers: { accept: 'application/json' },
       })
