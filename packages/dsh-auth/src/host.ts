@@ -89,7 +89,9 @@ export class HostSessionResolver {
   }
 
   async resolve(): Promise<ResolvedHostUser | null> {
-    if (!this.enabled) return null
+    if (!this.enabled) {
+      return null
+    }
     const now = Date.now()
     if (this.cache !== null && now - this.cache.fetchedAt < this.ttlMs) {
       return { ...this.cache.info }
@@ -99,10 +101,14 @@ export class HostSessionResolver {
         method: 'GET',
         headers: { accept: 'application/json' },
       })
-      if (!res.ok) return this.cache ? { ...this.cache.info } : null
+      if (!res.ok) {
+        return this.cache ? { ...this.cache.info } : null
+      }
       const data = await res.json() as Record<string, unknown>
       const info = normalizeHostUser(data)
-      if (!info) return this.cache ? { ...this.cache.info } : null
+      if (!info) {
+        return this.cache ? { ...this.cache.info } : null
+      }
       this.cache = { info: { ...info }, fetchedAt: now }
       return { ...info }
     } catch {
