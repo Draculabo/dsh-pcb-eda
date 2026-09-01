@@ -81,14 +81,19 @@ for (const pkg of PACKAGES) {
     try {
       const existing = execFileSync('npm', ['view', `${manifest.name}@${version}`, 'version'], {
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
+        stdio: ['ignore', 'pipe', 'pipe'],
       }).trim()
       if (existing.length > 0) {
         console.log(`\nskip ${manifest.name}@${version} — already published`)
         continue
       }
-    } catch {
-      /* not found → publish */
+    } catch (error) {
+      const stderr = error && typeof error === 'object' && 'stderr' in error
+        ? String(error.stderr)
+        : ''
+      if (!stderr.includes('E404')) {
+        throw error
+      }
     }
   }
 
