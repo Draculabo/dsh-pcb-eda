@@ -54,6 +54,7 @@ if (requireClean) {
 
 // 2. Per-package integrity.
 for (const pkg of PACKAGES) {
+  const packageFailuresBeforeChecks = failures
   const dir = join(root, 'packages', pkg)
   const pj = join(dir, 'package.json')
   if (!existsSync(pj)) { fail(`${pkg}/package.json missing`); continue }
@@ -107,7 +108,9 @@ for (const pkg of PACKAGES) {
     }
   }
 
-  ok(`@huaqiu/${pkg} v${manifest.version} — entry/client/patch/exports/clean`)
+  if (failures === packageFailuresBeforeChecks) {
+    ok(`@huaqiu/${pkg} v${manifest.version} — entry/client/patch/exports/clean`)
+  }
 }
 
 if (failures > 0) {
