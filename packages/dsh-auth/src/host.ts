@@ -92,22 +92,22 @@ export class HostSessionResolver {
     if (!this.enabled) return null
     const now = Date.now()
     if (this.cache !== null && now - this.cache.fetchedAt < this.ttlMs) {
-      return this.cache.info
+      return { ...this.cache.info }
     }
     try {
       const res = await this.doFetch(`${this.baseUrl}${this.path}`, {
         method: 'GET',
         headers: { accept: 'application/json' },
       })
-      if (!res.ok) return this.cache?.info ?? null
+      if (!res.ok) return this.cache ? { ...this.cache.info } : null
       const data = await res.json() as Record<string, unknown>
       const info = normalizeHostUser(data)
-      if (!info) return this.cache?.info ?? null
-      this.cache = { info, fetchedAt: now }
-      return info
+      if (!info) return this.cache ? { ...this.cache.info } : null
+      this.cache = { info: { ...info }, fetchedAt: now }
+      return { ...info }
     } catch {
       // Network error: fall back to a previously cached value if we have one.
-      return this.cache?.info ?? null
+      return this.cache ? { ...this.cache.info } : null
     }
   }
 
