@@ -49,6 +49,19 @@ describe('resolveHostConfig', () => {
     expect(c.hostAuthPath).toBe('/api/v1/auth/token')
     expect(c.hostSessionTtlSeconds).toBe(300)
   })
+
+  it('requires complete numeric env ttl values', () => {
+    const decimal = resolveHostConfig(undefined, { HQ_EDGE_HOST_TTL_SECONDS: ' 1.5 ' })
+    const malformed = resolveHostConfig(undefined, { HQ_EDGE_HOST_TTL_SECONDS: '60seconds' })
+
+    expect({
+      decimal: decimal.hostSessionTtlSeconds,
+      malformed: malformed.hostSessionTtlSeconds,
+    }).toEqual({
+      decimal: 1.5,
+      malformed: 300,
+    })
+  })
 })
 
 describe('normalizeHostUser', () => {
