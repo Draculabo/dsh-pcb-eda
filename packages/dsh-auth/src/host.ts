@@ -52,8 +52,10 @@ export function resolveHostConfig(
   if (typeof ttlRaw === 'number' && Number.isFinite(ttlRaw) && ttlRaw > 0) {
     ttl = ttlRaw
   } else if (typeof ttlRaw === 'string' && ttlRaw.trim().length > 0) {
-    const parsed = Number.parseInt(ttlRaw, 10)
-    if (Number.isFinite(parsed) && parsed > 0) ttl = parsed
+    const parsed = Number(ttlRaw.trim())
+    if (Number.isFinite(parsed) && parsed > 0) {
+      ttl = parsed
+    }
   }
   return { hqEdgeBaseUrl: baseUrl, hostAuthPath, hostSessionTtlSeconds: ttl }
 }
