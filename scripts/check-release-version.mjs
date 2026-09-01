@@ -35,7 +35,7 @@ if (!requested) {
   console.error('usage: node scripts/check-release-version.mjs <version> [--tag vX.Y.Z]')
   process.exit(1)
 }
-if (!/^\d+\.\d+\.\d+/.test(requested)) {
+if (!/^\d+\.\d+\.\d+$/.test(requested)) {
   console.error(`FATAL: invalid version "${requested}" (expected X.Y.Z)`)
   process.exit(1)
 }
