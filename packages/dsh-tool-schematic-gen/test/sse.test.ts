@@ -63,6 +63,31 @@ describe('consumeCopilotkit', () => {
     expect(state.schFiles).toEqual([{ filename: 'A.kicad_sch', content: '(kicad)' }])
   })
 
+  it('joins multiple data lines into one SSE event payload', async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        controller.enqueue(encoder.encode(
+          'data: {"type":"STATE_SNAPSHOT",\n' +
+          'data: "snapshot":{"design_name":"Multiline"}}\n\n' +
+          'data: {"type":"RUN_FINISHED"}\n\n',
+        ))
+        controller.close()
+      },
+    })
+    const fetchImpl = async () => new Response(stream, { status: 200 })
+    const result = await consumeCopilotkit('https://x/api/copilotkit', {}, {}, {
+      fetchImpl: fetchImpl as never,
+      timeoutMs: 5000,
+    })
+    expect(result).toEqual({
+      state: { design_name: 'Multiline' },
+      finished: true,
+      text: '',
+      trace: [],
+    })
+  })
+
   it('throws when the agent reports a RUN_ERROR', async () => {
     const stream = new ReadableStream({
       start(controller) {
