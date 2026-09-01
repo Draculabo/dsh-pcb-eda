@@ -42,15 +42,15 @@ function parsePath(req: IncomingMessage): { callId: string | null } | null {
   const rest = pathname.slice(PROGRESS_ROUTE_PREFIX.length)
   if (rest === '') return { callId: null }
   if (!rest.startsWith('/')) return null
-  const segs = rest.split('/').filter(Boolean)
-  if (segs.length !== 1) return null
+  const segs = rest.split('/')
+  if (segs.length !== 2 || segs[1] === '') return null
   let callId: string
   try {
-    callId = decodeURIComponent(segs[0]!)
+    callId = decodeURIComponent(segs[1]!)
   } catch {
     return null // malformed percent-encoding
   }
-  return { callId: callId.length > 0 ? callId : null }
+  return { callId }
 }
 
 export function createProgressHandler(store: ProgressStore): ProgressHandler {
