@@ -37,9 +37,13 @@ function parsePath(req: IncomingMessage): { id: string; content: boolean } | nul
   const rest = pathname.slice(ARTIFACTS_ROUTE_PREFIX.length)
   // rest === '' or startsWith('/')
   if (rest === '') return null
-  const segs = rest.split('/').filter(Boolean)
-  if (segs.length === 1) return { id: segs[0]!, content: false }
-  if (segs.length === 2 && segs[1] === 'content') return { id: segs[0]!, content: true }
+  const segs = rest.split('/')
+  if (segs.length === 2 && segs[0] === '' && segs[1] !== '') {
+    return { id: segs[1]!, content: false }
+  }
+  if (segs.length === 3 && segs[0] === '' && segs[1] !== '' && segs[2] === 'content') {
+    return { id: segs[1]!, content: true }
+  }
   return null
 }
 
