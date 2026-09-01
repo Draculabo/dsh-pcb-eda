@@ -68,9 +68,13 @@ export type ProjectedPhase =
 /** First text block of a settled tool result (renderJsonText output). */
 export function resultTextOf(block: ToolBlockLike | undefined): string {
   const content = block?.content
-  if (!Array.isArray(content)) return ''
+  if (!Array.isArray(content)) {
+    return ''
+  }
   for (const c of content) {
-    if (c && c.type === 'text' && typeof c.text === 'string') return c.text
+    if (c && c.type === 'text' && typeof c.text === 'string') {
+      return c.text
+    }
   }
   return ''
 }
@@ -84,14 +88,18 @@ function firstLine(text: string): string {
 /** Parse the generation tool result JSON into a structured shape. */
 export function parseGenResult(text: string): GenResult | null {
   const t = text.trim()
-  if (t === '') return null
+  if (t === '') {
+    return null
+  }
   let v: unknown
   try {
     v = JSON.parse(t)
   } catch {
     return null
   }
-  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+    return null
+  }
   const obj = v as Record<string, unknown>
 
   const status = typeof obj.status === 'string' ? obj.status : null
@@ -155,7 +163,9 @@ export function parseGenResult(text: string): GenResult | null {
  *   unparseable                                  → failed (surfaces raw text)
  */
 export function projectToolCall(block: ToolBlockLike | undefined): ProjectedPhase {
-  if (!block || typeof block !== 'object') return { phase: 'unknown' }
+  if (!block || typeof block !== 'object') {
+    return { phase: 'unknown' }
+  }
   if (!Array.isArray(block.content)) {
     // RunningToolCall — the tool/call event arrived, tool/result has not.
     return { phase: 'generating' }
@@ -173,11 +183,21 @@ export function projectToolCall(block: ToolBlockLike | undefined): ProjectedPhas
   if (!parsed) {
     return { phase: 'failed', message: firstLine(text) || 'unparseable tool result' }
   }
-  if (parsed.status === 'generated') return { phase: 'completed', result: parsed }
-  if (parsed.status === 'needs_confirmation') return { phase: 'needs_confirmation', result: parsed }
-  if (parsed.status === 'needs_auth') return { phase: 'needs_auth', result: parsed }
-  if (parsed.status === 'cancelled') return { phase: 'cancelled', result: parsed }
-  if (parsed.kind) return { phase: 'completed', result: parsed }
+  if (parsed.status === 'generated') {
+    return { phase: 'completed', result: parsed }
+  }
+  if (parsed.status === 'needs_confirmation') {
+    return { phase: 'needs_confirmation', result: parsed }
+  }
+  if (parsed.status === 'needs_auth') {
+    return { phase: 'needs_auth', result: parsed }
+  }
+  if (parsed.status === 'cancelled') {
+    return { phase: 'cancelled', result: parsed }
+  }
+  if (parsed.kind) {
+    return { phase: 'completed', result: parsed }
+  }
   return { phase: 'failed', message: `unexpected tool status: ${parsed.status}` }
 }
 
@@ -217,18 +237,29 @@ export function fieldLabel(key: string, t: Translate): string {
 /** Default download filename for a kind when the result has none. */
 export function defaultFilenameFor(kind: string | null, artifactId: string | null): string {
   let suffix = 'txt'
-  if (kind === 'symbol') suffix = 'kicad_sym'
-  else if (kind === 'footprint') suffix = 'kicad_mod'
-  else if (kind === 'schematic') suffix = 'kicad_sch'
-  else if (kind === 'pcb') suffix = 'kicad_pcb'
+  if (kind === 'symbol') {
+    suffix = 'kicad_sym'
+  } else if (kind === 'footprint') {
+    suffix = 'kicad_mod'
+  } else if (kind === 'schematic') {
+    suffix = 'kicad_sch'
+  } else if (kind === 'pcb') {
+    suffix = 'kicad_pcb'
+  }
   const base = artifactId ?? 'generated'
   return `${base}.${suffix}`
 }
 
 export function formatBytes(n: number | null): string {
-  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return ''
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) {
+    return ''
+  }
+  if (n < 1024) {
+    return `${n} B`
+  }
+  if (n < 1024 * 1024) {
+    return `${(n / 1024).toFixed(1)} KB`
+  }
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
@@ -236,6 +267,8 @@ export function formatBytes(n: number | null): string {
 export function hashString(s: string): string {
   let h = 5381
   const str = String(s)
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) + h + str.charCodeAt(i)) | 0
+  }
   return (h >>> 0).toString(36)
 }
