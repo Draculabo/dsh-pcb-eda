@@ -80,9 +80,17 @@ export type Translate = (key: AuthCopyKey, params?: Record<string, unknown>) => 
  */
 export function translate(locale: AuthLocale, key: AuthCopyKey, params?: Record<string, unknown>): string {
   const template = COPY[locale]?.[key] ?? COPY.zh[key] ?? key
-  if (!params) return template
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    name in params ? String(params[name]) : match)
+  if (!params) {
+    return template
+  }
+
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+    if (!Object.prototype.hasOwnProperty.call(params, name)) {
+      return match
+    }
+
+    return String(params[name])
+  })
 }
 
 /** Translate bound to one locale (stable for the lifetime of that locale). */
