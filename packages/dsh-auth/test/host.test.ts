@@ -64,6 +64,27 @@ describe('normalizeHostUser', () => {
   it('carries nickname', () => {
     expect(normalizeHostUser({ token: 't', id: 'u', nickname: 'Bob' })?.nickname).toBe('Bob')
   })
+  it('rejects blank credential fields without rewriting valid values', () => {
+    expect({
+      blankToken: normalizeHostUser({ token: '   ', userId: 'u' }),
+      blankUserId: normalizeHostUser({ token: 't', userId: '\t ' }),
+      paddedValues: normalizeHostUser({
+        token: ' token ',
+        userId: ' user ',
+        nickname: ' nickname ',
+      }),
+      blankNickname: normalizeHostUser({ token: 't', userId: 'u', nickname: '   ' }),
+    }).toEqual({
+      blankToken: null,
+      blankUserId: null,
+      paddedValues: {
+        id: ' user ',
+        token: ' token ',
+        nickname: ' nickname ',
+      },
+      blankNickname: { id: 'u', token: 't' },
+    })
+  })
 })
 
 describe('HostSessionResolver', () => {
