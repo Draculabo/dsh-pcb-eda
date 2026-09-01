@@ -13,8 +13,8 @@
  *   node scripts/check-publish.mjs [--require-clean]
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -41,6 +41,36 @@ function includedByFiles(manifest, target) {
   })
 }
 
+function findLegacyReferences(dir) {
+  const matches = []
+  const pending = [dir]
+
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (!current) {
+      continue
+    }
+
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules') {
+          pending.push(path)
+        }
+        continue
+      }
+      if (!entry.isFile()) {
+        continue
+      }
+      if (readFileSync(path).includes('@hqedge/')) {
+        matches.push(relative(dir, path).replaceAll('\\', '/'))
+      }
+    }
+  }
+
+  return matches
+}
+
 // 1. Clean-tree guard (release lane only).
 if (requireClean) {
   try {
@@ -58,6 +88,10 @@ for (const pkg of PACKAGES) {
   const pj = join(dir, 'package.json')
   if (!existsSync(pj)) { fail(`${pkg}/package.json missing`); continue }
   const manifest = JSON.parse(readFileSync(pj, 'utf8'))
+
+  for (const path of findLegacyReferences(dir)) {
+    fail(`${pkg}: legacy @hqedge reference found in ${path}`)
+  }
 
   if (typeof manifest.name !== 'string' || manifest.name !== `@huaqiu/${pkg}`) {
     fail(`${pkg}: name must be "@huaqiu/${pkg}"`)
