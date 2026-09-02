@@ -57,13 +57,15 @@ export interface EdaAccount {
  */
 export function resolveConfig(env?: Record<string, string | undefined>): SchematicGenConfig {
   const e = env && typeof env === 'object' ? env : {}
-  const get = (k: string, d: string) => (typeof e[k] === 'string' && e[k].length > 0 ? e[k]! : d)
+  const get = (k: string, d: string) => {
+    const value = e[k]
+    return typeof value === 'string' && value.trim().length > 0 ? value : d
+  }
+  const cookie = e['HQ_EDA_COOKIE']
   return {
     copilotkitUrl: get('HQ_EDA_COPILOTKIT_URL', DEFAULT_COPILOTKIT_URL),
     exportZipUrl: get('HQ_EDA_EXPORT_ZIP_URL', DEFAULT_EXPORT_ZIP_URL),
-    cookie: typeof e['HQ_EDA_COOKIE'] === 'string' && e['HQ_EDA_COOKIE'].length > 0
-      ? e['HQ_EDA_COOKIE']
-      : null,
+    cookie: typeof cookie === 'string' && cookie.trim().length > 0 ? cookie : null,
     defaultLanguage: get('HQ_EDA_DEFAULT_LANGUAGE', DEFAULT_AGENT_LANGUAGE),
   }
 }
