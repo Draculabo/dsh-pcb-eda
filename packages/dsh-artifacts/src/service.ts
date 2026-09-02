@@ -230,7 +230,7 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
     try {
       const entries = await fs.promises.readdir(root, { withFileTypes: true })
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue
+        if (!entry.isDirectory() || !ARTIFACT_ID_PATTERN.test(entry.name)) continue
         if (onlyExpired) {
           try {
             const raw = await fs.promises.readFile(path.join(root, entry.name, 'meta.json'), 'utf8')
