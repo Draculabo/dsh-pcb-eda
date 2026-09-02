@@ -42,8 +42,8 @@ function parsePath(req: IncomingMessage): { callId: string | null } | null {
   const rest = pathname.slice(PROGRESS_ROUTE_PREFIX.length)
   if (rest === '') return { callId: null }
   if (!rest.startsWith('/')) return null
-  const segs = rest.split('/').filter(Boolean)
-  if (segs.length !== 1) return null
+  const segs = rest.slice(1).split('/')
+  if (segs.length !== 1 || segs[0] === '') return null
   let callId: string
   try {
     callId = decodeURIComponent(segs[0]!)
