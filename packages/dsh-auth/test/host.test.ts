@@ -46,7 +46,7 @@ describe('resolveHostConfig', () => {
   it('rejects partially numeric TTL environment values', () => {
     expect(resolveHostConfig(undefined, {
       HQ_EDGE_BASE_URL: 'http://env:2',
-      HQ_EDGE_HOST_TTL_SECONDS: '300junk',
+      HQ_EDGE_HOST_TTL_SECONDS: '99junk',
     })).toEqual({
       hqEdgeBaseUrl: 'http://env:2',
       hostAuthPath: '/api/v1/auth/token',
