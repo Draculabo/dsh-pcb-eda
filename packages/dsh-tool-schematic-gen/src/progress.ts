@@ -297,7 +297,7 @@ export class ProgressStore {
       this.runs.delete(callId)
       return null
     }
-    return rec.doc
+    return structuredClone(rec.doc)
   }
 
   /** Every live run. Used by the route when the caller has no callId. */
