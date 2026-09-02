@@ -23,12 +23,18 @@ export type ProgressHandler = (
   res: ServerResponse,
 ) => Promise<void> | void
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): void {
   const payload = JSON.stringify(body)
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     // Progress is live — never let a proxy serve a stale snapshot.
     'cache-control': 'no-store',
+    ...headers,
   })
   res.end(payload)
 }
@@ -56,7 +62,7 @@ function parsePath(req: IncomingMessage): { callId: string | null } | null {
 export function createProgressHandler(store: ProgressStore): ProgressHandler {
   return (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      sendJson(res, 405, { error: 'method not allowed' })
+      sendJson(res, 405, { error: 'method not allowed' }, { allow: 'GET, HEAD' })
       return
     }
     const parsed = parsePath(req)
