@@ -5,6 +5,7 @@ import {
   buildRunBody,
   DEFAULT_AGENT_LANGUAGE,
   DEFAULT_COPILOTKIT_URL,
+  DEFAULT_EXPORT_ZIP_URL,
   resolveConfig,
   sanitizeZipBaseName,
 } from '../src/config.js'
@@ -26,6 +27,20 @@ describe('resolveConfig', () => {
     const c = resolveConfig({ HQ_EDA_COPILOTKIT_URL: 'https://stg.example/api/copilotkit', HQ_EDA_COOKIE: 'a=1' })
     expect(c.copilotkitUrl).toBe('https://stg.example/api/copilotkit')
     expect(c.cookie).toBe('a=1')
+  })
+
+  it('ignores whitespace-only env overrides', () => {
+    expect(resolveConfig({
+      HQ_EDA_COPILOTKIT_URL: '   ',
+      HQ_EDA_EXPORT_ZIP_URL: '\t',
+      HQ_EDA_COOKIE: '\n',
+      HQ_EDA_DEFAULT_LANGUAGE: '  ',
+    })).toEqual({
+      copilotkitUrl: DEFAULT_COPILOTKIT_URL,
+      exportZipUrl: DEFAULT_EXPORT_ZIP_URL,
+      cookie: null,
+      defaultLanguage: DEFAULT_AGENT_LANGUAGE,
+    })
   })
 
   it('lets a deployment override the agent-language default', () => {
