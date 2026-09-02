@@ -65,6 +65,7 @@ export function apply(ctx: ClientContext): () => void {
   })
 
   const disposers: Array<() => void> = []
+  let disposed = false
   const disposeProvide = ctx.provide?.('huaqiuAuth', { auth: client.auth })
   registerAuth(client.auth)
   registerAuthSync(() => { void client.syncNow() })
@@ -85,15 +86,32 @@ export function apply(ctx: ClientContext): () => void {
     document.removeEventListener('visibilitychange', sync)
   })
 
+  /**
+   * In HQ Edge host mode (config.hqEdgeBaseUrl set on the node half), EDA
+   * launches hq-edge WITH the operator credential, so hq-edge — not this
+   * plugin — owns authentication for the session. The auth plugin's own login
+   * UI (the `sidebar.footer.action` entrypoint and the login toolviews) is
+   * therefore suppressed: it would be redundant and confusing next to the
+   * host-provided session. In standalone DSH (official integration) the
+   * sidebar entrypoint stays — it is the only login surface there.
+   *
+   * The mode is read from the node half over the plugin-owned webServer route
+   * (async), so registration is deferred until it answers; the returned
+   * disposer still drains anything registered later.
+   */
   const slots = ctx.slots
-  if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
-    for (const toolName of AUTH_TOOL_NAMES) {
-      disposers.push(slots.inject('tool.call.toolview', () => slots.register({ name: 'tool.call.toolview', key: toolName }, HuaqiuToolView) as () => void))
+  void client.transport.fetchHostMode().then((hostMode) => {
+    if (disposed || hostMode) return
+    if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
+      for (const toolName of AUTH_TOOL_NAMES) {
+        disposers.push(slots.inject('tool.call.toolview', () => slots.register({ name: 'tool.call.toolview', key: toolName }, HuaqiuToolView) as () => void))
+      }
+      disposers.push(slots.inject('sidebar.footer.action', () => slots.register({ name: 'sidebar.footer.action', id: 'huaqiu-auth' }, HuaqiuAuthSidebarAction) as () => void))
     }
-    disposers.push(slots.inject('sidebar.footer.action', () => slots.register({ name: 'sidebar.footer.action', id: 'huaqiu-auth' }, HuaqiuAuthSidebarAction) as () => void))
-  }
+  })
 
   return () => {
+    disposed = true
     for (const dispose of disposers) {
       try {
         dispose()

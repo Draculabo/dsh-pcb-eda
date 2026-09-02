@@ -93,4 +93,32 @@ describe('auth webServer routes (browser→node transport)', () => {
     expect((await get(`${AUTH_ROUTE_PREFIX}/nope`)).status).toBe(404)
     expect((await post(`${AUTH_ROUTE_PREFIX}/nope`, {})).status).toBe(404)
   })
+
+  it('GET /config reports standalone mode (hostMode=false)', async () => {
+    const res = JSON.parse((await get(`${AUTH_ROUTE_PREFIX}/config`)).text)
+    expect(res.hostMode).toBe(false)
+  })
+
+  it('GET /config reports host mode when an HQ Edge base URL is configured', async () => {
+    // A host-mode service (overlay `config.hqEdgeBaseUrl` set) must expose
+    // hostMode=true so the browser half suppresses its own login entrypoint.
+    const hostSvc = new InMemoryHuaqiuAuthService({ hqEdgeBaseUrl: 'http://localhost:9999' })
+    const hostServer = http.createServer(createAuthHandler(hostSvc))
+    await new Promise<void>((resolve) => hostServer.listen(0, '127.0.0.1', resolve))
+    try {
+      const port = (hostServer.address() as AddressInfo).port
+      const res = JSON.parse(
+        await new Promise<string>((resolve, reject) => {
+          http.get(`http://127.0.0.1:${port}${AUTH_ROUTE_PREFIX}/config`, (r) => {
+            const chunks: Buffer[] = []
+            r.on('data', (c) => chunks.push(c))
+            r.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+          }).on('error', reject)
+        }),
+      )
+      expect(res.hostMode).toBe(true)
+    } finally {
+      await new Promise<void>((resolve) => hostServer.close(() => resolve()))
+    }
+  })
 })

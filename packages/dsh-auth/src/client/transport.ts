@@ -9,6 +9,12 @@ import type { AuthTokenPayload } from './lib.js'
 export interface AuthTransport {
   pushSession(info: AuthTokenPayload): Promise<void>
   pushLogout(): Promise<void>
+  /**
+   * Whether the plugin runs under an HQ Edge host. In host mode hq-edge already
+   * holds the operator credential (EDA hands it over on launch), so the
+   * browser half's own login UI (sidebar entrypoint) is suppressed.
+   */
+  fetchHostMode(): Promise<boolean>
 }
 
 export function createWebServerAuthTransport(
@@ -31,6 +37,22 @@ export function createWebServerAuthTransport(
     async pushLogout() {
       const res = await doFetch(`${base}/logout`, { method: 'POST' })
       if (!res.ok) throw new Error(`auth logout push failed: HTTP ${res.status}`)
+    },
+    async fetchHostMode() {
+      try {
+        const res = await doFetch(`${base}/config`, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+        })
+        if (!res.ok) return false
+        const body = await res.json() as { hostMode?: unknown }
+        return body.hostMode === true
+      } catch {
+        // Offline/same-origin failure: fall back to standalone (show the login
+        // entrypoint) rather than hiding it — a login UI is never a security
+        // regression, but a missing one in standalone would lock the user out.
+        return false
+      }
     },
   }
 }

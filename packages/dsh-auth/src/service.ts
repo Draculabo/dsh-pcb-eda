@@ -51,6 +51,14 @@ export interface HuaqiuAuthService {
   /** Node-only setters used by the webServer route handlers. */
   setCredentials(info: HuaqiuUserInfo): void
   invalidate(): void
+  /**
+   * True when running in HQ Edge host mode (a host base URL was configured —
+   * overlay `config.hqEdgeBaseUrl` or `HQ_EDGE_BASE_URL`). The browser half
+   * reads this over the webServer config route to decide whether the sidebar
+   * login entrypoint is needed: in host mode EDA hands the credential to
+   * hq-edge, so the auth plugin's own login UI is suppressed.
+   */
+  readonly hostMode: boolean
 }
 
 const PERSIST_FILE = 'session.json'
@@ -115,7 +123,11 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
       (resolved.hostSessionTtlSeconds ?? 300) * 1000,
       opts?.fetchImpl,
     )
+    this.hostMode = this.host.enabled
   }
+
+  /** Host mode is active iff a host base URL was configured (see HostSessionResolver.enabled). */
+  readonly hostMode: boolean
 
   readonly auth: HuaqiuAuthApi = {
     isAuthenticated: () => this.host.enabled || this.current !== null || readPersisted() !== null,

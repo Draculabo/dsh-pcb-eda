@@ -19,6 +19,7 @@ function ctxStub() {
     },
     setCredentials: () => {},
     invalidate: () => {},
+    hostMode: false,
   }
   const artifacts: HuaqiuArtifacts = {
     create: async (): Promise<CreateArtifactResult> => ({ id: 'art_test', type: 'footprint', filename: 'x.kicad_mod', size: 1 }),

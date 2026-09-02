@@ -43,6 +43,7 @@ function makeClient() {
   const transport = {
     pushSession: vi.fn(async (info: AuthTokenPayload) => { pushes.push(['session', info]) }),
     pushLogout: vi.fn(async () => { pushes.push(['logout']) }),
+    fetchHostMode: vi.fn(async () => false),
   }
   const storage = createAuthStorage(localStorage)
   const listeners: Array<(e: MessageEvent) => void> = []

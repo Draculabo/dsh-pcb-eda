@@ -5,10 +5,14 @@
  *   POST /api/v1/huaqiu/auth/session   body { token, userInfo? }  → cache set
  *   POST /api/v1/huaqiu/auth/logout                                → cache cleared
  *   GET  /api/v1/huaqiu/auth/session   → { authenticated, user }
+ *   GET  /api/v1/huaqiu/auth/config    → { hostMode }
  *
- * These routes are the browser→node transport for Phase 0A (start-p0.md §4:
- * smallest supported extension point — `apiProxy`'s dispatch table is closed,
- * so a plugin-owned `webServer` route is the documented channel).
+ * `config` tells the browser half whether it is running under an HQ Edge host
+ * (hq-edge passes the operator credential to hq-edge itself, so the sidebar
+ * login entrypoint is suppressed). These routes are the browser→node transport
+ * for Phase 0A (start-p0.md §4: smallest supported extension point —
+ * `apiProxy`'s dispatch table is closed, so a plugin-owned `webServer` route is
+ * the documented channel).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { HuaqiuAuthService, HuaqiuUserInfo } from './service.js'
@@ -73,6 +77,11 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
         const user = await service.auth.getUserInfo()
         const authenticated = service.auth.isAuthenticated()
         sendJson(res, 200, { authenticated, user })
+        return
+      }
+
+      if (req.method === 'GET' && pathname === `${AUTH_ROUTE_PREFIX}/config`) {
+        sendJson(res, 200, { hostMode: service.hostMode })
         return
       }
 

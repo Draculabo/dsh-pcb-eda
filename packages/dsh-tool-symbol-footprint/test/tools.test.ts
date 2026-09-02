@@ -44,6 +44,7 @@ function stubEnv(overrides: Partial<SymbolFootprintEnv> = {}): SymbolFootprintEn
     auth: stubAuth(),
     setCredentials: () => {},
     invalidate: () => {},
+    hostMode: false,
   }
   const created: CreateArtifactResult[] = []
   const artifacts: HuaqiuArtifacts = {

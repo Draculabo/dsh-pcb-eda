@@ -39,6 +39,8 @@ export interface AuthClient {
   restore(): Promise<void>
   /** Re-push persisted credentials on demand (heals a reset/absent node half). */
   syncNow(): Promise<void>
+  /** Browser→node transport (used to read host mode before UI registration). */
+  transport: AuthTransport
   dispose(): void
 }
 
@@ -144,6 +146,12 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     auth,
     handleMessageEvent,
     restore,
+    /**
+     * Browser→node transport. Exposed so the client entry can read host mode
+     * (whether an HQ Edge host supplies the credential and the login UI should
+     * be suppressed) before registering the sidebar entrypoint.
+     */
+    transport,
     /**
      * Re-push the persisted credential to the node half. Healing path: the
      * node keeps auth in memory, so a `dsh web` restart (or a failed first

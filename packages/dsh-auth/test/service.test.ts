@@ -15,9 +15,16 @@ describe('InMemoryHuaqiuAuthService', () => {
 
   it('starts unauthenticated and reports null credentials', async () => {
     const svc = new InMemoryHuaqiuAuthService()
+    expect(svc.hostMode).toBe(false)
     expect(svc.auth.isAuthenticated()).toBe(false)
     expect(await svc.auth.getAccessToken()).toBeNull()
     expect(await svc.auth.getUserInfo()).toBeNull()
+  })
+
+  it('hostMode reflects an HQ Edge host base URL config', () => {
+    expect(new InMemoryHuaqiuAuthService().hostMode).toBe(false)
+    expect(new InMemoryHuaqiuAuthService({}).hostMode).toBe(false)
+    expect(new InMemoryHuaqiuAuthService({ hqEdgeBaseUrl: 'http://localhost:9999' }).hostMode).toBe(true)
   })
 
   it('stores credentials and exposes them via the auth capability', async () => {
