@@ -63,6 +63,13 @@ describe('buildRunBody', () => {
     expect((inner.state as Record<string, unknown>).token).toBe('tok-1')
   })
 
+  it('uses a generated thread id when the supplied id is blank', () => {
+    const config = resolveConfig({})
+    const body = buildRunBody(agentIds.SCHEMATIC, 'design a 5V supply', config, ACCOUNT, 'English', ' \n\t ')
+    const inner = body.body as Record<string, unknown>
+    expect(inner.threadId).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/))
+  })
+
   it('uses the system empty state for the modular_circuit agent', () => {
     const config = resolveConfig({})
     const body = buildRunBody(agentIds.SYSTEM, 'an alarm clock', config, ACCOUNT, undefined, 'thr-2')
