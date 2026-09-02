@@ -22,7 +22,7 @@ describe('applyDelta', () => {
 
 describe('handleEvent', () => {
   it('applies STATE_SNAPSHOT wholesale', () => {
-    const state: Record<string, unknown> = {}
+    const state: Record<string, unknown> = { design_name: 'old', stale: true }
     handleEvent({ type: 'STATE_SNAPSHOT', snapshot: { design_name: 'X', module_graph: { m: 1 } } }, state)
     expect(state).toEqual({ design_name: 'X', module_graph: { m: 1 } })
   })
@@ -59,8 +59,7 @@ describe('consumeCopilotkit', () => {
     })
     expect(text).toBe('working')
     expect(finished).toBe(true)
-    expect(state.design_name).toBe('Alarm')
-    expect(state.schFiles).toEqual([{ filename: 'A.kicad_sch', content: '(kicad)' }])
+    expect(state).toEqual({ schFiles: [{ filename: 'A.kicad_sch', content: '(kicad)' }] })
   })
 
   it('throws when the agent reports a RUN_ERROR', async () => {
