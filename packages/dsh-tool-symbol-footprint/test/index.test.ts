@@ -10,11 +10,13 @@ function ctxStub() {
   const registered: unknown[] = []
   const auth: HuaqiuAuthService = {
     auth: {
-      isAuthenticated: () => true,
+      isAuthenticated: async () => true,
       getAccessToken: async () => 'tok-1',
       getUserInfo: async () => ({ id: 'u1', token: 'tok-1' }),
       login: async () => {},
       logout: async () => {},
+      validate: async () => ({ status: 'valid' }),
+      invalidate: () => {},
       onAuthStateChanged: () => () => {},
     },
     setCredentials: () => {},

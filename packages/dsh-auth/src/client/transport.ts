@@ -30,6 +30,7 @@ export function createWebServerAuthTransport(
           token: info.token,
           userId: info.id,
           ...(info.nickname !== undefined ? { nickname: info.nickname } : {}),
+          ...(info.expiresAt !== undefined ? { expiresAt: info.expiresAt } : {}),
         }),
       })
       if (!res.ok) throw new Error(`auth push failed: HTTP ${res.status}`)

@@ -4,6 +4,7 @@ import { rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InMemoryHuaqiuAuthService } from '../src/service.js'
 import { HostSessionResolver, normalizeHostUser, resolveHostConfig } from '../src/host.js'
+import { authFetch } from './helpers.js'
 
 // Redirect the persisted-session directory to a temp dir so the disk round-trip
 // is real (no mocking of fs) but never touches ~/.dsh.
@@ -112,9 +113,9 @@ describe('InMemoryHuaqiuAuthService host mode', () => {
   })
 
   it('falls back to standalone when host config is missing/invalid', async () => {
-    const svc = new InMemoryHuaqiuAuthService({ hqEdgeBaseUrl: '' })
+    const svc = new InMemoryHuaqiuAuthService({ hqEdgeBaseUrl: '' }, { fetchImpl: authFetch() })
     svc.setCredentials({ id: 'u', token: 'tok' })
-    expect(svc.auth.isAuthenticated()).toBe(true)
+    expect(await svc.auth.isAuthenticated()).toBe(true)
     expect(await svc.auth.getAccessToken()).toBe('tok')
   })
 
@@ -146,8 +147,8 @@ describe('InMemoryHuaqiuAuthService node-side persistence', () => {
     mkdirSync(TMP, { recursive: true })
     const file = join(TMP, 'session.json')
     writeFileSync(file, JSON.stringify({ id: 'restored', token: 'rtok' }))
-    const svc = new InMemoryHuaqiuAuthService()
-    expect(svc.auth.isAuthenticated()).toBe(true)
+    const svc = new InMemoryHuaqiuAuthService({}, { fetchImpl: authFetch() })
+    expect(await svc.auth.isAuthenticated()).toBe(true)
     expect(await svc.auth.getAccessToken()).toBe('rtok')
     expect((await svc.auth.getUserInfo())?.id).toBe('restored')
   })

@@ -29,26 +29,52 @@ import {
   type HuaqiuAuthConfig,
   type ResolvedHostUser,
 } from './host.js'
+import { TokenValidator, type AuthValidationResult } from './validation.js'
 
 export interface HuaqiuUserInfo {
   id: string
   token: string
   nickname?: string
+  /** Unix seconds; known for browser-pushed sessions (auth.eda.cn window). */
+  expiresAt?: number
 }
 
 export interface HuaqiuAuthApi {
-  isAuthenticated(): boolean
+  /**
+   * Authoritative async check: a credential exists AND is known to be valid
+   * (local expiry + cached remote validation). Never a mere token-presence
+   * check — a host token supplied by hq-edge is not assumed valid just because
+   * it exists (spec §10). Short-circuits to `false` after `invalidate()` until
+   * re-validated or a fresh credential arrives.
+   */
+  isAuthenticated(): Promise<boolean>
   getAccessToken(): Promise<string | null>
   getUserInfo(): Promise<HuaqiuUserInfo | null>
   /** Node-side no-op: login always happens in the browser. */
   login(): Promise<void>
   logout(): Promise<void>
+  /**
+   * Single authoritative validation path (spec §7). Works identically for
+   * standalone and host credentials; never depends on hq-edge.
+   */
+  validate(): Promise<AuthValidationResult>
+  /**
+   * Mark the current credential's validation state stale without deleting the
+   * credential (kept for recovery). Next validation cannot reuse a previous
+   * "valid" result (spec §9/§11). Call this when an API request returns 401.
+   */
+  invalidate(): void
   onAuthStateChanged(listener: (info: HuaqiuUserInfo | null) => void): () => void
 }
 
 export interface HuaqiuAuthService {
   auth: HuaqiuAuthApi
-  /** Node-only setters used by the webServer route handlers. */
+  /**
+   * Node-only setters used by the webServer route handlers.
+   * NOTE: `service.invalidate()` is the FULL reset (logout: drops the pushed
+   * credential, persisted file and host cache). The capability-level
+   * `auth.invalidate()` is validation-scoped and keeps the credential.
+   */
   setCredentials(info: HuaqiuUserInfo): void
   invalidate(): void
   /**
@@ -79,7 +105,15 @@ function readPersisted(): HuaqiuUserInfo | null {
     const nickname = typeof raw.nickname === 'string' && raw.nickname.length > 0
       ? raw.nickname
       : undefined
-    return { id, token, ...(nickname ? { nickname } : {}) }
+    const expiresAt = typeof raw.expiresAt === 'number' && Number.isFinite(raw.expiresAt)
+      ? raw.expiresAt
+      : undefined
+    return {
+      id,
+      token,
+      ...(nickname ? { nickname } : {}),
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
+    }
   } catch {
     return null
   }
@@ -111,6 +145,13 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
   private current: HuaqiuUserInfo | null = null
   private listeners = new Set<(info: HuaqiuUserInfo | null) => void>()
   private readonly host: HostSessionResolver
+  private readonly validator: TokenValidator
+  /**
+   * True once the current credential has been rejected (API 401) or explicitly
+   * invalidated. Keeps the credential for recovery but makes `isAuthenticated()`
+   * short-circuit to false and forces a fresh remote validation next time.
+   */
+  private stale = false
 
   constructor(
     config?: Partial<HuaqiuAuthConfig> | null,
@@ -123,6 +164,10 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
       (resolved.hostSessionTtlSeconds ?? 300) * 1000,
       opts?.fetchImpl,
     )
+    this.validator = new TokenValidator({
+      ttlMs: (resolved.validationTtlSeconds ?? 60) * 1000,
+      fetchImpl: opts?.fetchImpl,
+    })
     this.hostMode = this.host.enabled
   }
 
@@ -130,17 +175,26 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
   readonly hostMode: boolean
 
   readonly auth: HuaqiuAuthApi = {
-    isAuthenticated: () => this.host.enabled || this.current !== null || readPersisted() !== null,
+    isAuthenticated: async () => {
+      if (this.stale) return false
+      return (await this.validateInternal()).status === 'valid'
+    },
     getAccessToken: async () => (await this.resolve())?.token ?? null,
     getUserInfo: async () => this.resolve(),
     login: async () => {
       /* login is a browser action */
     },
     logout: async () => this.invalidate(),
+    validate: () => this.validateInternal(),
+    invalidate: () => this.markStale(),
     onAuthStateChanged: (listener) => this.on(listener),
   }
 
-  /** Spec §6.2 resolution order: host → pushed → persisted → null. */
+  /**
+   * Spec §6.2 resolution order: host → pushed → persisted → null.
+   * Returns the credential regardless of validation state (recovery keeps the
+   * value; `validate()`/`isAuthenticated()` decide whether it is usable).
+   */
   private async resolve(): Promise<HuaqiuUserInfo | null> {
     if (this.host.enabled) {
       const host = await this.host.resolve()
@@ -150,8 +204,37 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     return readPersisted()
   }
 
+  /** Spec §7: resolve → local expiry → remote validation → update state. */
+  private async validateInternal(): Promise<AuthValidationResult> {
+    const info = await this.resolve()
+    if (!info) {
+      this.stale = true
+      return { status: 'invalid', reason: 'invalid' }
+    }
+    // Local expiry is an optimization; remote validation stays authoritative.
+    if (this.validator.isLocallyExpired(info.expiresAt)) {
+      this.validator.invalidate(info.token)
+      this.stale = true
+      return { status: 'invalid', reason: 'expired' }
+    }
+    const result = await this.validator.validate(info.token, { expiresAt: info.expiresAt })
+    if (result.status === 'valid') this.stale = false
+    else if (result.status === 'invalid') this.stale = true
+    // 'unavailable' leaves the stale flag untouched — a network blip never
+    // declares the credential invalid (spec §17).
+    return result
+  }
+
+  /** Validation-scoped invalidation: keep the credential, drop cached validity. */
+  private markStale(): void {
+    this.stale = true
+    this.validator.invalidate()
+  }
+
   setCredentials(info: HuaqiuUserInfo): void {
     this.current = info
+    this.stale = false
+    this.validator.invalidate()
     void writePersisted(info)
     this.emit()
   }
@@ -160,6 +243,8 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     const was = this.host.enabled || this.current !== null || readPersisted() !== null
     this.current = null
     this.host.clear()
+    this.stale = true
+    this.validator.invalidate()
     deletePersisted()
     if (was) this.emit()
   }

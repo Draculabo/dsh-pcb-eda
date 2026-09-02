@@ -27,10 +27,13 @@ export interface HuaqiuAuthConfig {
   hostAuthPath?: string
   /** Seconds a host session is reused before re-fetching. Default 300. */
   hostSessionTtlSeconds?: number
+  /** Seconds remote token-validation results are cached. Default 60. */
+  validationTtlSeconds?: number
 }
 
 export const DEFAULT_HOST_AUTH_PATH = '/api/v1/auth/token'
 export const DEFAULT_HOST_TTL_SECONDS = 300
+export const DEFAULT_VALIDATION_TTL_SECONDS = 60
 
 /**
  * Resolve the effective config: overlay `config` (highest) > env (safety net
@@ -55,7 +58,20 @@ export function resolveHostConfig(
     const parsed = Number.parseInt(ttlRaw, 10)
     if (Number.isFinite(parsed) && parsed > 0) ttl = parsed
   }
-  return { hqEdgeBaseUrl: baseUrl, hostAuthPath, hostSessionTtlSeconds: ttl }
+  const vTtlRaw = config?.validationTtlSeconds ?? env.HQ_EDGE_VALIDATION_TTL_SECONDS
+  let validationTtlSeconds = DEFAULT_VALIDATION_TTL_SECONDS
+  if (typeof vTtlRaw === 'number' && Number.isFinite(vTtlRaw) && vTtlRaw > 0) {
+    validationTtlSeconds = vTtlRaw
+  } else if (typeof vTtlRaw === 'string' && vTtlRaw.trim().length > 0) {
+    const parsed = Number.parseInt(vTtlRaw, 10)
+    if (Number.isFinite(parsed) && parsed > 0) validationTtlSeconds = parsed
+  }
+  return {
+    hqEdgeBaseUrl: baseUrl,
+    hostAuthPath,
+    hostSessionTtlSeconds: ttl,
+    validationTtlSeconds,
+  }
 }
 
 export interface HostSession {

@@ -322,7 +322,7 @@ export async function runGenerateSymbol(
     // Reactive invalidation (spec §6.5): a token-expired frame means the cached
     // credential is dead. Clear it so the next call re-resolves (and the UI
     // re-prompts for login) instead of replaying the same token forever.
-    onTokenExpired: () => { void env.auth.logout() },
+    onTokenExpired: () => { env.auth.invalidate() },
   })
 
   const generated = await finishGeneration('symbol', response, env)
@@ -367,7 +367,7 @@ export async function runGenerateFootprintFromDimensions(
     // Reactive invalidation (spec §6.5): a token-expired frame means the cached
     // credential is dead. Clear it so the next call re-resolves (and the UI
     // re-prompts for login) instead of replaying the same token forever.
-    onTokenExpired: () => { void env.auth.logout() },
+    onTokenExpired: () => { env.auth.invalidate() },
   })
 
   const generated = await finishGeneration('footprint', response, env)
@@ -418,7 +418,7 @@ export async function runGenerateFootprintFromImage(
     // Reactive invalidation (spec §6.5): a token-expired frame means the cached
     // credential is dead. Clear it so the next call re-resolves (and the UI
     // re-prompts for login) instead of replaying the same token forever.
-    onTokenExpired: () => { void env.auth.logout() },
+    onTokenExpired: () => { env.auth.invalidate() },
   })
 
   if (extraction.action === null) {

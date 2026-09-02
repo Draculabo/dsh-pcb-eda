@@ -7,11 +7,13 @@ import { HTTP_TIMEOUT_MS } from '../src/sse.js'
 
 function stubAuth(userId = 'u1', token = 'tok-1'): HuaqiuAuthService['auth'] {
   return {
-    isAuthenticated: () => true,
+    isAuthenticated: async () => true,
     getAccessToken: async () => token,
     getUserInfo: async () => (userId ? { id: userId, token } : null),
     login: async () => {},
     logout: async () => {},
+    validate: async () => ({ status: 'valid' }),
+    invalidate: () => {},
     onAuthStateChanged: () => () => {},
   }
 }

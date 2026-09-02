@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { rmSync } from 'node:fs'
 import { InMemoryHuaqiuAuthService } from '../src/service.js'
+import { authFetch } from './helpers.js'
 
 // Isolate the persisted-session directory so `isAuthenticated()`'s file fallback
 // never reads a stray `~/.dsh/auth/session.json` from another run.
@@ -16,7 +17,7 @@ describe('InMemoryHuaqiuAuthService', () => {
   it('starts unauthenticated and reports null credentials', async () => {
     const svc = new InMemoryHuaqiuAuthService()
     expect(svc.hostMode).toBe(false)
-    expect(svc.auth.isAuthenticated()).toBe(false)
+    expect(await svc.auth.isAuthenticated()).toBe(false)
     expect(await svc.auth.getAccessToken()).toBeNull()
     expect(await svc.auth.getUserInfo()).toBeNull()
   })
@@ -28,9 +29,9 @@ describe('InMemoryHuaqiuAuthService', () => {
   })
 
   it('stores credentials and exposes them via the auth capability', async () => {
-    const svc = new InMemoryHuaqiuAuthService()
+    const svc = new InMemoryHuaqiuAuthService({}, { fetchImpl: authFetch() })
     svc.setCredentials({ id: 'u1', token: 'tok-1', nickname: 'Alice' })
-    expect(svc.auth.isAuthenticated()).toBe(true)
+    expect(await svc.auth.isAuthenticated()).toBe(true)
     expect(await svc.auth.getAccessToken()).toBe('tok-1')
     expect(await svc.auth.getUserInfo()).toEqual({ id: 'u1', token: 'tok-1', nickname: 'Alice' })
   })
@@ -46,7 +47,7 @@ describe('InMemoryHuaqiuAuthService', () => {
     const svc = new InMemoryHuaqiuAuthService()
     svc.setCredentials({ id: 'u1', token: 'tok' })
     await svc.auth.logout()
-    expect(svc.auth.isAuthenticated()).toBe(false)
+    expect(await svc.auth.isAuthenticated()).toBe(false)
     expect(await svc.auth.getAccessToken()).toBeNull()
   })
 

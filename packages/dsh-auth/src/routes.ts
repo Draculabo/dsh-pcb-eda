@@ -2,7 +2,7 @@
  * HTTP adapter: receives the browser-pushed credentials and serves the node
  * auth state (probe / boot restore). Same-origin through `ctx.webServer`:
  *
- *   POST /api/v1/huaqiu/auth/session   body { token, userInfo? }  → cache set
+ *   POST /api/v1/huaqiu/auth/session   body { token, userId, nickname?, expiresAt? } → cache set
  *   POST /api/v1/huaqiu/auth/logout                                → cache cleared
  *   GET  /api/v1/huaqiu/auth/session   → { authenticated, user }
  *   GET  /api/v1/huaqiu/auth/config    → { hostMode }
@@ -45,7 +45,15 @@ function normalizeUserInfo(data: Record<string, unknown>): HuaqiuUserInfo | null
     : null
   if (!token || !id) return null
   const nickname = typeof data.nickname === 'string' && data.nickname.length > 0 ? data.nickname : undefined
-  return { id, token, ...(nickname ? { nickname } : {}) }
+  const expiresAt = typeof data.expiresAt === 'number' && Number.isFinite(data.expiresAt)
+    ? data.expiresAt
+    : undefined
+  return {
+    id,
+    token,
+    ...(nickname ? { nickname } : {}),
+    ...(expiresAt !== undefined ? { expiresAt } : {}),
+  }
 }
 
 export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
@@ -75,7 +83,7 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
 
       if (req.method === 'GET' && pathname === `${AUTH_ROUTE_PREFIX}/session`) {
         const user = await service.auth.getUserInfo()
-        const authenticated = service.auth.isAuthenticated()
+        const authenticated = await service.auth.isAuthenticated()
         sendJson(res, 200, { authenticated, user })
         return
       }

@@ -30,11 +30,17 @@ function emitOnOpen(action: { action: string; context: unknown }, extra: unknown
 
 function stubAuth(authenticated = true): HuaqiuAuthService['auth'] {
   return {
-    isAuthenticated: () => authenticated,
+    isAuthenticated: async () => authenticated,
     getAccessToken: async () => (authenticated ? 'tok-1' : null),
     getUserInfo: async () => (authenticated ? { id: 'u1', token: 'tok-1' } : null),
     login: async () => {},
     logout: async () => {},
+    validate: async () => (
+      authenticated
+        ? { status: 'valid' as const }
+        : { status: 'invalid' as const, reason: 'unauthorized' as const }
+    ),
+    invalidate: () => {},
     onAuthStateChanged: () => () => {},
   }
 }
