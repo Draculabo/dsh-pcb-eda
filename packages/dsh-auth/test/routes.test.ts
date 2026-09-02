@@ -75,6 +75,15 @@ describe('auth webServer routes (browser→node transport)', () => {
     expect(after.user.token).toBe('t')
   })
 
+  it('does not expose internal auth errors', async () => {
+    vi.spyOn(svc.auth, 'getUserInfo').mockRejectedValueOnce(new Error('/private/auth/session.json'))
+
+    expect(await get(`${AUTH_ROUTE_PREFIX}/session`)).toEqual({
+      status: 500,
+      text: '{"error":"internal error"}',
+    })
+  })
+
   it('logout invalidates the node cache (group C)', async () => {
     await post(`${AUTH_ROUTE_PREFIX}/session`, { token: 't', userId: 'u' })
     const res = await post(`${AUTH_ROUTE_PREFIX}/logout`)
