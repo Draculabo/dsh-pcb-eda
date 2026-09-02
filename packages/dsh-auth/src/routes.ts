@@ -61,7 +61,7 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
     try {
       const url = req.url ?? ''
       const q = url.indexOf('?')
-      const pathname = (q >= 0 ? url.slice(0, q) : url).replace(/\/+$/, '')
+      const pathname = q >= 0 ? url.slice(0, q) : url
 
       if (req.method === 'POST' && pathname === `${AUTH_ROUTE_PREFIX}/session`) {
         const body = JSON.parse(await readBody(req) || '{}') as Record<string, unknown>
