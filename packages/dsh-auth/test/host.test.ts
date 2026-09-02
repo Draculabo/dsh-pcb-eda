@@ -112,6 +112,30 @@ describe('InMemoryHuaqiuAuthService host mode', () => {
     expect((await svc.auth.getUserInfo())?.id).toBe('host-u')
   })
 
+  it('does NOT fall back to standalone credentials when the host has none (regression)', async () => {
+    // hq-edge is up but has no auth info: GET /api/v1/auth/token → 200 {token:null}.
+    const fetchImpl = authFetch({ hostPayload: { token: null, userId: undefined } })
+    const svc = new InMemoryHuaqiuAuthService({ hqEdgeBaseUrl: 'http://hq' }, { fetchImpl })
+    // A stale standalone session exists on disk (the reported bug scenario).
+    mkdirSync(TMP, { recursive: true })
+    writeFileSync(join(TMP, 'session.json'), JSON.stringify({ id: 'stale-u', token: 'stale-tok' }))
+    // A browser push also exists in memory.
+    svc.setCredentials({ id: 'pushed-u', token: 'pushed-tok' })
+    // Host mode must treat the absent host credential as UNAUTHENTICATED —
+    // never silently reuse a stale standalone/pushed token.
+    expect(await svc.auth.getAccessToken()).toBeNull()
+    expect(await svc.auth.getUserInfo()).toBeNull()
+    expect(await svc.auth.isAuthenticated()).toBe(false)
+    await expect(svc.auth.validate()).resolves.toEqual({ status: 'invalid', reason: 'invalid' })
+  })
+
+  it('does not write pushed credentials to the standalone store in host mode', async () => {
+    const fetchImpl = authFetch({ hostPayload: { token: 'host-tok', userId: 'host-u' } })
+    const svc = new InMemoryHuaqiuAuthService({ hqEdgeBaseUrl: 'http://hq' }, { fetchImpl })
+    svc.setCredentials({ id: 'pushed-u', token: 'pushed-tok' })
+    expect(existsSync(join(TMP, 'session.json'))).toBe(false)
+  })
+
   it('falls back to standalone when host config is missing/invalid', async () => {
     const svc = new InMemoryHuaqiuAuthService({ hqEdgeBaseUrl: '' }, { fetchImpl: authFetch() })
     svc.setCredentials({ id: 'u', token: 'tok' })

@@ -192,13 +192,19 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
 
   /**
    * Spec §6.2 resolution order: host → pushed → persisted → null.
-   * Returns the credential regardless of validation state (recovery keeps the
-   * value; `validate()`/`isAuthenticated()` decide whether it is usable).
+   *
+   * Host mode is STRICT: an enabled host is the single source of truth. If the
+   * host yields no credential, the operator is unauthenticated — we must NOT
+   * fall back to a pushed/persisted credential left behind by an earlier
+   * standalone (auth.eda.cn) login. Otherwise a stale `~/.dsh/auth/session.json`
+   * would let the DSH plugins keep calling the backend while hq-edge itself has
+   * no auth info. The standalone fallbacks only apply when no host is configured.
    */
   private async resolve(): Promise<HuaqiuUserInfo | null> {
     if (this.host.enabled) {
       const host = await this.host.resolve()
       if (host) return toUserInfo(host)
+      return null
     }
     if (this.current) return this.current
     return readPersisted()
@@ -235,7 +241,11 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     this.current = info
     this.stale = false
     this.validator.invalidate()
-    void writePersisted(info)
+    // Never persist to the standalone store while running under a host: the
+    // host (hq-edge) owns the credential in host mode, and a stale standalone
+    // session must not leak across modes. Persistence is only meaningful in
+    // standalone (silent-login restore).
+    if (!this.hostMode) void writePersisted(info)
     this.emit()
   }
 
