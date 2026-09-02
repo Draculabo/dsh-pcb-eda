@@ -130,6 +130,9 @@ export function handleEvent(
   const type = record.type
   if (type === 'STATE_SNAPSHOT') {
     if (record.snapshot && typeof record.snapshot === 'object') {
+      for (const key of Object.keys(state)) {
+        delete state[key]
+      }
       Object.assign(state, record.snapshot)
     }
     return { stateChanged: true }
