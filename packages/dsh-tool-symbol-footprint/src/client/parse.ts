@@ -113,7 +113,7 @@ export function parseGenResult(text: string): GenResult | null {
         id: aid,
         type: typeof a.type === 'string' ? a.type : (kind ?? null),
         filename: typeof a.filename === 'string' ? a.filename : null,
-        size: typeof a.size === 'number' ? a.size : null,
+        size: typeof a.size === 'number' && Number.isFinite(a.size) && a.size >= 0 ? a.size : null,
       }
     }
   }
