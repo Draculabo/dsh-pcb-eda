@@ -101,11 +101,20 @@ describe('progress route', () => {
     expect(out.status).toBe(404)
   })
 
-  it('rejects non-GET methods', async () => {
+  it('rejects unsupported methods with the allowed methods', async () => {
     const handler = createProgressHandler(seededStore())
     const { res, out } = stubRes()
     await handler(req('POST', `${PROGRESS_ROUTE_PREFIX}/call-1`), res)
-    expect(out.status).toBe(405)
+    expect(out).toEqual({
+      status: 405,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+        allow: 'GET, HEAD',
+      },
+      raw: '{"error":"method not allowed"}',
+      json: { error: 'method not allowed' },
+    })
   })
 
   it('answers HEAD without a body', async () => {
