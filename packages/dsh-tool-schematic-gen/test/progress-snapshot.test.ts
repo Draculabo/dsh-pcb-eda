@@ -13,7 +13,7 @@ describe('ProgressStore snapshots', () => {
     snapshot.frames.push({
       id: 'external',
       name: 'external',
-      scope: 'external',
+      path: 'external',
       status: 'running',
       startedAt: 1000,
     })
