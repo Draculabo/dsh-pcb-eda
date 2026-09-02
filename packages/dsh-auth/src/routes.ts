@@ -36,11 +36,11 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 function normalizeUserInfo(data: Record<string, unknown>): HuaqiuUserInfo | null {
-  const token = typeof data.token === 'string' && data.token.length > 0 ? data.token : null
-  const id = typeof data.userId === 'string' && data.userId.length > 0
+  const token = typeof data.token === 'string' && data.token.trim().length > 0 ? data.token : null
+  const id = typeof data.userId === 'string' && data.userId.trim().length > 0
     ? data.userId
     : typeof data.userId === 'number' && Number.isFinite(data.userId) ? String(data.userId)
-    : typeof data.id === 'string' && data.id.length > 0 ? data.id
+    : typeof data.id === 'string' && data.id.trim().length > 0 ? data.id
     : typeof data.id === 'number' && Number.isFinite(data.id) ? String(data.id)
     : null
   if (!token || !id) return null
