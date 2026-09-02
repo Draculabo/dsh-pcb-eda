@@ -76,7 +76,11 @@ export class TokenValidator {
   private readonly inFlight = new Map<string, Promise<AuthValidationResult>>()
 
   constructor(options: TokenValidatorOptions = {}) {
-    this.ttlMs = options.ttlMs ?? DEFAULT_VALIDATION_TTL_MS
+    const ttlMs = options.ttlMs ?? DEFAULT_VALIDATION_TTL_MS
+    if (!Number.isFinite(ttlMs) || ttlMs < 0) {
+      throw new Error('ttlMs must be a finite non-negative number')
+    }
+    this.ttlMs = ttlMs
     this.validateUrl = options.validateUrl ?? DEFAULT_VALIDATE_URL
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
     this.now = options.now ?? (() => Date.now())
