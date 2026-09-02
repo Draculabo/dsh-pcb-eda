@@ -77,8 +77,8 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
       }
 
       sendJson(res, 404, { error: 'not found' })
-    } catch (err) {
-      sendJson(res, 500, { error: 'internal error', detail: String(err) })
+    } catch {
+      sendJson(res, 500, { error: 'internal error' })
     }
   }
 }
