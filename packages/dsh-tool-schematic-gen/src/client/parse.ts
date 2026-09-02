@@ -146,7 +146,7 @@ export function formatBytes(n: number | null): string {
 /** Filename for download: prefer the artifact filename, else derive from kind. */
 export function downloadFilenameFor(kind: string | null, artifact: ArtifactRef | null, designName: string | null): string {
   if (artifact?.filename) return artifact.filename
-  const base = designName && designName.length > 0 ? designName : 'generated'
+  const base = designName && designName.trim().length > 0 ? designName : 'generated'
   if (kind === 'system') return `${base}.zip`
   if (kind === 'schematic') return `${base}.kicad_sch`
   return `${base}.txt`
