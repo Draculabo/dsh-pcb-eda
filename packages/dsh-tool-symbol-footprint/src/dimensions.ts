@@ -48,7 +48,13 @@ export function normalizeDimensions(context: unknown): ExtractedDimensions {
   const dimensions: Record<string, string | number | boolean> = {}
   for (const key of Object.keys(raw)) {
     const value = raw[key]
-    if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+    if (typeof value === 'number') {
+      if (Number.isFinite(value)) {
+        dimensions[key] = value
+      }
+      continue
+    }
+    if (typeof value === 'string' || typeof value === 'boolean') {
       dimensions[key] = value
     }
   }
