@@ -22,7 +22,10 @@ export const AUTH_ROUTE_PREFIX = '/api/v1/huaqiu/auth'
 export type AuthHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+  })
   res.end(JSON.stringify(body))
 }
 
