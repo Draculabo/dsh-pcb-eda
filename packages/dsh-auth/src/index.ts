@@ -32,11 +32,21 @@ declare module '@deepseek-ai/cordis' {
  */
 export function apply(ctx: Context, config?: Partial<HuaqiuAuthConfig>): void {
   const service = new InMemoryHuaqiuAuthService(config)
-  ctx.effect(() => ctx.provide('huaqiuAuth', service))
-
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'prefix',
-    path: AUTH_ROUTE_PREFIX,
-    handler: createAuthHandler(service),
-  }))
+  ctx.effect(() => {
+    const disposeService = ctx.provide('huaqiuAuth', service)
+    try {
+      const disposeRoute = ctx.webServer.register({
+        kind: 'prefix',
+        path: AUTH_ROUTE_PREFIX,
+        handler: createAuthHandler(service),
+      })
+      return () => {
+        disposeRoute()
+        disposeService()
+      }
+    } catch (error) {
+      disposeService()
+      throw error
+    }
+  })
 }
