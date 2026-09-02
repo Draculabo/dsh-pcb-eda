@@ -118,7 +118,9 @@ export class TokenValidator {
     this.inFlight.set(token, promise)
     try {
       const result = await promise
-      this.cache.set(token, { result, at: this.now() })
+      if (result.status !== 'unavailable') {
+        this.cache.set(token, { result, at: this.now() })
+      }
       return result
     } finally {
       this.inFlight.delete(token)
