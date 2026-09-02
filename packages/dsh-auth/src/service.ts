@@ -78,14 +78,22 @@ function readPersisted(): HuaqiuUserInfo | null {
 }
 
 function writePersisted(info: HuaqiuUserInfo): void {
+  let tmp: string | null = null
   try {
     const dir = PERSIST_DIR()
     mkdirSync(dir, { recursive: true })
     const file = join(dir, PERSIST_FILE)
-    const tmp = `${file}.${process.pid}.tmp`
+    tmp = `${file}.${process.pid}.tmp`
     writeFileSync(tmp, JSON.stringify(info), 'utf8')
     renameSync(tmp, file)
   } catch {
+    if (tmp !== null) {
+      try {
+        rmSync(tmp, { force: true })
+      } catch {
+        /* best-effort */
+      }
+    }
     /* persistence is best-effort; never break the auth flow over a disk error */
   }
 }
