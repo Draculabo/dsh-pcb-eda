@@ -48,12 +48,16 @@ describe('auth webServer routes (browser→node transport)', () => {
     })
   }
 
-  async function get(p: string): Promise<{ status: number; text: string }> {
+  async function get(p: string): Promise<{ status: number; text: string; cacheControl: string | undefined }> {
     return new Promise((resolve, reject) => {
       const req = http.get(base + p, (res) => {
         const chunks: Buffer[] = []
         res.on('data', (c) => chunks.push(c))
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString('utf8') }))
+        res.on('end', () => resolve({
+          status: res.statusCode ?? 0,
+          text: Buffer.concat(chunks).toString('utf8'),
+          cacheControl: res.headers['cache-control'],
+        }))
       })
       req.on('error', reject)
     })
@@ -74,8 +78,13 @@ describe('auth webServer routes (browser→node transport)', () => {
     expect(await svc.auth.getAccessToken()).toBe('tok-e') // credential kept for recovery
   })
 
-  it('GET /session reports the current node auth state', async () => {
-    const before = JSON.parse((await get(`${AUTH_ROUTE_PREFIX}/session`)).text)
+  it('GET /session reports the current node auth state without allowing response caching', async () => {
+    const beforeResponse = await get(`${AUTH_ROUTE_PREFIX}/session`)
+    expect({ status: beforeResponse.status, cacheControl: beforeResponse.cacheControl }).toEqual({
+      status: 200,
+      cacheControl: 'no-store',
+    })
+    const before = JSON.parse(beforeResponse.text)
     expect(before.authenticated).toBe(false)
     await post(`${AUTH_ROUTE_PREFIX}/session`, { token: 't', userId: 'u' })
     const after = JSON.parse((await get(`${AUTH_ROUTE_PREFIX}/session`)).text)
