@@ -163,7 +163,7 @@ export function buildRunBody(
   language?: string,
   threadId?: string,
 ): Record<string, unknown> {
-  const tid = typeof threadId === 'string' && threadId.length > 0 ? threadId : randomUUID()
+  const tid = typeof threadId === 'string' && threadId.trim().length > 0 ? threadId : randomUUID()
   const runId = randomUUID()
   const msgId = randomUUID()
   const lang = typeof language === 'string' && language.length > 0 ? language : config.defaultLanguage
