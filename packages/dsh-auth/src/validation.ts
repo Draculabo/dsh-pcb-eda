@@ -148,7 +148,8 @@ export class TokenValidator {
   }
 
   private async validateRemotely(token: string): Promise<AuthValidationResult> {
-    const url = `${this.validateUrl}?token=${encodeURIComponent(token)}`
+    const url = new URL(this.validateUrl)
+    url.searchParams.set('token', token)
     let res: Response
     try {
       res = await this.fetchImpl(url, {
