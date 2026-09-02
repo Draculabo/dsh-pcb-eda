@@ -89,6 +89,19 @@ describe('auth webServer routes (browser→node transport)', () => {
     expect(svc.auth.isAuthenticated()).toBe(false)
   })
 
+  it('rejects whitespace-only session credentials', async () => {
+    const results = await Promise.all([
+      post(`${AUTH_ROUTE_PREFIX}/session`, { token: '   ', userId: 'u' }),
+      post(`${AUTH_ROUTE_PREFIX}/session`, { token: 't', userId: '\n\t' }),
+    ])
+
+    expect(results).toEqual([
+      { status: 400, text: '{"error":"token and userId are required"}' },
+      { status: 400, text: '{"error":"token and userId are required"}' },
+    ])
+    expect(await svc.auth.getUserInfo()).toBeNull()
+  })
+
   it('404s unknown paths', async () => {
     expect((await get(`${AUTH_ROUTE_PREFIX}/nope`)).status).toBe(404)
     expect((await post(`${AUTH_ROUTE_PREFIX}/nope`, {})).status).toBe(404)
