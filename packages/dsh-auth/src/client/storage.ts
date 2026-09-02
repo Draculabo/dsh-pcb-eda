@@ -18,9 +18,9 @@ export function createAuthStorage(
 ): AuthStorage {
   return {
     get() {
-      const raw = storage.getItem(key)
-      if (!raw) return null
       try {
+        const raw = storage.getItem(key)
+        if (!raw) return null
         const parsed = JSON.parse(raw) as AuthTokenPayload
         if (!parsed || typeof parsed.token !== 'string' || typeof parsed.id !== 'string') return null
         // Parity with auth.eda.cn's 5-day token window.
