@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { rmSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { InMemoryHuaqiuAuthService } from '../src/service.js'
 
 // Isolate the persisted-session directory so `isAuthenticated()`'s file fallback
@@ -59,5 +59,20 @@ describe('InMemoryHuaqiuAuthService', () => {
     off()
     svc.setCredentials({ id: 'u1', token: 't' })
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('removes temporary files when persisted credentials cannot be published', async () => {
+    mkdirSync(join(TMP, 'session.json'), { recursive: true })
+    const svc = new InMemoryHuaqiuAuthService()
+
+    svc.setCredentials({ id: 'u1', token: 'tok' })
+
+    expect({
+      files: readdirSync(TMP),
+      credentials: await svc.auth.getUserInfo(),
+    }).toEqual({
+      files: ['session.json'],
+      credentials: { id: 'u1', token: 'tok' },
+    })
   })
 })
