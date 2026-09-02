@@ -1,7 +1,10 @@
 # DSH bundle patch: inserts the Huaqiu schematic generation tool plugin.
-# NOTE: the full inject list (tools, huaqiuAuth, huaqiuArtifacts) is the
-# Phase 2 target; the Phase 0 skeleton keeps ['tools'] so it loads standalone.
+# The entry inject must match the node-half module contract
+# (`src/index.ts` — export const inject). The tool's apply() reads the
+# `huaqiuAuth` / `huaqiuArtifacts` services and mounts SSE routes on
+# `webServer`; if any is absent it throws, so the loader must hold this entry
+# until all of them are provided.
 - insert:
     - id: huaqiu-tool-schematic-gen
       name: '@huaqiu/dsh-tool-schematic-gen'
-      inject: ['tools']
+      inject: ['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer']

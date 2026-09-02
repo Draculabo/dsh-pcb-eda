@@ -1,7 +1,9 @@
 # DSH bundle patch: inserts the Huaqiu symbol/footprint generation tool plugin.
-# NOTE: the full inject list (tools, huaqiuAuth, huaqiuArtifacts, userQuestions)
-# is the Phase 2 target; the Phase 0 skeleton keeps ['tools'] so it loads standalone.
+# The entry inject must match the node-half module contract
+# (`src/index.ts` — export const inject). The tool's apply() reads the
+# `huaqiuAuth` and `huaqiuArtifacts` services and throws if they are absent,
+# so the loader must hold this entry until those services are provided.
 - insert:
     - id: huaqiu-tool-symbol-footprint
       name: '@huaqiu/dsh-tool-symbol-footprint'
-      inject: ['tools']
+      inject: ['tools', 'huaqiuAuth', 'huaqiuArtifacts']
