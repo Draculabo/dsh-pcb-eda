@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import { HuaqiuArtifactService } from '../src/service.js'
 
 describe('HuaqiuArtifactService options', () => {
@@ -15,13 +18,20 @@ describe('HuaqiuArtifactService options', () => {
   })
 
   it('preserves zero as a valid explicit size cap', async () => {
-    const service = new HuaqiuArtifactService({ maxBytes: 0 })
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-artifacts-options-'))
+    const service = new HuaqiuArtifactService({ baseDir: root, maxBytes: 0 })
 
-    await expect(service.create({ type: 'zip', filename: 'empty.zip', content: '' })).resolves.toMatchObject({
-      type: 'zip',
-      filename: 'empty.zip',
-      size: 0,
-    })
-    await expect(service.create({ type: 'zip', filename: 'data.zip', content: 'x' })).rejects.toThrow(/max size/)
+    try {
+      const result = await service.create({ type: 'zip', filename: 'empty.zip', content: '' })
+      expect(result).toEqual({
+        id: expect.stringMatching(/^art_[0-9a-f]+$/),
+        type: 'zip',
+        filename: 'empty.zip',
+        size: 0,
+      })
+      await expect(service.create({ type: 'zip', filename: 'data.zip', content: 'x' })).rejects.toThrow(/max size/)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
   })
 })
