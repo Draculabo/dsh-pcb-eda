@@ -34,13 +34,24 @@ declare module '@deepseek-ai/cordis' {
 
 export function apply(ctx: Context, config: HuaqiuArtifactsConfig = {}): void {
   const service = new HuaqiuArtifactService(config)
-  ctx.effect(() => ctx.provide('huaqiuArtifacts', service))
+  ctx.effect(() => {
+    const disposeService = ctx.provide('huaqiuArtifacts', service)
+    try {
+      const disposeRoute = ctx.webServer.register({
+        kind: 'prefix',
+        path: ARTIFACTS_ROUTE_PREFIX,
+        handler: createArtifactsHandler(service),
+      })
 
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'prefix',
-    path: ARTIFACTS_ROUTE_PREFIX,
-    handler: createArtifactsHandler(service),
-  }))
+      return () => {
+        disposeRoute()
+        disposeService()
+      }
+    } catch (error) {
+      disposeService()
+      throw error
+    }
+  })
 
   // Boot-time GC: `deleteAll({ onlyExpired: true })` is implemented but nothing
   // ever calls it, so `~/.dsh/artifacts/` (and any migrated location) grows
