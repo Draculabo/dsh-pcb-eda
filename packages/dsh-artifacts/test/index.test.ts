@@ -165,6 +165,7 @@ describe('artifacts HTTP routes', () => {
     const a = await svc.create({ type: 'schematic', filename: '我的板.kicad_sch', content: '(kicad_sch)' })
     const meta = await get(`${ARTIFACTS_ROUTE_PREFIX}/${a.id}`)
     expect(meta.status).toBe(200)
+    expect(meta.headers['cache-control']).toBe('no-store')
     const parsed = JSON.parse(meta.body.toString('utf8'))
     expect(parsed.id).toBe(a.id)
     expect(parsed.filename).toBe('我的板.kicad_sch')
