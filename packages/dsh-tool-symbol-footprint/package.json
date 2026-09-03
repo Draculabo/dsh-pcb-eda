@@ -28,7 +28,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.8 <0.2.0",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
     "@huaqiu/dsh-artifacts": "^0.2.1",
     "@huaqiu/dsh-auth": "^0.2.1",
     "react": "^18"
