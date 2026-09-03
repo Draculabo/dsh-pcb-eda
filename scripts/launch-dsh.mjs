@@ -5,18 +5,12 @@
  * then starts the dsh web server.
  *
  * Run from the project/git root:
- *   node scripts/start-dsh-web.js
+ *   node scripts/launch-dsh.mjs
  *   # or after chmod +x:
- *   ./scripts/start-dsh-web.js
+ *   ./scripts/launch-dsh.mjs
  */
 
-'use strict';
-
-// const { execSync, spawn } = require('child_process');
-// const os = require('os');
-// const path = require('path');
-
-import { execSync ,spawn} from 'child_process';
+import { execSync, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 
