@@ -16,15 +16,31 @@
  *
  * @param cardRootSelector - CSS selector matching the plugin card's root
  *   element, e.g. `.hq-genhit` (symbol/footprint) or `.hq-sch` (schematic).
+ * @param options.skipWhenContains - when a collapsed seat ALSO contains this
+ *   selector, leave it collapsed and follow DSH's default behaviour. Use this
+ *   for transient sub-states that should not be pinned open — e.g. the inline
+ *   login card (`.hq-genhit__login` / `.hq-sch__login`), so the login HIT
+ *   collapses automatically while the finished preview stays visible.
  * @returns cleanup function; safe to call repeatedly.
  */
-export function keepToolCardVisible(cardRootSelector: string): () => void {
+export interface KeepToolCardVisibleOptions {
+  skipWhenContains?: string
+}
+
+export function keepToolCardVisible(
+  cardRootSelector: string,
+  options?: KeepToolCardVisibleOptions,
+): () => void {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
     return () => {}
   }
+  const skipSelector = options?.skipWhenContains
   const root = document.documentElement
   const revealSeat = (seat: HTMLElement): void => {
-    if (seat.querySelector(cardRootSelector)) seat.removeAttribute('hidden')
+    if (!seat.querySelector(cardRootSelector)) return
+    // Leave transient sub-states (e.g. the login HIT) collapsed by default.
+    if (skipSelector && seat.querySelector(skipSelector)) return
+    seat.removeAttribute('hidden')
   }
   let scheduled = false
   const sweep = (): void => {

@@ -244,5 +244,7 @@ export function removeStyles(): void {
  * Returns a disposer.
  */
 export function installSchematicUncollapser(): () => void {
-  return keepToolCardVisible('.hq-sch')
+  // Keep the finished preview open, but let the inline login HIT collapse by
+  // default (DSH behaviour) while the user is still authenticating.
+  return keepToolCardVisible('.hq-sch', { skipWhenContains: '.hq-sch__login' })
 }

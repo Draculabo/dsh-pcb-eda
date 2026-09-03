@@ -235,5 +235,7 @@ export function removeStyles(): void {
  * Returns a disposer.
  */
 export function installGenHitUncollapser(): () => void {
-  return keepToolCardVisible('.hq-genhit')
+  // Keep the finished preview open, but let the inline login HIT collapse by
+  // default (DSH behaviour) while the user is still authenticating.
+  return keepToolCardVisible('.hq-genhit', { skipWhenContains: '.hq-genhit__login' })
 }
