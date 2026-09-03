@@ -27,6 +27,14 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
+const knownOptions = new Set(['--dry-run', '--provenance', '--tag'])
+const unknownOptions = argv.filter(
+  (arg) => arg.startsWith('-') && !knownOptions.has(arg) && !arg.startsWith('--tag='),
+)
+if (unknownOptions.length > 0) {
+  console.error(`FATAL: unknown option${unknownOptions.length === 1 ? '' : 's'}: ${unknownOptions.join(', ')}`)
+  process.exit(1)
+}
 const dryRun = argv.includes('--dry-run')
 const provenance = argv.includes('--provenance')
 const tagIndex = argv.indexOf('--tag')
