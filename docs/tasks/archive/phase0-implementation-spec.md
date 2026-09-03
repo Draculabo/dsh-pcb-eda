@@ -172,7 +172,7 @@ All five share the same skeleton with per-package differences. Values are the co
     "./package.json": "./package.json"
   },
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
-  "peerDependencies": { "@deepseek-ai/cordis": "^4.0.1", "@deepseek-ai/dsh-tools": ">=0.1.0-rc.8 <0.2.0" },
+  "peerDependencies": { "@deepseek-ai/cordis": "^4.0.1", "@deepseek-ai/dsh-tools": ">=0.1.0-rc.0 <0.2.0" },
   "dependencies": { "@huaqiu/part-search": "^1.0.0" },   // plain library, NOT peer
   "files": ["lib", "src", "cordis.patch.yml"],
   "scripts": { "build": "tsdown && tsc -p tsconfig.build.json", "test": "vitest run", "prepack": "pnpm build" },
@@ -196,7 +196,7 @@ Same as 3.3 plus:
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.8 <0.2.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.0 <0.2.0",
     "@deepseek-ai/dsh-client-runtime": "*",
     "@deepseek-ai/dsh-client-ui-slots": "*",
     "@deepseek-ai/dsh-client-locale": "*",
@@ -529,7 +529,7 @@ curl -s http://127.0.0.1:3080/api/v1/huaqiu/artifacts/<id>/content    # 200 cont
 
 1. **Exact browser→host RPC shape** for the auth token push (Phase 0A task #1): inspect the public extension point and pick the smallest supported path (`apiProxy` custom handler vs `ClientConnectionRpc` extension vs `webServer` fallback route). Document the call shape and freeze it. Do not add speculative `@deepseek-ai/dsh-host-*` peers until the chosen path is proven (§3.1).
 2. ~~Provider package name for `userQuestions`~~ — **resolved in Phase 0**: `@deepseek-ai/dsh-user-questions` exists on npm (`0.1.1-rc.2`). Use it in §3.4 peer deps (symbol-footprint, Phase 2).
-3. **DSH runtime peer range** — **resolved in Phase 0**: `@deepseek-ai/dsh-tools` published through `0.1.1-rc.2`; range `>=0.1.0-rc.8 <0.2.0` is satisfiable. `@deepseek-ai/cordis` is `4.0.1`. Confirmed live on the npm registry.
+3. **DSH runtime peer range** — **resolved in Phase 0**: `@deepseek-ai/dsh-tools` published through `0.1.1-rc.2`; range `>=0.1.0-rc.0 <0.2.0` is satisfiable. `@deepseek-ai/cordis` is `4.0.1`. Confirmed live on the npm registry.
 4. **`dsh plugin --profile web add <local path>` mechanics** for out-of-tree local packages (link vs tarball) — **resolved in Phase 0**: `@deepseek-ai/dsh@0.1.1-rc.2` on public npm provides the `dsh` CLI (via `npx`). `dsh plugin --profile web add <local dir>` links the package (`link:` in the profile project) and composes its `cordis.patch.yml` into the profile tree (verified for a node-only and a dual-face package — see §14).
 5. **Dev loop for client plugins** (hot reload vs `dsh web` restart) — note in the workspace README; doesn't block Phase 0.
 

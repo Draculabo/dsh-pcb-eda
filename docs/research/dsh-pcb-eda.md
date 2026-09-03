@@ -68,7 +68,7 @@ A "DSH plugin" is any npm package that the profile composer can turn into Cordis
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.8 <0.2.0"
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.0 <0.2.0"
   },
   "files": ["lib", "src", "cordis.patch.yml"]
 }
@@ -520,7 +520,7 @@ Verified conventions from the community plugins (`dsh-plugin/dsh-auth-gate`, `ds
   - `"dsh": { "bundle": { "patch": "./cordis.patch.yml" }, "client": { "platform": "web", "inject": [...] } }`.
   - `"files": ["lib", "src", "cordis.patch.yml"]` — **`cordis.patch.yml` MUST be in `files`** or installs break.
   - `"publishConfig": { "access": "public" }` for unscoped/scoped-public packages.
-  - peerDependencies on `@deepseek-ai/cordis` `^4.0.1` and DSH runtime packages with ranges like `>=0.1.0-rc.8 <0.2.0` (from `dsh-plugin/dsh-mcp-panel`).
+  - peerDependencies on `@deepseek-ai/cordis` `^4.0.1` and DSH runtime packages with ranges like `>=0.1.0-rc.0 <0.2.0` (from `dsh-plugin/dsh-mcp-panel`).
 - **Build**: `tsdown` produces `lib/index.js` + `lib/client.js` + types; `tsc` emits `lib/types`. `prepack: npm run build`.
 - **Versioning**: semver; the DSH ecosystem uses `0.x.y` / `0.1.1-rc.x` pre-release tags for the RC era. Recommend matching `@deepseek-ai` peer ranges (Cordis 4.x stable, dsh-tools RC).
 - **Native deps**: none for these plugins; git-hosted deps build via `prepare` (pnpm blocks until allowlisted — `apps/cli/src/plugin.ts`).

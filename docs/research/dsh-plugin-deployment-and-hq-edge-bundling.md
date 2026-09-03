@@ -599,7 +599,7 @@ hq-edge:      bump the pinned @huaqiu/* versions in the plugin manifest
    publishing moves fully to dsh-pcb-eda's `release.yml`. No hq-edge workflow change is required
    for the plugin publish itself.
 6. **Compatibility/installation matrix** (per the migration-plan review): publish the minimum DSH
-   version each plugin needs (they peer `cordis ^4.0.1`, `dsh-tools >=0.1.0-rc.8 <0.2.0`) so
+   version each plugin needs (they peer `cordis ^4.0.1`, `dsh-tools >=0.1.0-rc.0 <0.2.0`) so
    users on older DSH get a clear error rather than a broken boot.
 
 ---
