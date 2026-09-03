@@ -52,7 +52,23 @@ if (requireClean) {
   }
 }
 
-// 2. Per-package integrity.
+// 2. Legacy dependency guard.
+try {
+  const legacyReferences = execFileSync(
+    'git',
+    ['grep', '-n', '-F', '@hqedge/', '--', ...PACKAGES.map((pkg) => `packages/${pkg}`)],
+    { cwd: root, encoding: 'utf8' },
+  ).trim()
+  if (legacyReferences.length > 0) {
+    fail(`legacy @hqedge references remain in publishable packages:\n${legacyReferences}`)
+  }
+} catch (e) {
+  if (e?.status !== 1) {
+    fail(`could not scan for legacy @hqedge references: ${String(e?.message || e)}`)
+  }
+}
+
+// 3. Per-package integrity.
 for (const pkg of PACKAGES) {
   const dir = join(root, 'packages', pkg)
   const pj = join(dir, 'package.json')
