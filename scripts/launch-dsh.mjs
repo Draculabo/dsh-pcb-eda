@@ -144,20 +144,30 @@ function main() {
     }
   );
 
+  const signalHandlers = new Map();
+
+  // Forward termination signals to the child.
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    const handler = () => {
+      if (!child.killed) {
+        child.kill(sig);
+      }
+    };
+    signalHandlers.set(sig, handler);
+    process.on(sig, handler);
+  }
+
   child.on('exit', (code, signal) => {
     if (signal) {
+      const handler = signalHandlers.get(signal);
+      if (handler) {
+        process.off(signal, handler);
+      }
       process.kill(process.pid, signal);
     } else {
       process.exit(code ?? 0);
     }
   });
-
-  // Forward termination signals to the child
-  for (const sig of ['SIGINT', 'SIGTERM']) {
-    process.on(sig, () => {
-      if (!child.killed) child.kill(sig);
-    });
-  }
 }
 
 main();
