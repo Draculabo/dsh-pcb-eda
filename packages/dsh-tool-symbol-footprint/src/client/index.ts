@@ -18,7 +18,7 @@
  */
 import { createElement, useEffect, useState, type ComponentType } from 'react'
 import { GenHit } from './hit-card.jsx'
-import { injectStyles, removeStyles, disposeThemeObserver } from './theme.js'
+import { injectStyles, removeStyles, disposeThemeObserver, installGenHitUncollapser } from './theme.js'
 
 const TOOLVIEW_KEYS = [
   'generate_symbol_from_image',
@@ -170,12 +170,14 @@ export function apply(ctx: ClientContext): () => void {
   }
 
   injectStyles()
+  const uncollapseDispose = installGenHitUncollapser()
 
   const cleanup = (): void => {
     for (const dispose of disposers) {
       try { dispose() } catch { /* already disposed */ }
     }
     disposers.length = 0
+    uncollapseDispose()
     removeStyles()
     disposeThemeObserver()
   }
