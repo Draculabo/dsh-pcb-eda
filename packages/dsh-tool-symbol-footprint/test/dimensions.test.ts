@@ -108,17 +108,24 @@ describe('confirmDimensionsWithHuman', () => {
 })
 
 describe('confirmDirectFootprintWithHuman', () => {
-  it('accepts by default and declines on the Decline option', async () => {
+  it('accepts only the Accept option and declines otherwise', async () => {
     const accepted = await confirmDirectFootprintWithHuman(
       { ask: async () => ({ answers: [{ selected: [HIL_ACCEPT] }] }) },
       { fileUrl: 'https://x/y.kicad_mod' },
     )
     expect(accepted.verdict).toBe('accepted')
+
     const declined = await confirmDirectFootprintWithHuman(
       { ask: async () => ({ answers: [{ selected: [HIL_DECLINE] }] }) },
       { fileUrl: 'https://x/y.kicad_mod' },
     )
     expect(declined.verdict).toBe('declined')
+
+    const unanswered = await confirmDirectFootprintWithHuman(
+      { ask: async () => ({ answers: [] }) },
+      { fileUrl: 'https://x/y.kicad_mod' },
+    )
+    expect(unanswered.verdict).toBe('declined')
   })
 })
 
