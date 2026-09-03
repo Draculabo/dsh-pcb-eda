@@ -91,6 +91,9 @@ importers:
       '@huaqiu/dsh-auth':
         specifier: workspace:*
         version: link:../dsh-auth
+      '@huaqiu/dsh-tool-uncollapse':
+        specifier: workspace:*
+        version: link:../dsh-tool-uncollapse
       '@huaqiu/ecad-renderer':
         specifier: ^0.2.4
         version: 0.2.4
@@ -119,6 +122,9 @@ importers:
       '@huaqiu/dsh-auth':
         specifier: workspace:*
         version: link:../dsh-auth
+      '@huaqiu/dsh-tool-uncollapse':
+        specifier: workspace:*
+        version: link:../dsh-tool-uncollapse
       '@huaqiu/ecad-renderer':
         specifier: ^0.2.4
         version: 0.2.4
@@ -137,6 +143,15 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+
+  packages/dsh-tool-uncollapse:
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
 
 packages:
 

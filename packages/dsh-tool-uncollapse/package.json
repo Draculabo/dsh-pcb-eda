@@ -1,0 +1,31 @@
+{
+  "name": "@huaqiu/dsh-tool-uncollapse",
+  "version": "0.3.2",
+  "type": "module",
+  "main": "./lib/index.mjs",
+  "types": "./lib/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.mts",
+      "default": "./lib/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.0"
+  }
+}

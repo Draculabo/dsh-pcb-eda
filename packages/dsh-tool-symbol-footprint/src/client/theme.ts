@@ -19,17 +19,15 @@
  * no DSH-internal selectors. The style tag is removed on dispose.
  *
  * Compact-transcript un-collapse: DSH's `ui-chat` hides a `tool-call` node's
- * wrapper with `hidden="until-found"` once the turn closes (see ChatNodeSeat +
- * useSearchableHidden). That is a UA `[hidden]{display:none}` we cannot opt out
- * of from inside the card, and patching DSH is not an option for customers
- * running stock builds. So from THIS plugin's client half we react to DSH's
- * own DOM: any collapsed seat whose subtree contains our `.hq-genhit` card has
- * its `hidden` attribute removed, kept removed by a MutationObserver across
- * DSH's virtualized re-renders. Scoped to our cards only — other tools still
- * collapse normally. No DSH source is touched.
+ * wrapper with `hidden="until-found"` once the turn closes. We cannot opt out
+ * from inside the card and must not patch DSH, so `installGenHitUncollapser()`
+ * delegates to `@huaqiu/dsh-tool-uncollapse`, which undoes it from this
+ * plugin's client half (scoped to our `.hq-genhit` cards; no DSH source
+ * touched). See that package for the full mechanism.
  */
 import { useEffect, useState } from 'react'
 import { LOGIN_IFRAME_HEIGHT, type AuthLocale } from './login-url.js'
+import { keepToolCardVisible } from '@huaqiu/dsh-tool-uncollapse'
 
 export const PLUGIN_ID = '@huaqiu/dsh-tool-symbol-footprint'
 export const STYLE_ID = 'hq-genhit-styles'
@@ -231,46 +229,11 @@ export function removeStyles(): void {
 /**
  * Keep our GenHit preview visible in DSH's compact transcript.
  *
- * DSH collapses `tool-call` nodes behind a "N tool calls" disclosure by setting
- * `hidden="until-found"` on the chat-node wrapper once the turn closes. That
- * hides the entire card (preview included). We cannot prevent it from inside
- * the card and must not patch DSH, so we undo it from this plugin's client half:
- * for every collapsed seat that wraps our `.hq-genhit` card, remove the
- * attribute. A rAF-coalesced MutationObserver reasserts this whenever DSH's
- * virtualized renderer re-adds it. Scoped to our cards — other tools keep
- * collapsing. Returns a disposer.
- *
- * @returns cleanup function, or a no-op when there is no DOM (SSR/tests).
+ * Delegates to `@huaqiu/dsh-tool-uncollapse` (shared across the
+ * `@huaqiu/dsh-tool-*` plugins) — see that package for the mechanism and
+ * trade-offs. Scoped to our `.hq-genhit` cards; other tools keep collapsing.
+ * Returns a disposer.
  */
 export function installGenHitUncollapser(): () => void {
-  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
-    return () => {}
-  }
-  const root = document.documentElement
-  const revealSeat = (seat: HTMLElement): void => {
-    if (seat.querySelector('.hq-genhit')) seat.removeAttribute('hidden')
-  }
-  let scheduled = false
-  const sweep = (): void => {
-    scheduled = false
-    for (const seat of root.querySelectorAll<HTMLElement>('[data-turn-process-hidden]')) {
-      revealSeat(seat)
-    }
-  }
-  const observer = new MutationObserver(() => {
-    if (scheduled) return
-    scheduled = true
-    requestAnimationFrame(sweep)
-  })
-  observer.observe(root, {
-    subtree: true,
-    childList: true,
-    attributes: true,
-    attributeFilter: ['hidden', 'data-turn-process-hidden'],
-  })
-  sweep()
-  return () => {
-    observer.disconnect()
-    scheduled = false
-  }
+  return keepToolCardVisible('.hq-genhit')
 }
