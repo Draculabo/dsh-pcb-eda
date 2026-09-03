@@ -62,6 +62,24 @@ describe('@huaqiu/dsh-tool-schematic-gen plugin', () => {
     expect(typeof dispose).toBe('function')
   })
 
+  it('rolls back tools registered before a later registration fails', () => {
+    const { ctx } = ctxStub()
+    const disposed: string[] = []
+    let registrations = 0
+    ctx.tools = {
+      register: (tool: unknown) => {
+        registrations += 1
+        if (registrations === 2) {
+          throw new Error('tool registration failed')
+        }
+        return () => disposed.push((tool as Tool).name)
+      },
+    }
+
+    expect(() => apply(ctx as never)).toThrow('tool registration failed')
+    expect(disposed).toEqual(['generate_schematic_from_description'])
+  })
+
   it('throws loudly when the auth service is missing', () => {
     const { ctx } = ctxStub()
     expect(() => apply({ ...ctx, huaqiuAuth: undefined } as never)).toThrow(/huaqiuAuth/)
