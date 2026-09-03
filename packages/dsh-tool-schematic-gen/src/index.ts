@@ -104,7 +104,21 @@ export function apply(ctx: Context, config: SchematicGenPluginConfig = {}): () =
     deps,
   }
 
-  const disposers = createSchematicGenTools(env).map((tool) => ctx.tools.register(tool))
+  const disposers: Array<() => void> = []
+  try {
+    for (const tool of createSchematicGenTools(env)) {
+      disposers.push(ctx.tools.register(tool))
+    }
+  } catch (error) {
+    for (const disposeTool of disposers) {
+      try {
+        disposeTool()
+      } catch {
+        // Roll back every tool that was registered before the failure.
+      }
+    }
+    throw error
+  }
 
   // eslint-disable-next-line no-console
   console.log(LOG_TAG, 'registered agent tools', {
