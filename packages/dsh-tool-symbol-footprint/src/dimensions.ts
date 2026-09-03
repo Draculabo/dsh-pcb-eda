@@ -130,7 +130,8 @@ export function renderDimensionsForHuman(
  * These stay ENGLISH for backwards compatibility (they are part of the
  * module's public surface and of the answer check below). A localized run
  * renders `HIL_LABELS[locale]` instead; `matchesAny()` accepts either, so a
- * host that echoes back the English constant still resolves correctly.
+ * host that echoes back the English constant, the localized label,
+ * or a differently-cased version all resolve to the same verdict.
  */
 export const HIL_CONFIRM = 'Confirm'
 export const HIL_EDIT = 'Edit values'
@@ -317,8 +318,8 @@ export async function confirmDirectFootprintWithHuman(
   const first = answer && Array.isArray(answer.answers) ? answer.answers[0] : undefined
   const selected = first && Array.isArray(first.selected) ? first.selected : []
 
-  if (matchesAny(selected, declineCandidates(t))) {
-    return { verdict: 'declined' }
+  if (matchesAny(selected, [HIL_LABELS.zh.accept, HIL_LABELS.en.accept, t('direct.opt.accept')])) {
+    return { verdict: 'accepted' }
   }
-  return { verdict: 'accepted' }
+  return { verdict: 'declined' }
 }
