@@ -52,6 +52,11 @@ function semverBump(current, kind) {
 
 function main() {
   const argv = process.argv.slice(2)
+  const unknownOptions = argv.filter((a) => a.startsWith('-') && a !== '--apply')
+  if (unknownOptions.length > 0) {
+    console.error(`unknown option: ${unknownOptions.join(', ')}`)
+    process.exit(1)
+  }
   const apply = argv.includes('--apply')
   const positional = argv.filter((a) => !a.startsWith('-'))
   if (positional.length !== 1) {
