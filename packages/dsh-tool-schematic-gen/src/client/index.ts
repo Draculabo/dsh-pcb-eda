@@ -15,7 +15,7 @@
  */
 import { createElement, useEffect, useState, type ComponentType } from 'react'
 import { GenHit } from './hit-card.jsx'
-import { injectStyles, removeStyles, disposeThemeObserver } from './theme.js'
+import { injectStyles, removeStyles, disposeThemeObserver, installSchematicUncollapser } from './theme.js'
 import type { AuthStateLike, PromptSender } from './hit-card.jsx'
 
 export type { AuthStateLike, PromptSender }
@@ -162,12 +162,14 @@ export function apply(ctx: ClientContext): () => void {
   }
 
   injectStyles()
+  const uncollapseDispose = installSchematicUncollapser()
 
   const cleanup = (): void => {
     for (const dispose of disposers) {
       try { dispose() } catch { /* already disposed */ }
     }
     disposers.length = 0
+    uncollapseDispose()
     removeStyles()
     disposeThemeObserver()
   }
