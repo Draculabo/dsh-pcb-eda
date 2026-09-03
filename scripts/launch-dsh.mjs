@@ -17,6 +17,7 @@
 // const path = require('path');
 
 import { execSync ,spawn} from 'child_process';
+import { accessSync } from 'fs';
 import os from 'os';
 import path from 'path';
 
@@ -109,7 +110,7 @@ function main() {
   // (has a packages/ folder). This is only a soft check.
   const packagesDir = path.join(process.cwd(), 'packages');
   try {
-    require('fs').accessSync(packagesDir);
+    accessSync(packagesDir);
   } catch {
     console.warn(
       'Warning: ./packages not found in current working directory.\n' +
