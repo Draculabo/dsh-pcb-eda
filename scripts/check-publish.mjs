@@ -62,7 +62,7 @@ for (const pkg of PACKAGES) {
   if (typeof manifest.name !== 'string' || manifest.name !== `@huaqiu/${pkg}`) {
     fail(`${pkg}: name must be "@huaqiu/${pkg}"`)
   }
-  if (typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+/.test(manifest.version)) {
+  if (typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(manifest.version)) {
     fail(`${pkg}: invalid version ${manifest.version}`)
   }
 
