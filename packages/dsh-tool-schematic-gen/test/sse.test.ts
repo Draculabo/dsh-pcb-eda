@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyDelta,
   consumeCopilotkit,
@@ -35,6 +35,14 @@ describe('handleEvent', () => {
     expect(r3.error).toBe('boom')
     expect(handleEvent({ type: 'OTHER' }, {})).toEqual({})
   })
+
+  it('preserves empty system-design todo updates', () => {
+    expect(handleEvent({
+      type: 'CUSTOM',
+      name: 'SYSTEM_DESIGN_EVENT',
+      value: { kind: 'todo_progress', todos: [] },
+    }, {})).toEqual({ todos: [] })
+  })
 })
 
 describe('consumeCopilotkit', () => {
@@ -61,6 +69,44 @@ describe('consumeCopilotkit', () => {
     expect(finished).toBe(true)
     expect(state.design_name).toBe('Alarm')
     expect(state.schFiles).toEqual([{ filename: 'A.kicad_sch', content: '(kicad)' }])
+  })
+
+  it('delivers empty todo updates to clear stale progress', async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        const events = [
+          {
+            type: 'CUSTOM',
+            name: 'SYSTEM_DESIGN_EVENT',
+            value: { kind: 'todo_progress', todos: [{ content: 'Place parts', status: 'in_progress' }] },
+          },
+          {
+            type: 'CUSTOM',
+            name: 'SYSTEM_DESIGN_EVENT',
+            value: { kind: 'todo_progress', todos: [] },
+          },
+          { type: 'RUN_FINISHED' },
+        ]
+        for (const event of events) {
+          controller.enqueue(encoder.encode('data: ' + JSON.stringify(event) + '\n\n'))
+        }
+        controller.close()
+      },
+    })
+    const onTodos = vi.fn()
+    const fetchImpl = async () => new Response(stream, { status: 200 })
+
+    await consumeCopilotkit('https://x/api/copilotkit', {}, {}, {
+      fetchImpl: fetchImpl as never,
+      timeoutMs: 5000,
+      onTodos,
+    })
+
+    expect(onTodos.mock.calls).toEqual([
+      [[{ content: 'Place parts', status: 'in_progress' }]],
+      [[]],
+    ])
   })
 
   it('throws when the agent reports a RUN_ERROR', async () => {
