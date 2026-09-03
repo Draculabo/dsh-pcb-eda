@@ -83,7 +83,10 @@ function main() {
   const plan = []
   for (const { path, data } of manifests) {
     const rel = path.slice(root.length + 1)
-    const changes = { version: [data.version, next] }
+    const changes = {}
+    if (data.version !== next) {
+      changes.version = [data.version, next]
+    }
     // Rewrite in-workspace @huaqiu/* references in dep maps (keep workspace:).
     for (const depKey of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
       const map = data[depKey]
@@ -96,6 +99,11 @@ function main() {
       }
     }
     if (Object.keys(changes).length > 0) plan.push({ rel, changes })
+  }
+
+  if (plan.length === 0) {
+    console.log('Workspace already matches the requested version. No changes needed.')
+    return
   }
 
   for (const { rel, changes } of plan) {
