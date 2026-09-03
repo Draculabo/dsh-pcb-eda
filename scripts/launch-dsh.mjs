@@ -52,6 +52,8 @@ function killPort(port) {
       for (const line of output.split(/\r?\n/)) {
         if (!/LISTENING/i.test(line)) continue;
         const parts = line.trim().split(/\s+/);
+        const localAddress = parts[1];
+        if (!localAddress?.endsWith(`:${port}`)) continue;
         const pid = parts[parts.length - 1];
         if (pid && /^\d+$/.test(pid) && pid !== '0') {
           pids.add(pid);
