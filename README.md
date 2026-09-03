@@ -156,11 +156,11 @@ pnpm run check:publish # pre-publish integrity gate (entry/client/patch/exports)
 
 ### Local run
 
-`update.sh` rebuilds nothing — it kills port 3080, links every local package into the
+`pnpm launch-dsh` rebuilds nothing — it kills port 3080, links every local package into the
 `web` profile (`dsh plugin add <path>`), and starts the web profile:
 
 ```bash
-./update.sh   # → http://127.0.0.1:3080
+pnpm launch-dsh   # → http://127.0.0.1:3080
 ```
 
 Per-package layout:

@@ -17,7 +17,8 @@
     "check:publish:release": "node scripts/check-publish.mjs --require-clean",
     "check:release:version": "node scripts/check-release-version.mjs",
     "publish:dry": "node scripts/publish.mjs --dry-run",
-    "publish:local": "node scripts/publish.mjs"
+    "publish:local": "node scripts/publish.mjs",
+    "launch-dsh" : "node scripts/launch-dsh.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
