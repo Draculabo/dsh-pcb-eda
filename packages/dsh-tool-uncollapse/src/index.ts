@@ -38,21 +38,19 @@ export function keepToolCardVisible(
   const root = document.documentElement
   const revealSeat = (seat: HTMLElement): void => {
     if (!seat.querySelector(cardRootSelector)) return
-    // Leave transient sub-states (e.g. the login HIT) collapsed by default.
     if (skipSelector && seat.querySelector(skipSelector)) return
     seat.removeAttribute('hidden')
   }
-  let scheduled = false
+  let scheduledFrame: number | undefined
   const sweep = (): void => {
-    scheduled = false
+    scheduledFrame = undefined
     for (const seat of root.querySelectorAll<HTMLElement>('[data-turn-process-hidden]')) {
       revealSeat(seat)
     }
   }
   const observer = new MutationObserver(() => {
-    if (scheduled) return
-    scheduled = true
-    requestAnimationFrame(sweep)
+    if (scheduledFrame !== undefined) return
+    scheduledFrame = requestAnimationFrame(sweep)
   })
   observer.observe(root, {
     subtree: true,
@@ -63,6 +61,9 @@ export function keepToolCardVisible(
   sweep()
   return () => {
     observer.disconnect()
-    scheduled = false
+    if (scheduledFrame !== undefined) {
+      cancelAnimationFrame(scheduledFrame)
+      scheduledFrame = undefined
+    }
   }
 }
