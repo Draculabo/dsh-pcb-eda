@@ -429,20 +429,22 @@ export async function exportModuleGraphZip(
     if (onAbort && signal) signal.removeEventListener('abort', onAbort)
     throw new Error('schematic-gen: failed to export the module graph to zip: ' +
       String((err as Error)?.message || err))
+  }
+
+  try {
+    if (!res || !res.ok) {
+      let detail = ''
+      try {
+        const j = (await res.json()) as { error?: unknown }
+        detail = typeof j.error === 'string' ? j.error : ''
+      } catch { /* not JSON */ }
+      throw new Error('schematic-gen: the export-zip service returned HTTP ' +
+        String(res && res.status) + (detail ? ' — ' + detail : ''))
+    }
+    const ab = await res.arrayBuffer()
+    return Buffer.from(ab)
   } finally {
     clearTimeout(timer)
     if (onAbort && signal) signal.removeEventListener('abort', onAbort)
   }
-
-  if (!res || !res.ok) {
-    let detail = ''
-    try {
-      const j = (await res.json()) as { error?: unknown }
-      detail = typeof j.error === 'string' ? j.error : ''
-    } catch { /* not JSON */ }
-    throw new Error('schematic-gen: the export-zip service returned HTTP ' +
-      String(res && res.status) + (detail ? ' — ' + detail : ''))
-  }
-  const ab = await res.arrayBuffer()
-  return Buffer.from(ab)
 }

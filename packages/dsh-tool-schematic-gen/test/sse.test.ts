@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyDelta,
   consumeCopilotkit,
@@ -117,5 +117,33 @@ describe('exportModuleGraphZip', () => {
       fetchImpl: fetchImpl as never,
       timeoutMs: 5000,
     })).rejects.toThrow(/HTTP 400 — boom/)
+  })
+
+  it('keeps the timeout active while reading the zip response body', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchImpl = async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal as AbortSignal
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            signal.addEventListener('abort', () => controller.error(signal.reason), { once: true })
+          },
+        })
+        return new Response(stream, { status: 200 })
+      }
+      const result = exportModuleGraphZip(
+        'https://x/export-zip',
+        { modules: [] },
+        resolveConfig({}),
+        { userId: 'u1', userToken: 't1' },
+        { fetchImpl: fetchImpl as never, timeoutMs: 25 },
+      )
+      const rejection = expect(result).rejects.toThrow(/did not respond within 25ms/)
+
+      await vi.advanceTimersByTimeAsync(25)
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
