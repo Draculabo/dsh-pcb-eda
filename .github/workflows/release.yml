@@ -109,11 +109,11 @@ jobs:
         run: pnpm run check:publish:release
 
       - name: Dry-run release (no publish)
-        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true'
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
         run: node scripts/publish.mjs --dry-run
 
       - name: Publish to npm
-        if: github.event_name == 'push' || (inputs.dry_run != 'true' && inputs.publish == true)
+        if: github.event_name == 'push' || (!inputs.dry_run && inputs.publish)
         run: node scripts/publish.mjs --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
