@@ -171,7 +171,7 @@ export function handleEvent(
             const todo = parseTodo(item)
             if (todo) todos.push(todo)
           }
-          return todos.length > 0 ? { todos } : {}
+          return { todos }
         }
         if (payload['kind'] === 'progress') {
           const note = parseNote(payload)
@@ -243,7 +243,7 @@ function dispatchRaw(raw: string, state: Record<string, unknown>, acc: Accumulat
       for (const ev of r.trace) acc.trace.push(ev)
       acc.onTrace?.(r.trace)
     }
-    if (r.todos && r.todos.length > 0) acc.onTodos?.(r.todos)
+    if (r.todos) acc.onTodos?.(r.todos)
     if (r.note) acc.onNote?.(r.note)
     if (r.stateChanged) acc.onState?.(state)
   }
