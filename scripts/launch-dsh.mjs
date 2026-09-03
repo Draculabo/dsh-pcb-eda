@@ -38,55 +38,48 @@ const PLUGINS = [
 function killPort(port) {
   const platform = os.platform();
 
-  try {
-    if (platform === 'win32') {
-      // Find PIDs listening on the port, then force-kill them.
-      // netstat output lines look like:
-      //   TCP    0.0.0.0:3080    0.0.0.0:0    LISTENING    12345
-      const output = execSync(`netstat -ano | findstr :${port}`, {
+  if (platform === 'win32') {
+    let output;
+    try {
+      output = execSync(`netstat -ano | findstr :${port}`, {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'ignore'],
       });
+    } catch {
+      return;
+    }
 
-      const pids = new Set();
-      for (const line of output.split(/\r?\n/)) {
-        if (!/LISTENING/i.test(line)) continue;
-        const parts = line.trim().split(/\s+/);
-        const pid = parts[parts.length - 1];
-        if (pid && /^\d+$/.test(pid) && pid !== '0') {
-          pids.add(pid);
-        }
-      }
-
-      for (const pid of pids) {
-        try {
-          execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
-          console.log(`Killed process ${pid} on port ${port}`);
-        } catch {
-          // process may already have exited
-        }
-      }
-    } else {
-      // macOS / Linux
-      try {
-        const pids = execSync(`lsof -ti:${port}`, {
-          encoding: 'utf8',
-          stdio: ['pipe', 'pipe', 'ignore'],
-        })
-          .trim()
-          .split(/\s+/)
-          .filter(Boolean);
-
-        if (pids.length) {
-          execSync(`kill -9 ${pids.join(' ')}`, { stdio: 'ignore' });
-          console.log(`Killed process(es) ${pids.join(', ')} on port ${port}`);
-        }
-      } catch {
-        // lsof exits non-zero when nothing is listening – ignore
+    const pids = new Set();
+    for (const line of output.split(/\r?\n/)) {
+      if (!/LISTENING/i.test(line)) continue;
+      const parts = line.trim().split(/\s+/);
+      const pid = parts[parts.length - 1];
+      if (pid && /^\d+$/.test(pid) && pid !== '0') {
+        pids.add(pid);
       }
     }
+
+    for (const pid of pids) {
+      execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+      console.log(`Killed process ${pid} on port ${port}`);
+    }
+    return;
+  }
+
+  let output;
+  try {
+    output = execSync(`lsof -ti:${port}`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
   } catch {
-    // netstat / findstr may also exit non-zero when no match – ignore
+    return;
+  }
+
+  const pids = output.trim().split(/\s+/).filter(Boolean);
+  if (pids.length) {
+    execSync(`kill -9 ${pids.join(' ')}`, { stdio: 'ignore' });
+    console.log(`Killed process(es) ${pids.join(', ')} on port ${port}`);
   }
 }
 
