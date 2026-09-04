@@ -95,6 +95,7 @@ export class HistoryStore {
     writeJsonFile(this.file, this.entries)
     if (entry?.input?.imageId) {
       try { unlinkSync(join(this.dir, INPUT_DIR, entry.input.imageId)) } catch { /* already gone */ }
+      try { unlinkSync(join(this.dir, INPUT_DIR, `${entry.input.imageId}.mime`)) } catch { /* already gone */ }
     }
   }
 
@@ -106,12 +107,15 @@ export class HistoryStore {
     const dir = join(this.dir, INPUT_DIR)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, imageId), parsed.bytes)
+    writeFileSync(join(dir, `${imageId}.mime`), parsed.mime, 'utf8')
   }
 
   async readImage(imageId: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
     const path = join(this.dir, INPUT_DIR, imageId)
     if (!existsSync(path)) return null
-    return { bytes: readFileSync(path), mime: 'image/png' }
+    const mimePath = join(this.dir, INPUT_DIR, `${imageId}.mime`)
+    const mime = existsSync(mimePath) ? readFileSync(mimePath, 'utf8') : 'image/png'
+    return { bytes: readFileSync(path), mime }
   }
 }
 
