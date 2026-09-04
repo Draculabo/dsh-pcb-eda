@@ -42,7 +42,12 @@ const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'))
 const writeJson = (p, data) => writeFileSync(p, JSON.stringify(data, null, 2) + '\n')
 
 function semverBump(current, kind) {
-  const parts = String(current).split('.').map((n) => parseInt(n, 10) || 0)
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(current))
+  if (!match) {
+    throw new Error(`invalid current version: ${current} (expected X.Y.Z)`)
+  }
+
+  const parts = match.slice(1).map(Number)
   if (kind === 'major') { parts[0] += 1; parts[1] = 0; parts[2] = 0 }
   else if (kind === 'minor') { parts[1] += 1; parts[2] = 0 }
   else if (kind === 'patch') { parts[2] += 1 }
