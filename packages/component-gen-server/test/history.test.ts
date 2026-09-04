@@ -1,7 +1,7 @@
 /**
  * `@huaqiu/component-gen-server` — history store tests.
  */
-import { mkdtempSync, existsSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'

@@ -72,10 +72,10 @@ importers:
       '@huaqiu/dsh-auth':
         specifier: workspace:*
         version: link:../dsh-auth
+    devDependencies:
       '@huaqiu/dsh-tool-symbol-footprint':
         specifier: workspace:*
         version: link:../dsh-tool-symbol-footprint
-    devDependencies:
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(typescript@5.9.3)

@@ -1,6 +1,7 @@
 node_modules/
 dist/
-lib/
+# tsdown build outputs (keep source dirs named `lib`, e.g. */src/lib, tracked)
+packages/*/lib/
 coverage/
 *.tgz
 .DS_Store

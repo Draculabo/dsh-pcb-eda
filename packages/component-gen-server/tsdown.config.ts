@@ -12,12 +12,15 @@ export default defineConfig([
   },
   {
     // Standalone server: reuses the plugin's generation functions to build
-    // the backend and serves the app bundle. Imported only on demand.
+    // the backend and serves the app bundle. The plugin is externalized
+    // (peer dep) and this entry is dts-less, so this builds without the
+    // plugin's lib — breaking the server↔plugin build cycle deterministically
+    // (pnpm builds server first, then the plugin that depends on it).
     entry: { standalone: './src/standalone.ts' },
     format: ['esm'],
-    dts: true,
+    dts: false,
     clean: false,
-    deps: { neverBundle: [/^@deepseek-ai\//] },
+    deps: { neverBundle: [/^@deepseek-ai\//, /^@huaqiu\/dsh-tool-symbol-footprint$/] },
     outDir: 'lib',
   },
 ])

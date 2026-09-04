@@ -74,6 +74,7 @@ export const EN: DeepStrings<typeof ZH> = {
     validationMinGtMax: 'Min > max',
     validationInvalid: 'Invalid value',
     unit: 'mm',
+    body: 'Body',
     pins: '{count} pins',
     validationIssue: '{n} value(s) need fixing',
     validationOk: 'Values are valid',

@@ -71,6 +71,7 @@ export const ZH = {
     validationMinGtMax: '最小值大于最大值',
     validationInvalid: '无效数值',
     unit: 'mm',
+    body: '本体',
     pins: '{count} 引脚',
     validationIssue: '{n} 处数值需要修正',
     validationOk: '数值有效',
