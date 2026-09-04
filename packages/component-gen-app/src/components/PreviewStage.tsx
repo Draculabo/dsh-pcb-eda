@@ -6,7 +6,7 @@
  * on unmount / src change.
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { renderArtifactToCanvas, sizeCanvasFor } from '../lib/ecad.js'
+import { renderArtifactToCanvas, sizeCanvasFor } from '../utils/ecad.js'
 import type { Translate } from '../copy/index.js'
 
 export interface PreviewStageProps {

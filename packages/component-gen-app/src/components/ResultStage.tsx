@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { ComponentGenPorts } from '../ports.js'
 import type { Translate } from '../copy/index.js'
-import { triggerDownload } from '../lib/ecad.js'
+import { triggerDownload } from '../utils/ecad.js'
 import { PreviewStage } from './PreviewStage.js'
 
 export interface ResultStageProps {

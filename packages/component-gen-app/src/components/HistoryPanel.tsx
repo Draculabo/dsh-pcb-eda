@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import type { ComponentGenPorts, HistoryEntry } from '../ports.js'
 import type { Translate } from '../copy/index.js'
-import { triggerDownload } from '../lib/ecad.js'
+import { triggerDownload } from '../utils/ecad.js'
 
 export interface HistoryPanelProps {
   ports: ComponentGenPorts

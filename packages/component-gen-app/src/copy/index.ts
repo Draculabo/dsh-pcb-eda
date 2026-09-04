@@ -5,7 +5,7 @@
  *   - `ZH as const` → `CopyKey` → `EN: Record<CopyKey, string>` (missing EN
  *     key is a compile error; zh is the runtime fallback);
  *   - `Translate = (key, params?) => string` with `{param}` substitution;
- *   - `fieldLabel` (lib/labels.ts) resolves dimension keys through the
+ *   - `fieldLabel` (utils/labels.ts) resolves dimension keys through the
  *     `field.*` copy section, so labels follow the UI language.
  */
 import { ZH, type CopyKey } from './zh.js'

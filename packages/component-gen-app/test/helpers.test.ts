@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
-import { humanizeKey } from '../src/lib/labels.js'
+import { humanizeKey } from '../src/utils/labels.js'
 import { translateFor } from '../src/copy/index.js'
 
 describe('defaultArtifactsBase', () => {

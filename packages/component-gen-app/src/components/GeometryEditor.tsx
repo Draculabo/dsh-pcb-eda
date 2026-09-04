@@ -11,8 +11,8 @@ import {
   bgaGrid, classifyDimensions, clampDimension, dimensionBounds, formatDimension,
   normalizeDimensions, numVal, parseDimension, pinCountOf, pkgFamilyLabel,
   rectFromValues, summaryOf, toleranceOf, validateDimensions, type DimensionValues,
-} from '../lib/dims.js'
-import { fieldLabel } from '../lib/labels.js'
+} from '../utils/dims.js'
+import { fieldLabel } from '../utils/labels.js'
 import type { Translate } from '../copy/index.js'
 
 export interface GeometryEditorProps {

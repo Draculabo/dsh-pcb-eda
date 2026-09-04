@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import type { ComponentGenConfig, ComponentGenPorts } from '../ports.js'
 import type { Translate } from '../copy/index.js'
-import type { DimensionValues } from '../lib/dims.js'
+import type { DimensionValues } from '../utils/dims.js'
 import { UploadInput } from '../components/UploadInput.js'
 import { GeometryEditor } from '../components/GeometryEditor.js'
 import { ResultStage } from '../components/ResultStage.js'
