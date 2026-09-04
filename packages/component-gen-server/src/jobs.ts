@@ -145,7 +145,11 @@ export async function runGeneration(
   const signal = store.signal(id)
 
   const progress = (message: string): void => {
-    store.update(id, { status: 'running', progress: message })
+    store.update(
+      id,
+      { status: 'running', progress: message },
+      { type: 'progress', message, at: new Date().toISOString() },
+    )
     onProgress?.(message)
   }
   const exec = { signal }
