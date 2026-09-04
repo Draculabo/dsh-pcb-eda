@@ -7,7 +7,7 @@
  * job that finished before subscription still lands correctly.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ComponentGenPorts, JobEvent, JobKind, JobState, StartJobRequest } from '../ports.js'
+import type { ComponentGenPorts, HistoryEntry, JobEvent, JobKind, JobState, StartJobRequest } from '../ports.js'
 
 export type GenPhase = 'idle' | 'running' | 'needs_confirmation' | 'completed' | 'failed' | 'cancelled'
 
@@ -23,6 +23,8 @@ export interface UseJobRunnerResult {
   run: (req: StartJobRequest) => Promise<void>
   cancel: () => Promise<void>
   clear: () => void
+  /** Render an already-generated history entry in the 'completed' stage. */
+  loadHistory: (entry: HistoryEntry) => void
 }
 
 export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
@@ -104,5 +106,22 @@ export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
     setJobId(null)
   }, [cleanup])
 
-  return { phase, progress, dimensions, pkgType, fileName, result, error, jobId, run, cancel, clear }
+  const loadHistory = useCallback((entry: HistoryEntry): void => {
+    cleanup()
+    setPhase('completed')
+    setProgress('')
+    setDimensions(null)
+    setPkgType(entry.input?.packageType ?? null)
+    setFileName(null)
+    setResult({
+      artifact: { id: entry.result?.artifactId },
+      filename: entry.result?.filename,
+      ...(entry.input?.dimensions ? { dimensions: entry.input.dimensions } : {}),
+    })
+    setError('')
+    // jobId keys the result stage so re-opening a different entry re-renders.
+    setJobId(`history:${entry.id}`)
+  }, [cleanup])
+
+  return { phase, progress, dimensions, pkgType, fileName, result, error, jobId, run, cancel, clear, loadHistory }
 }

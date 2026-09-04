@@ -6,7 +6,7 @@
  * app needs comes through `ComponentGenPorts`.
  */
 import { useMemo, useState, type ReactElement } from 'react'
-import type { ComponentGenPage, ComponentGenPorts } from './ports.js'
+import type { ComponentGenPage, ComponentGenPorts, ReopenRequest } from './ports.js'
 import { translateFor, type Translate } from './copy/index.js'
 import { SymbolGenPage } from './pages/SymbolGenPage.js'
 import { FootprintGenPage } from './pages/FootprintGenPage.js'
@@ -25,6 +25,11 @@ export function ComponentGenApp(props: ComponentGenAppProps): ReactElement {
   const { ports, page, lang, showHistory = true, onClose } = props
   const t: Translate = useMemo(() => translateFor(lang), [lang])
   const [historyOpen, setHistoryOpen] = useState(showHistory)
+  const [reopenReq, setReopenReq] = useState<ReopenRequest | null>(null)
+  // Only forward a reopen request whose kind matches the active page (history
+  // is already filtered by activeKind, but the request must not leak across a
+  // tab switch).
+  const pageReopen = reopenReq && reopenReq.entry.kind === page ? reopenReq : null
 
   return (
     <div className="cga-app">
@@ -36,8 +41,8 @@ export function ComponentGenApp(props: ComponentGenAppProps): ReactElement {
       </div>
 
       {page === 'symbol'
-        ? <SymbolGenPage ports={ports} t={t} />
-        : <FootprintGenPage ports={ports} t={t} />}
+        ? <SymbolGenPage ports={ports} t={t} reopen={pageReopen} />
+        : <FootprintGenPage ports={ports} t={t} reopen={pageReopen} />}
 
       {historyOpen
         ? (
@@ -46,7 +51,12 @@ export function ComponentGenApp(props: ComponentGenAppProps): ReactElement {
               <div className="cga-app__head">
                 <span className="cga-app__head-title">{t('history.title')}</span>
               </div>
-              <HistoryPanel ports={ports} t={t} activeKind={page} onReopen={() => { /* detail view TBD */ }} />
+              <HistoryPanel
+                ports={ports}
+                t={t}
+                activeKind={page}
+                onReopen={(entry) => setReopenReq((prev) => ({ n: (prev?.n ?? 0) + 1, entry }))}
+              />
             </div>
           </div>
         )

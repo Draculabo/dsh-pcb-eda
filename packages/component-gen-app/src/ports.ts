@@ -103,6 +103,13 @@ export interface HistoryPatch {
   edited?: Record<string, boolean>
 }
 
+/** Request to reopen a generated history entry in the active generation page. */
+export interface ReopenRequest {
+  /** monotonically increasing so re-clicking the same entry re-applies. */
+  n: number
+  entry: HistoryEntry
+}
+
 export interface ComponentGenConfig {
   hostMode: boolean
   capabilities: {

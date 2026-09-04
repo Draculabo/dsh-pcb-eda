@@ -5,8 +5,8 @@
  * instruction → `runGenerateSymbol` via the component-gen server → live
  * progress → preview + download + history.
  */
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
-import type { ComponentGenConfig, ComponentGenPorts } from '../ports.js'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import type { ComponentGenConfig, ComponentGenPorts, ReopenRequest } from '../ports.js'
 import type { Translate } from '../copy/index.js'
 import { UploadInput } from '../components/UploadInput.js'
 import { ResultStage } from '../components/ResultStage.js'
@@ -16,17 +16,39 @@ import { useJobRunner } from '../hooks/useJobRunner.js'
 export interface SymbolGenPageProps {
   ports: ComponentGenPorts
   t: Translate
+  /** reopen a generated history entry into the completed stage. */
+  reopen?: ReopenRequest | null
   /** the app calls back to switch tabs (not used on the symbol page). */
   onClose?: () => void
 }
 
-export function SymbolGenPage({ ports, t }: SymbolGenPageProps): ReactElement {
+export function SymbolGenPage({ ports, t, reopen = null }: SymbolGenPageProps): ReactElement {
   const auth = useAuthGate(ports)
   const runner = useJobRunner(ports)
   const [config, setConfig] = useState<ComponentGenConfig | null>(null)
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [instruction, setInstruction] = useState('')
+
+  // Stable refs so the reopen effect only re-runs when the request changes.
+  const runnerRef = useRef(runner)
+  runnerRef.current = runner
+  const portsRef = useRef(ports)
+  portsRef.current = ports
+
+  // Reopen: load the generated artifact into the result stage and restore the
+  // source image + instruction so the user can inspect / regenerate.
+  useEffect(() => {
+    if (!reopen) return
+    const { entry } = reopen
+    runnerRef.current.loadHistory(entry)
+    if (entry.input?.imageId) {
+      portsRef.current.inputImage(entry.input.imageId)
+        .then((dataUrl) => setImageDataUrl(dataUrl))
+        .catch(() => { /* best effort */ })
+    }
+    if (entry.input?.instruction) setInstruction(entry.input.instruction)
+  }, [reopen])
 
   useEffect(() => {
     ports.config().then(setConfig).catch(() => { /* best effort */ })

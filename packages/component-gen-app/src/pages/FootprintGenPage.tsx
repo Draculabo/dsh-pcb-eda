@@ -7,8 +7,8 @@
  *   2. direct generation — extract returns a standard footprint immediately
  *      (fast path) → preview + download.
  */
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
-import type { ComponentGenConfig, ComponentGenPorts } from '../ports.js'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import type { ComponentGenConfig, ComponentGenPorts, ReopenRequest } from '../ports.js'
 import type { Translate } from '../copy/index.js'
 import type { DimensionValues } from '../utils/dims.js'
 import { UploadInput } from '../components/UploadInput.js'
@@ -20,15 +20,37 @@ import { useJobRunner } from '../hooks/useJobRunner.js'
 export interface FootprintGenPageProps {
   ports: ComponentGenPorts
   t: Translate
+  /** reopen a generated history entry into the completed stage. */
+  reopen?: ReopenRequest | null
 }
 
-export function FootprintGenPage({ ports, t }: FootprintGenPageProps): ReactElement {
+export function FootprintGenPage({ ports, t, reopen = null }: FootprintGenPageProps): ReactElement {
   const auth = useAuthGate(ports)
   const runner = useJobRunner(ports)
   const [config, setConfig] = useState<ComponentGenConfig | null>(null)
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [hint, setHint] = useState('')
+
+  // Stable refs so the reopen effect only re-runs when the request changes.
+  const runnerRef = useRef(runner)
+  runnerRef.current = runner
+  const portsRef = useRef(ports)
+  portsRef.current = ports
+
+  // Reopen: load the generated artifact into the result stage and restore the
+  // source image + package-type hint so the user can inspect / regenerate.
+  useEffect(() => {
+    if (!reopen) return
+    const { entry } = reopen
+    runnerRef.current.loadHistory(entry)
+    if (entry.input?.imageId) {
+      portsRef.current.inputImage(entry.input.imageId)
+        .then((dataUrl) => setImageDataUrl(dataUrl))
+        .catch(() => { /* best effort */ })
+    }
+    if (entry.input?.packageType) setHint(entry.input.packageType)
+  }, [reopen])
 
   useEffect(() => {
     ports.config().then(setConfig).catch(() => { /* best effort */ })
