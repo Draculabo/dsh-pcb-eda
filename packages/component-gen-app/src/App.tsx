@@ -8,7 +8,7 @@
  * into the page. Completely DSH-agnostic — everything the app needs comes
  * through `ComponentGenPorts`.
  */
-import { useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import type { ComponentGenPage, ComponentGenPorts, ReopenRequest } from './ports.js'
 import { translateFor, type Translate } from './copy/index.js'
 import { SymbolGenPage } from './pages/SymbolGenPage.js'
@@ -33,6 +33,17 @@ function HistoryDialog({
   onReopen: (entry: ReopenRequest['entry']) => void
   onClose: () => void
 }): ReactElement {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   return (
     <div className="cga-history-dialog" role="presentation">
       <div className="cga-history-dialog__mask" aria-hidden="true" onClick={onClose} />
