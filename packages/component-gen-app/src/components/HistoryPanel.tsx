@@ -72,7 +72,7 @@ export function HistoryPanel({ ports, t, activeKind = null, onReopen }: HistoryP
 
   return (
     <div className="cga-history">
-      {visible.length === 0 && !loading
+      {visible.length === 0 && !loading && done
         ? <div className="cga-upload__text">{t('history.empty')}</div>
         : null}
       {visible.map((entry) => (
@@ -106,7 +106,7 @@ export function HistoryPanel({ ports, t, activeKind = null, onReopen }: HistoryP
           </div>
         </div>
       ))}
-      {!done && visible.length > 0
+      {!done && entries.length > 0
         ? (
           <button type="button" className="cga-btn" disabled={loading} onClick={() => void load(cursor)}>
             {loading ? t('app.loading') : t('history.loadMore')}
