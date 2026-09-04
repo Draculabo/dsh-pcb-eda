@@ -23,7 +23,16 @@ export default defineConfig([
     dts: false,
     sourcemap: true,
     clean: false,
-    deps: { neverBundle: [/^react$/, /^react\//, /^@deepseek-ai\//] },
+    // react stays external (platform seed word), @deepseek-ai stays external
+    // (provided by the DSH platform). @huaqiu/component-gen-app is a peer
+    // dependency, so tsdown would otherwise externalize it — but it is a plain
+    // library (not a plugin) that never registers itself in the DSH client
+    // module table, so it MUST be bundled into this client bundle or the
+    // runtime fails with "missed the module table". Force-bundle it here.
+    deps: {
+      neverBundle: [/^react$/, /^react\//, /^@deepseek-ai\//],
+      alwaysBundle: [/^@huaqiu\/component-gen-app$/],
+    },
     outputOptions: {
       entryFileNames: 'client.js',
       banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(CLIENT_ID)}, factory: (require) => {`,
