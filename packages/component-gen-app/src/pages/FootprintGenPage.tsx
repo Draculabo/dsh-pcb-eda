@@ -41,15 +41,30 @@ export function FootprintGenPage({ ports, t, reopen = null }: FootprintGenPagePr
   // Reopen: load the generated artifact into the result stage and restore the
   // source image + package-type hint so the user can inspect / regenerate.
   useEffect(() => {
-    if (!reopen) return
+    if (!reopen) {
+      return
+    }
+
+    let active = true
     const { entry } = reopen
     runnerRef.current.loadHistory(entry)
+    setFile(null)
+    setImageDataUrl(null)
+    setHint(entry.input?.packageType ?? '')
+
     if (entry.input?.imageId) {
       portsRef.current.inputImage(entry.input.imageId)
-        .then((dataUrl) => setImageDataUrl(dataUrl))
+        .then((dataUrl) => {
+          if (active) {
+            setImageDataUrl(dataUrl)
+          }
+        })
         .catch(() => { /* best effort */ })
     }
-    if (entry.input?.packageType) setHint(entry.input.packageType)
+
+    return () => {
+      active = false
+    }
   }, [reopen])
 
   useEffect(() => {
