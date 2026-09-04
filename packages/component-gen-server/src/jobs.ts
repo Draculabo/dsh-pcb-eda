@@ -150,6 +150,16 @@ export async function runGeneration(
   }
   const exec = { signal }
 
+  const cancelIfAborted = async (): Promise<RunOutcome | null> => {
+    if (!signal?.aborted) {
+      return null
+    }
+
+    const state = store.settle(id, { status: 'cancelled' })
+    await record(history, meta, req, state).catch(() => {})
+    return { state, recorded: true }
+  }
+
   try {
     if (req.kind === 'symbol') {
       progress('正在生成 Symbol…')
@@ -157,6 +167,10 @@ export async function runGeneration(
         { imageDataUrl: req.input.imageDataUrl ?? '', instruction: req.input.instruction },
         exec,
       )
+      const cancelled = await cancelIfAborted()
+      if (cancelled) {
+        return cancelled
+      }
       if (isNeedsAuth(result)) return fail('needs_auth')
       const state = store.settle(id, { status: 'completed', result })
       await record(history, meta, req, state)
@@ -173,6 +187,10 @@ export async function runGeneration(
         },
         exec,
       )
+      const cancelled = await cancelIfAborted()
+      if (cancelled) {
+        return cancelled
+      }
       if (isNeedsAuth(result)) return fail('needs_auth')
       if (result.status === 'needs_confirmation') {
         const dims = result.dimensions && typeof result.dimensions === 'object' ? result.dimensions : {}
@@ -206,6 +224,10 @@ export async function runGeneration(
       },
       exec,
     )
+    const cancelled = await cancelIfAborted()
+    if (cancelled) {
+      return cancelled
+    }
     if (isNeedsAuth(result)) return fail('needs_auth')
     if (result.status === 'cancelled') {
       const state = store.settle(id, { status: 'cancelled', result })
