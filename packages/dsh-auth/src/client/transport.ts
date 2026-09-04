@@ -15,6 +15,21 @@ export interface AuthTransport {
    * browser half's own login UI (sidebar entrypoint) is suppressed.
    */
   fetchHostMode(): Promise<boolean>
+  /**
+   * Fetch the node half's authoritative session. The node resolves host-mode
+   * credentials first (host session → pushed browser session → persisted
+   * file), so in host mode this is how the browser half learns the host-owned
+   * credential without ever opening the auth.eda.cn iframe.
+   */
+  fetchSession(): Promise<{ authenticated: boolean; user: HostSessionUser | null }>
+}
+
+/** Minimal session user shape returned by the node `/session` route. */
+export interface HostSessionUser {
+  id?: string | number
+  token?: string
+  nickname?: string
+  expiresAt?: number
 }
 
 export function createWebServerAuthTransport(
@@ -54,6 +69,16 @@ export function createWebServerAuthTransport(
         // regression, but a missing one in standalone would lock the user out.
         return false
       }
+    },
+    async fetchSession() {
+      const res = await doFetch(`${base}/session`, {
+        method: 'GET',
+        headers: { accept: 'application/json' },
+      })
+      if (!res.ok) return { authenticated: false, user: null }
+      const body = await res.json() as { authenticated?: unknown; user?: unknown }
+      const user = body.user && typeof body.user === 'object' ? body.user as HostSessionUser : null
+      return { authenticated: body.authenticated === true, user }
     },
   }
 }

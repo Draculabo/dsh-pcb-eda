@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { AUTH_ORIGIN, buildLoginUrl, parseAuthMessage, handleAuthMessage, type AuthTokenPayload } from '../src/client/lib.js'
 import { createAuthStorage } from '../src/client/storage.js'
 import { createAuthClient } from '../src/client/client.js'
+import type { HostSessionUser } from '../src/client/transport.js'
 import {
   DIALOG_CARD_ATTR,
   DIALOG_CLOSE_ATTR,
@@ -44,6 +45,8 @@ function makeClient() {
     pushSession: vi.fn(async (info: AuthTokenPayload) => { pushes.push(['session', info]) }),
     pushLogout: vi.fn(async () => { pushes.push(['logout']) }),
     fetchHostMode: vi.fn(async () => false),
+    fetchSession: vi.fn(async (): Promise<{ authenticated: boolean; user: HostSessionUser | null }> =>
+      ({ authenticated: false, user: null })),
   }
   const storage = createAuthStorage(localStorage)
   const listeners: Array<(e: MessageEvent) => void> = []
@@ -485,5 +488,66 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
       expect.objectContaining({ token: 'tok-1' }),
       null,
     ])
+  })
+})
+
+describe('host mode (hq-edge integration)', () => {
+  it('adopts the host-owned session so the auth gate reads authenticated', async () => {
+    const { client, transport } = makeClient()
+    transport.fetchHostMode.mockResolvedValue(true)
+    transport.fetchSession.mockResolvedValue({
+      authenticated: true,
+      user: { id: 6215935, token: 'host-tok-1', nickname: '老铁' },
+    })
+    const seen: unknown[] = []
+    client.auth.onAuthStateChanged((info) => seen.push(info))
+
+    expect(await client.refreshHost()).toBe(true)
+    expect(client.auth.isAuthenticated()).toBe(true)
+    await expect(client.auth.getUserInfo()).resolves.toEqual(
+      expect.objectContaining({ id: '6215935', token: 'host-tok-1', nickname: '老铁' }),
+    )
+    await expect(client.auth.getAccessToken()).resolves.toBe('host-tok-1')
+    // Host mode: login never opens the auth.eda.cn iframe.
+    await client.auth.login()
+    expect(isLoginDialogOpen()).toBe(false)
+    expect(seen).toEqual([expect.objectContaining({ token: 'host-tok-1' })])
+  })
+
+  it('standalone refreshHost keeps the login entrypoint and storage gate', async () => {
+    const { client, transport, storage } = makeClient()
+    transport.fetchHostMode.mockResolvedValue(false)
+    expect(await client.refreshHost()).toBe(false)
+    expect(client.auth.isAuthenticated()).toBe(false)
+    // Standalone login still opens the iframe.
+    await client.auth.login()
+    expect(isLoginDialogOpen()).toBe(true)
+    closeLoginDialog()
+    // Storage stays authoritative after host resolution in standalone.
+    storage.set({ id: 'u1', token: 'tok-1' })
+    expect(client.auth.isAuthenticated()).toBe(true)
+  })
+
+  it('logout in host mode clears local caches without pushing to the node', async () => {
+    const { client, transport } = makeClient()
+    transport.fetchHostMode.mockResolvedValue(true)
+    transport.fetchSession.mockResolvedValue({ authenticated: true, user: { id: 7, token: 't7' } })
+    await client.refreshHost()
+    expect(client.auth.isAuthenticated()).toBe(true)
+    await client.auth.logout()
+    expect(client.auth.isAuthenticated()).toBe(false)
+    expect(transport.pushLogout).not.toHaveBeenCalled()
+  })
+
+  it('host session survives until refreshHost resolves a later absence', async () => {
+    const { client, transport } = makeClient()
+    transport.fetchHostMode.mockResolvedValue(true)
+    transport.fetchSession.mockResolvedValue({ authenticated: true, user: { id: 'h1', token: 'h1-tok' } })
+    await client.refreshHost()
+    expect(client.auth.isAuthenticated()).toBe(true)
+    // Host flips to logged-out — the gate must follow.
+    transport.fetchSession.mockResolvedValue({ authenticated: false, user: null })
+    await client.refreshHost()
+    expect(client.auth.isAuthenticated()).toBe(false)
   })
 })

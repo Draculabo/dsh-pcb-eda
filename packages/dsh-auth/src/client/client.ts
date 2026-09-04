@@ -39,6 +39,13 @@ export interface AuthClient {
   restore(): Promise<void>
   /** Re-push persisted credentials on demand (heals a reset/absent node half). */
   syncNow(): Promise<void>
+  /**
+   * Resolve host mode from the node half and, when active, adopt the host-owned
+   * session as the browser credential. Resolves `hostMode`; the resolved
+   * session is emitted through `onAuthStateChanged` so apps and the HIT cards
+   * flip to authenticated without ever opening the auth.eda.cn iframe.
+   */
+  refreshHost(): Promise<boolean>
   /** Browser→node transport (used to read host mode before UI registration). */
   transport: AuthTransport
   dispose(): void
@@ -49,6 +56,14 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   const loginUrl = deps.loginUrl ?? `${AUTH_ORIGIN}/`
   const { storage, transport } = deps
   const listeners = new Set<(info: AuthTokenPayload | null) => void>()
+
+  // Host-mode credential state. In host mode hq-edge owns the session (EDA
+  // hands the operator token over on launch) — the node half resolves it and
+  // the browser adopts it through `/session`, so the auth gate, the HIT cards
+  // and the sidebar all read authenticated without an iframe login.
+  let hostMode = false
+  let hostSession: AuthTokenPayload | null = null
+  let hostSessionLoaded = false
 
   const emit = (info: AuthTokenPayload | null): void => {
     for (const listener of listeners) listener(info)
@@ -84,12 +99,50 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     )
   }
 
+  /**
+   * Adopt the host-owned session as the browser credential (host mode only).
+   * Kept synchronous for `isAuthenticated()`'s first-paint fast path — callers
+   * that need the resolved payload use `getUserInfo()` / `getAccessToken()`,
+   * which await host resolution before returning.
+   */
+  const resolveHost = async (): Promise<void> => {
+    hostSessionLoaded = true
+    if (!hostMode) {
+      hostSession = null
+      return
+    }
+    try {
+      const session = await transport.fetchSession()
+      hostSession = session.authenticated ? normalizeHostUserPayload(session.user) : null
+    } catch {
+      // Host unreachable: stay logged out rather than inventing a session.
+      hostSession = null
+    }
+  }
+
   const auth = {
-    isAuthenticated: (): boolean => storage.get() !== null,
-    getAccessToken: async (): Promise<string | null> => storage.get()?.token ?? null,
-    getUserInfo: async (): Promise<AuthTokenPayload | null> => storage.get(),
-    login: async (options?: LoginOptions): Promise<void> => openIframe(options ?? {}),
+    isAuthenticated: (): boolean => hostSession !== null || storage.get() !== null,
+    getAccessToken: async (): Promise<string | null> => {
+      if (hostMode && !hostSessionLoaded) await resolveHost()
+      return hostSession?.token ?? storage.get()?.token ?? null
+    },
+    getUserInfo: async (): Promise<AuthTokenPayload | null> => {
+      if (hostMode && !hostSessionLoaded) await resolveHost()
+      return hostSession ?? storage.get()
+    },
+    login: async (options?: LoginOptions): Promise<void> => {
+      // Host mode: hq-edge owns the session — never open the auth iframe.
+      if (hostMode) return
+      openIframe(options ?? {})
+    },
     logout: async (): Promise<void> => {
+      if (hostMode) {
+        // Host-owned session: nothing to revoke browser-side beyond our cache.
+        hostSession = null
+        storage.clear()
+        emit(null)
+        return
+      }
       storage.clear()
       try {
         await transport.pushLogout()
@@ -111,11 +164,13 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     const msg = handleAuthMessage(event)
     if (!msg) return
     if (msg.kind === 'token') {
+      hostSession = null
       storage.set(msg.info)
       void transport.pushSession(msg.info).catch(() => { /* node push is best-effort; syncNow heals */ })
       emit(msg.info)
       closeIframe()
     } else if (msg.kind === 'logout') {
+      hostSession = null
       storage.clear()
       emit(null)
       void transport.pushLogout().catch(() => { /* local state already cleared */ })
@@ -147,6 +202,24 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     handleMessageEvent,
     restore,
     /**
+     * Resolve host mode + host session from the node half and emit the result.
+     * Called at apply() boot; also re-runnable on demand (e.g. focus) so a
+     * late host handover still flips the gate.
+     */
+    async refreshHost(): Promise<boolean> {
+      let mode = false
+      try {
+        mode = await transport.fetchHostMode()
+      } catch {
+        mode = false
+      }
+      hostMode = mode
+      hostSessionLoaded = false
+      await resolveHost()
+      emit(hostSession ?? storage.get())
+      return hostMode
+    },
+    /**
      * Browser→node transport. Exposed so the client entry can read host mode
      * (whether an HQ Edge host supplies the credential and the login UI should
      * be suppressed) before registering the sidebar entrypoint.
@@ -171,7 +244,29 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     dispose() {
       deps.windowLike.removeEventListener('message', onWindowMessage)
       closeIframe()
+      hostMode = false
+      hostSession = null
+      hostSessionLoaded = false
       void trustedOrigin // referenced for clarity: the auth iframe URL comes from it
     },
+  }
+}
+
+/** Map the node `/session` user into the client payload shape. */
+function normalizeHostUserPayload(
+  user: { id?: string | number; token?: string; nickname?: string; expiresAt?: number } | null,
+): AuthTokenPayload | null {
+  if (!user) return null
+  const token = typeof user.token === 'string' && user.token.length > 0 ? user.token : null
+  const id = typeof user.id === 'string' && user.id.length > 0
+    ? user.id
+    : typeof user.id === 'number' && Number.isFinite(user.id) ? String(user.id)
+    : null
+  if (!token || !id) return null
+  return {
+    id,
+    token,
+    ...(user.nickname !== undefined && typeof user.nickname === 'string' ? { nickname: user.nickname } : {}),
+    ...(user.expiresAt !== undefined && typeof user.expiresAt === 'number' ? { expiresAt: user.expiresAt } : {}),
   }
 }

@@ -89,18 +89,21 @@ export function apply(ctx: ClientContext): () => void {
   /**
    * In HQ Edge host mode (config.hqEdgeBaseUrl set on the node half), EDA
    * launches hq-edge WITH the operator credential, so hq-edge — not this
-   * plugin — owns authentication for the session. The auth plugin's own login
-   * UI (the `sidebar.footer.action` entrypoint and the login toolviews) is
-   * therefore suppressed: it would be redundant and confusing next to the
-   * host-provided session. In standalone DSH (official integration) the
-   * sidebar entrypoint stays — it is the only login surface there.
+   * plugin — owns authentication for the session. `refreshHost()` resolves
+   * that host mode and adopts the host-owned session as the browser
+   * credential, so the auth gate / HIT cards read authenticated immediately.
+   * The auth plugin's own login UI (the `sidebar.footer.action` entrypoint and
+   * the login toolviews) is suppressed in host mode: it would be redundant and
+   * confusing next to the host-provided session. In standalone DSH (official
+   * integration) the sidebar entrypoint stays — it is the only login surface
+   * there.
    *
    * The mode is read from the node half over the plugin-owned webServer route
    * (async), so registration is deferred until it answers; the returned
    * disposer still drains anything registered later.
    */
   const slots = ctx.slots
-  void client.transport.fetchHostMode().then((hostMode) => {
+  void client.refreshHost().then((hostMode) => {
     if (disposed || hostMode) return
     if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
       for (const toolName of AUTH_TOOL_NAMES) {
