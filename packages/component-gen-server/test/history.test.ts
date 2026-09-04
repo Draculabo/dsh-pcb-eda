@@ -1,7 +1,7 @@
 /**
  * `@huaqiu/component-gen-server` — history store tests.
  */
-import { mkdtempSync, existsSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -46,6 +46,24 @@ describe('HistoryStore', () => {
       expect(read?.mime).toBe('image/png')
       expect(Buffer.from(read!.bytes).toString()).toBe('abc')
       expect(await store.readImage('nope')).toBeNull()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps history image access within the inputs directory', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
+    try {
+      const store = new HistoryStore(dir)
+      const outsidePath = join(dir, 'outside-image')
+      writeFileSync(outsidePath, 'keep')
+
+      const entry = makeEntry({ input: { imageId: '../outside-image' } })
+      await store.append(entry)
+
+      expect(await store.readImage(entry.input.imageId!)).toBeNull()
+      await store.delete(entry.id)
+      expect(readFileSync(outsidePath, 'utf8')).toBe('keep')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
