@@ -9,12 +9,13 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import type { ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createComponentGenHandler } from '../src/routes.js'
 import { HistoryStore, newImageId } from '../src/history.js'
 import type { ComponentGenBackend } from '../src/backend.js'
-import { COMPONENT_GEN_ROUTE_PREFIX } from '../src/types.js'
+import { COMPONENT_GEN_ROUTE_PREFIX, MAX_IMAGE_BYTES } from '../src/types.js'
 
 const stubBackend: ComponentGenBackend = {
   generateSymbol: async () => ({ status: 'generated' }),
@@ -65,6 +66,16 @@ async function callImage(handler: ReturnType<typeof createComponentGenHandler>, 
   return { status: status(), mime: mime(), body: body() }
 }
 
+async function startJob(handler: ReturnType<typeof createComponentGenHandler>, imageDataUrl: string): Promise<{ status: number; body: Record<string, unknown> }> {
+  const payload = Buffer.from(JSON.stringify({ kind: 'symbol', input: { imageDataUrl } }))
+  const req = Readable.from([payload]) as IncomingMessage
+  req.method = 'POST'
+  req.url = `${COMPONENT_GEN_ROUTE_PREFIX}/jobs`
+  const { res, status, body } = fakeRes()
+  await handler(req, res)
+  return { status: status(), body: JSON.parse(body().toString()) as Record<string, unknown> }
+}
+
 describe('GET /history/:imageId/image', () => {
   it('serves a stored input image by its thumbnail id directly (not by history entry id)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hq-cga-routes-'))
@@ -91,6 +102,48 @@ describe('GET /history/:imageId/image', () => {
       const handler = createComponentGenHandler({ backend: stubBackend, history })
       const out = await callImage(handler, 'img_missing')
       expect(out.status).toBe(404)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('POST /jobs image limits', () => {
+  it('accepts an image whose decoded bytes fit the configured limit', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-routes-'))
+    try {
+      const bytes = Buffer.alloc(3_200_000)
+      const imageDataUrl = `data:image/png;base64,${bytes.toString('base64')}`
+      expect(imageDataUrl.length).toBeGreaterThan(MAX_IMAGE_BYTES)
+      expect(bytes.byteLength).toBeLessThan(MAX_IMAGE_BYTES)
+
+      const history = new HistoryStore(dir)
+      const handler = createComponentGenHandler({ backend: stubBackend, history })
+
+      expect(await startJob(handler, imageDataUrl)).toMatchObject({
+        status: 202,
+        body: { jobId: expect.any(String) },
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects an image whose decoded bytes exceed the configured limit', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-routes-'))
+    try {
+      const bytes = Buffer.alloc(MAX_IMAGE_BYTES + 1)
+      const imageDataUrl = `data:image/png;base64,${bytes.toString('base64')}`
+      const history = new HistoryStore(dir)
+      const handler = createComponentGenHandler({ backend: stubBackend, history })
+
+      expect(await startJob(handler, imageDataUrl)).toEqual({
+        status: 413,
+        body: {
+          error: 'image too large',
+          detail: `max ${MAX_IMAGE_BYTES} bytes`,
+        },
+      })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
