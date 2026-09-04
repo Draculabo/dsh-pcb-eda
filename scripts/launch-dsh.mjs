@@ -4,32 +4,46 @@
  * Kills any process listening on port 3080, registers the local dsh plugins,
  * then starts the dsh web server.
  *
+ * Launches dsh from the LOCAL DeepSeek Harness repo checkout via the official
+ * `pnpm dsh` script (see deepseek-harness/README.md), instead of the
+ * npm-published `@deepseek-ai/dsh`. The harness repo is expected to live as a
+ * sibling of dsh-pcb-eda:
+ *
+ *   <code>/deepseek-harness     ← local dsh (pnpm dsh <cmd>)
+ *   <code>/dsh-pcb-eda          ← this repo (packages/ = the plugins)
+ *
  * Run from the project/git root:
- *   node scripts/start-dsh-web.js
- *   # or after chmod +x:
- *   ./scripts/start-dsh-web.js
+ *   node scripts/launch-dsh.mjs
  */
 
 'use strict';
 
-// const { execSync, spawn } = require('child_process');
-// const os = require('os');
-// const path = require('path');
-
-import { execSync ,spawn} from 'child_process';
+import { execSync, spawn } from 'child_process';
+import { accessSync, readFileSync } from 'node:fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const PORT = 3080;
 const PROFILE = 'web';
 
+// Resolved from the script's own location (import.meta.url) so it works
+// regardless of the caller's cwd.
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+// This repo (dsh-pcb-eda) — home of the local plugins.
+const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
+// Local DeepSeek Harness repo — always a sibling of this repo.
+const HARNESS_DIR = path.resolve(SCRIPT_DIR, '..', '..', 'deepseek-harness');
+
+// Plugins live in this repo; resolve to absolute paths because `pnpm dsh` runs
+// with cwd = HARNESS_DIR.
 const PLUGINS = [
   './packages/dsh-auth',
   './packages/dsh-artifacts',
   './packages/dsh-tool-part-search',
   './packages/dsh-tool-symbol-footprint',
   './packages/dsh-tool-schematic-gen',
-];
+].map((p) => path.resolve(REPO_ROOT, p));
 
 /**
  * Kill any process currently listening on the given port.
@@ -94,13 +108,13 @@ function killPort(port) {
  * Run a command and inherit stdio so the user sees live output.
  * Throws if the command exits with a non-zero status.
  */
-function run(cmd, args = []) {
+function run(cmd, args = [], cwd = process.cwd()) {
   console.log(`> ${cmd} ${args.join(' ')}`);
   execSync(`${cmd} ${args.map(a => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`, {
     stdio: 'inherit',
-    cwd: process.cwd(),
+    cwd,
     env: process.env,
-    shell: true, // needed for npx on Windows
+    shell: true, // needed for pnpm on Windows
   });
 }
 
@@ -109,7 +123,7 @@ function main() {
   // (has a packages/ folder). This is only a soft check.
   const packagesDir = path.join(process.cwd(), 'packages');
   try {
-    require('fs').accessSync(packagesDir);
+    accessSync(packagesDir);
   } catch {
     console.warn(
       'Warning: ./packages not found in current working directory.\n' +
@@ -117,28 +131,44 @@ function main() {
     );
   }
 
+  // The local harness is the source of truth for the dsh CLI (`pnpm dsh`).
+  // Fail fast with a clear message when it is not where we expect it.
+  const harnessPkg = path.join(HARNESS_DIR, 'package.json');
+  try {
+    accessSync(harnessPkg);
+    // Make sure the official `dsh` script exists in the harness package.json.
+    const pkg = JSON.parse(readFileSync(harnessPkg, 'utf8'));
+    if (typeof pkg?.scripts?.dsh !== 'string') throw new Error('no dsh script');
+  } catch {
+    console.error(
+      `Local DeepSeek Harness not found at:\n  ${HARNESS_DIR}\n` +
+        'Expected the harness repo as a sibling of dsh-pcb-eda ' +
+        `(e.g. ${path.dirname(HARNESS_DIR)}/deepseek-harness).\n` +
+        'It must expose the official `dsh` script: `pnpm dsh <cmd>`.'
+    );
+    process.exit(1);
+  }
+
+  console.log(`Using local dsh from: ${HARNESS_DIR} (pnpm dsh)`);
   console.log(`Freeing port ${PORT}…`);
   killPort(PORT);
 
   for (const plugin of PLUGINS) {
-    run('npx', [
-      '@deepseek-ai/dsh',
-      'plugin',
-      '--profile',
-      PROFILE,
-      'add',
-      plugin,
-    ]);
+    run(
+      'pnpm',
+      ['dsh', 'plugin', '--profile', PROFILE, 'add', plugin],
+      HARNESS_DIR
+    );
   }
 
   console.log('Starting dsh web…');
   // Final command should keep the process alive, so we spawn it without waiting.
   const child = spawn(
-    'npx',
-    ['@deepseek-ai/dsh', 'web'],
+    'pnpm',
+    ['dsh', 'web'],
     {
       stdio: 'inherit',
-      cwd: process.cwd(),
+      cwd: HARNESS_DIR,
       env: process.env,
       shell: true,
     }
