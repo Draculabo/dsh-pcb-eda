@@ -1,2 +1,5 @@
 packages:
   - 'packages/*'
+minimumReleaseAgeExclude:
+  - '@huaqiu/dsh-artifacts@0.3.3'
+  - '@huaqiu/dsh-auth@0.3.3'

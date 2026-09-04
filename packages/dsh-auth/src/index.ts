@@ -11,6 +11,8 @@ import { AUTH_ROUTE_PREFIX, createAuthHandler } from './routes.js'
 import type { HuaqiuAuthConfig } from './host.js'
 
 export type { HuaqiuAuthApi, HuaqiuAuthService, HuaqiuUserInfo } from './service.js'
+export { InMemoryHuaqiuAuthService } from './service.js'
+export { AUTH_ROUTE_PREFIX, createAuthHandler, type AuthHandler } from './routes.js'
 export type { HuaqiuAuthConfig } from './host.js'
 
 export const name = '@huaqiu/dsh-auth'

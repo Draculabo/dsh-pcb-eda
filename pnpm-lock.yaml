@@ -24,6 +24,68 @@ importers:
         specifier: ^4.1.0
         version: 4.1.11(@types/node@24.13.3)(jsdom@26.1.0)(vite@8.2.2(@types/node@24.13.3))
 
+  packages/component-gen-app:
+    dependencies:
+      '@huaqiu/ecad-renderer':
+        specifier: ^0.2.4
+        version: 0.2.4
+      '@huaqiu/kicad-sexpr-parser':
+        specifier: ^0.1.1
+        version: 0.1.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.31
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.7
+        version: 18.3.7(@types/react@18.3.31)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vite:
+        specifier: ^8.2.2
+        version: 8.2.2(@types/node@24.13.3)
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.11(@types/node@24.13.3)(jsdom@26.1.0)(vite@8.2.2(@types/node@24.13.3))
+
+  packages/component-gen-server:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: ^0.1.0-rc.0
+        version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: ^0.1.0-rc.0
+        version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
+      '@huaqiu/dsh-artifacts':
+        specifier: workspace:*
+        version: link:../dsh-artifacts
+      '@huaqiu/dsh-auth':
+        specifier: workspace:*
+        version: link:../dsh-auth
+      '@huaqiu/dsh-tool-symbol-footprint':
+        specifier: workspace:*
+        version: link:../dsh-tool-symbol-footprint
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.11(@types/node@24.13.3)(jsdom@26.1.0)(vite@8.2.2(@types/node@24.13.3))
+
   packages/dsh-artifacts:
     dependencies:
       '@deepseek-ai/cordis':
@@ -49,17 +111,17 @@ importers:
         version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
     devDependencies:
       '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
+        specifier: ~18.3.1
+        version: 18.3.31
       '@types/react-dom':
-        specifier: ^19.2.5
-        version: 19.2.5(@types/react@19.2.18)
+        specifier: ^18.3.5
+        version: 18.3.7(@types/react@18.3.31)
       react:
-        specifier: ^19.2.8
-        version: 19.2.8
+        specifier: ^18.3.1
+        version: 18.3.1
       react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
 
   packages/dsh-tool-part-search:
     dependencies:
@@ -112,10 +174,22 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.1
         version: 4.0.1
+      '@deepseek-ai/dsh-home-paths':
+        specifier: ^0.1.0-rc.0
+        version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
       '@deepseek-ai/dsh-tools':
         specifier: ^0.1.0-rc.0
         version: 0.1.0-rc.8(ac9081d1e007de8a90a707560a8ae1c3)
+      '@huaqiu/component-gen-server':
+        specifier: workspace:*
+        version: link:../component-gen-server
     devDependencies:
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: ^0.1.0-rc.0
+        version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
+      '@huaqiu/component-gen-app':
+        specifier: workspace:*
+        version: link:../component-gen-app
       '@huaqiu/dsh-artifacts':
         specifier: workspace:*
         version: link:../dsh-artifacts
@@ -197,9 +271,6 @@ packages:
         optional: true
       '@deepseek-ai/cordis-plugin-loader':
         optional: true
-
-  '@deepseek-ai/cosmokit@1.8.2':
-    resolution: {integrity: sha512-muBOKtSrUKU5m/xpq8ZXWL6hQ/jgd4PhU2PqH97bcxIiLEJfNwZOGQEx4t/aS/GgxRAR+ra9pMHPMtTHU4sqqA==}
 
   '@deepseek-ai/cosmokit@1.8.3':
     resolution: {integrity: sha512-qBo+ronVM6Eu2WNVJXi8JcMiqZ19T9BRIpV+5qJUFPXjGH/Z0QKcQMC/IZJ7L394YTOtJgcovbk9qP0w2GsBXQ==}
@@ -465,16 +536,8 @@ packages:
     peerDependencies:
       '@types/react': ^18.0.0
 
-  '@types/react-dom@19.2.5':
-    resolution: {integrity: sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==}
-    peerDependencies:
-      '@types/react': ^19.2.0
-
   '@types/react@18.3.31':
     resolution: {integrity: sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw==}
-
-  '@types/react@19.2.18':
-    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
 
   '@vitest/expect@4.1.11':
     resolution: {integrity: sha512-VX2x5vNJXET47KAFzwERI+KRMtTTCSWTfSMKsW7JsUsXV4psq++e3DvZpuTDOpHcxytiDs6p2nhVb2tVDiiUYw==}
@@ -931,17 +994,8 @@ packages:
     peerDependencies:
       react: ^18.3.1
 
-  react-dom@19.2.8:
-    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
-    peerDependencies:
-      react: ^19.2.8
-
   react@18.3.1:
     resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
-    engines: {node: '>=0.10.0'}
-
-  react@19.2.8:
-    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
     engines: {node: '>=0.10.0'}
 
   readable-stream@2.3.8:
@@ -989,9 +1043,6 @@ packages:
 
   scheduler@0.23.2:
     resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
-
-  scheduler@0.27.0:
-    resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
 
   setimmediate@1.0.5:
     resolution: {integrity: sha512-MATJdZp8sLqDl/68LfQmbP8zKPLQNV6BIZoIgrscFDQ+RsvK/BxeDQOgyxKKoh0y/8h3BqVFnCqQ/gd+reiIXA==}
@@ -1271,10 +1322,8 @@ snapshots:
 
   '@deepseek-ai/cordis@4.0.1':
     dependencies:
-      '@deepseek-ai/cosmokit': 1.8.2
+      '@deepseek-ai/cosmokit': 1.8.3
       '@standard-schema/spec': 1.1.0
-
-  '@deepseek-ai/cosmokit@1.8.2': {}
 
   '@deepseek-ai/cosmokit@1.8.3': {}
 
@@ -1477,17 +1526,9 @@ snapshots:
     dependencies:
       '@types/react': 18.3.31
 
-  '@types/react-dom@19.2.5(@types/react@19.2.18)':
-    dependencies:
-      '@types/react': 19.2.18
-
   '@types/react@18.3.31':
     dependencies:
       '@types/prop-types': 15.7.15
-      csstype: 3.2.3
-
-  '@types/react@19.2.18':
-    dependencies:
       csstype: 3.2.3
 
   '@vitest/expect@4.1.11':
@@ -1839,16 +1880,9 @@ snapshots:
       react: 18.3.1
       scheduler: 0.23.2
 
-  react-dom@19.2.8(react@19.2.8):
-    dependencies:
-      react: 19.2.8
-      scheduler: 0.27.0
-
   react@18.3.1:
     dependencies:
       loose-envify: 1.4.0
-
-  react@19.2.8: {}
 
   readable-stream@2.3.8:
     dependencies:
@@ -1910,8 +1944,6 @@ snapshots:
   scheduler@0.23.2:
     dependencies:
       loose-envify: 1.4.0
-
-  scheduler@0.27.0: {}
 
   setimmediate@1.0.5: {}
 

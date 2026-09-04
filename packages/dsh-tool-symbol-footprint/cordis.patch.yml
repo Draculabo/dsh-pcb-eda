@@ -3,7 +3,8 @@
 # (`src/index.ts` — export const inject). The tool's apply() reads the
 # `huaqiuAuth` and `huaqiuArtifacts` services and throws if they are absent,
 # so the loader must hold this entry until those services are provided.
+# `webServer` hosts the component-gen workspace API (jobs/SSE/history).
 - insert:
     - id: huaqiu-tool-symbol-footprint
       name: '@huaqiu/dsh-tool-symbol-footprint'
-      inject: ['tools', 'huaqiuAuth', 'huaqiuArtifacts']
+      inject: ['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer']

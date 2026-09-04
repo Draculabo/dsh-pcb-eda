@@ -31,9 +31,17 @@
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.0",
     "@huaqiu/dsh-artifacts": "^0.3.3",
     "@huaqiu/dsh-auth": "^0.3.3",
+    "@huaqiu/component-gen-app": "^0.1.0",
     "react": "^18"
   },
+  "dependencies": {
+    "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.0",
+    "@huaqiu/component-gen-server": "workspace:*"
+  },
   "devDependencies": {
+    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.0",
+    "@huaqiu/component-gen-app": "workspace:*",
+    "@huaqiu/component-gen-server": "workspace:*",
     "@huaqiu/dsh-artifacts": "workspace:*",
     "@huaqiu/dsh-auth": "workspace:*",
     "@huaqiu/dsh-tool-uncollapse": "workspace:*",

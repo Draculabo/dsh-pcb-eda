@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { apply, inject, name, packageTypes } from '../src/index.js'
+import { apply, createComponentGenBackend, inject, name, packageTypes } from '../src/index.js'
 import type { HuaqiuAuthService } from '@huaqiu/dsh-auth'
 import type { HuaqiuArtifacts, CreateArtifactResult } from '@huaqiu/dsh-artifacts'
 
@@ -46,9 +46,11 @@ function ctxStub() {
 describe('@huaqiu/dsh-tool-symbol-footprint plugin', () => {
   it('exposes the expected node plugin shape', () => {
     expect(name).toBe('@huaqiu/dsh-tool-symbol-footprint')
-    expect(inject).toEqual(['tools', 'huaqiuAuth', 'huaqiuArtifacts'])
+    expect(inject).toEqual(['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer'])
     expect(typeof apply).toBe('function')
     expect(Array.isArray(packageTypes)).toBe(true)
+    // Component-gen backend factory: reused by the standalone server.
+    expect(typeof createComponentGenBackend).toBe('function')
     expect(packageTypes.length).toBeGreaterThan(0)
   })
 

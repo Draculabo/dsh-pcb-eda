@@ -17,6 +17,8 @@ export type {
   CreateArtifactResult,
   HuaqiuArtifacts,
 } from './service.js'
+export { HuaqiuArtifactService } from './service.js'
+export { ARTIFACTS_ROUTE_PREFIX, createArtifactsHandler, type ArtifactsHandler } from './routes.js'
 
 export const name = '@huaqiu/dsh-artifacts'
 export const inject = ['webServer'] as const

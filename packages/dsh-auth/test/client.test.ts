@@ -28,7 +28,7 @@ const realAuthEdaCnEnvelope = {
     type: 'update_access_token',
     data: {
       userId: 6215935,
-      expires_at: 1788359214,
+      expires_at: 9999999999,
       agreeCollectIP: false,
       token: '0494009e-edbc-5f52-99e3-ae4ef00f051e-6a919aad',
       id: 6215935,
@@ -399,7 +399,7 @@ describe('auth client behaviors (acceptance groups A–D)', () => {
       id: '6215935',
       token: '0494009e-edbc-5f52-99e3-ae4ef00f051e-6a919aad',
       nickname: '老铁',
-      expiresAt: 1788359214,
+      expiresAt: 9999999999,
     })
     expect(transport.pushSession).toHaveBeenCalledWith(expect.objectContaining({ id: '6215935' }))
   })

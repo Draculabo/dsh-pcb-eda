@@ -1,0 +1,48 @@
+{
+  "name": "@huaqiu/component-gen-server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./lib/index.mjs",
+  "types": "./lib/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.mts",
+      "default": "./lib/index.mjs"
+    },
+    "./standalone": {
+      "types": "./lib/standalone.d.mts",
+      "default": "./lib/standalone.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src"
+  ],
+  "bin": {
+    "hq-component-gen": "./lib/standalone.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.0",
+    "@huaqiu/dsh-artifacts": "workspace:*",
+    "@huaqiu/dsh-auth": "workspace:*",
+    "@huaqiu/dsh-tool-symbol-footprint": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

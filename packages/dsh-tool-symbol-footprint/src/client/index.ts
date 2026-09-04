@@ -19,6 +19,7 @@
 import { createElement, useEffect, useState, type ComponentType } from 'react'
 import { GenHit } from './hit-card.jsx'
 import { injectStyles, removeStyles, disposeThemeObserver, installGenHitUncollapser } from './theme.js'
+import { installWorkspace } from './workspace.jsx'
 
 const TOOLVIEW_KEYS = [
   'generate_symbol_from_image',
@@ -60,12 +61,13 @@ export interface AuthStateLike {
  *
  * Declared structurally, never imported: each package must remain
  * independently installable. `nickname` is optional because the HQ Edge host
- * contract may not supply one.
+ * contract may not supply one. `login` opens the dsh-auth login dialog.
  */
 export interface HuaqiuAuthClientService {
   auth?: {
     isAuthenticated(): boolean
     getUserInfo(): Promise<{ nickname?: string } | null>
+    login?(): Promise<void>
     onAuthStateChanged(listener: (info: { nickname?: string } | null) => void): () => void
   }
 }
@@ -171,12 +173,14 @@ export function apply(ctx: ClientContext): () => void {
 
   injectStyles()
   const uncollapseDispose = installGenHitUncollapser()
+  const workspaceDispose = installWorkspace(ctx, authService?.auth)
 
   const cleanup = (): void => {
     for (const dispose of disposers) {
       try { dispose() } catch { /* already disposed */ }
     }
     disposers.length = 0
+    workspaceDispose()
     uncollapseDispose()
     removeStyles()
     disposeThemeObserver()

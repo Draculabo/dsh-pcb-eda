@@ -1,0 +1,49 @@
+{
+  "name": "@huaqiu/component-gen-app",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./lib/index.mjs",
+  "types": "./lib/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown && vite build",
+    "build:lib": "tsdown",
+    "build:standalone": "vite build",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "dependencies": {
+    "@huaqiu/ecad-renderer": "^0.2.4",
+    "@huaqiu/kicad-sexpr-parser": "^0.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.0",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

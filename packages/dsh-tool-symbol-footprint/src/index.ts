@@ -26,9 +26,17 @@
  * @module @huaqiu/dsh-tool-symbol-footprint
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { HuaqiuArtifacts } from '@huaqiu/dsh-artifacts'
 import type { HuaqiuAuthService } from '@huaqiu/dsh-auth'
-import { createSymbolFootprintTools } from './tools.js'
+import type { ComponentGenBackend } from '@huaqiu/component-gen-server'
+import { createComponentGenRoutes } from '@huaqiu/component-gen-server'
+import { HistoryStore } from '@huaqiu/component-gen-server'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+import {
+  createSymbolFootprintTools, runGenerateSymbol, runGenerateFootprintFromImage,
+  runGenerateFootprintFromDimensions, type SymbolFootprintEnv,
+} from './tools.js'
 import type { UserQuestionsLike } from './dimensions.js'
 import { resolveHitlLocale } from './hitl-i18n.js'
 import { resolveEndpoint, packageTypes } from './protocol.js'
@@ -37,8 +45,10 @@ import { resolveEndpoint, packageTypes } from './protocol.js'
 export const name = '@huaqiu/dsh-tool-symbol-footprint'
 
 /** Cordis services this half depends on. `userQuestions` is deliberately NOT
- *  injected — see the HIL note in the file header. */
-export const inject = ['tools', 'huaqiuAuth', 'huaqiuArtifacts'] as const
+ *  injected — see the HIL note in the file header. `webServer` hosts the
+ *  component-gen API routes (jobs/SSE/history) that the browser workspace
+ *  drives. */
+export const inject = ['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer'] as const
 
 /** Console tag for filtering in logs. */
 const LOG_TAG = '[dsh-symbol-footprint]'
@@ -108,6 +118,29 @@ export function apply(ctx: Context, config: SymbolFootprintConfig = {}): () => v
 
   const disposers = createSymbolFootprintTools(env).map((tool) => ctx.tools.register(tool))
 
+  // ── Component Gen workspace (standalone symbol/footprint generator) ────────
+  // The same generation pipeline, driven by the browser workspace instead of
+  // the agent tools. The app env deliberately disables the native HIL popup
+  // (`getUserQuestions: undefined`) so the workspace is the single driver
+  // (single-HIL). History is user-level JSON under `~/.dsh/component-gen/`.
+  const appEnv: SymbolFootprintEnv = {
+    ...env,
+    getUserQuestions: () => undefined,
+  }
+  const appBackend = createComponentGenBackend(appEnv)
+  const history = new HistoryStore(dshHomePath('component-gen'))
+  let webServerDisposer: (() => void) | undefined
+  if (ctx.webServer && typeof ctx.webServer.register === 'function') {
+    ctx.effect(() => ctx.webServer.register(createComponentGenRoutes({
+      backend: appBackend,
+      history,
+      hostMode: auth.hostMode,
+    })))
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn(LOG_TAG, 'webServer unavailable — component-gen workspace API disabled')
+  }
+
   // eslint-disable-next-line no-console
   console.log(LOG_TAG, 'registered agent tools', {
     tools: disposers.length,
@@ -126,7 +159,44 @@ export function apply(ctx: Context, config: SymbolFootprintConfig = {}): () => v
   }
 }
 
+/**
+ * Build the component-gen HTTP backend over the plugin's existing generation
+ * functions. Shared by the DSH integration (this plugin) and the standalone
+ * server (`@huaqiu/component-gen-server/standalone`).
+ *
+ * @param env - `SymbolFootprintEnv`; set `getUserQuestions: () => undefined`
+ *   to make the workspace the single HIL driver (no native accept/decline
+ *   popup).
+ */
+export function createComponentGenBackend(env: SymbolFootprintEnv): ComponentGenBackend {
+  return {
+    generateSymbol: (args, exec) =>
+      runGenerateSymbol(
+        { image: args.imageDataUrl, instruction: args.instruction },
+        { signal: exec.signal },
+        env,
+      ),
+    extractFootprint: (args, exec) =>
+      runGenerateFootprintFromImage(
+        { image: args.imageDataUrl, package_type: args.packageType, instruction: args.instruction },
+        { signal: exec.signal },
+        env,
+      ),
+    generateFootprint: (args, exec) =>
+      runGenerateFootprintFromDimensions(
+        { package_type: args.packageType, file_name: args.fileName, dimensions: args.dimensions },
+        { signal: exec.signal },
+        env,
+      ),
+  }
+}
+
 /** Exported for tests: the supported package list. */
 export { packageTypes }
 /** Exported for tests: the wire command types this plugin speaks. */
 export { commandTypes, agentActions } from './protocol.js'
+/** The generation pipeline — reused by `@huaqiu/component-gen-server/standalone`. */
+export {
+  runGenerateSymbol, runGenerateFootprintFromImage, runGenerateFootprintFromDimensions,
+  type SymbolFootprintEnv, type SymbolFootprintDeps,
+} from './tools.js'
