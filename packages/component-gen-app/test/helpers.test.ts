@@ -4,7 +4,7 @@
  * The component tree needs a DOM, so these target the DOM-free utilities only.
  */
 import { describe, expect, it } from 'vitest'
-import { defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
+import { createHttpPorts, defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
 import { humanizeKey } from '../src/utils/labels.js'
 import { translateFor } from '../src/copy/index.js'
 
@@ -24,6 +24,29 @@ describe('parseEvent', () => {
   })
   it('returns null for an empty frame', () => {
     expect(parseEvent('')).toBeNull()
+  })
+})
+
+describe('jobEvents', () => {
+  it('consumes CRLF-delimited SSE frames', async () => {
+    const expected = {
+      type: 'progress' as const,
+      message: 'ok',
+      at: '2026-01-01T00:00:00Z',
+    }
+    const ports = createHttpPorts({
+      base: '/api/v1/huaqiu/component-gen',
+      doFetch: async () => new Response(
+        `event: progress\r\ndata: ${JSON.stringify(expected)}\r\n\r\n`,
+        { headers: { 'content-type': 'text/event-stream' } },
+      ),
+    })
+
+    const event = await new Promise<typeof expected>((resolve) => {
+      ports.jobEvents('job-1', (value) => resolve(value as typeof expected))
+    })
+
+    expect(event).toEqual(expected)
   })
 })
 
