@@ -151,6 +151,16 @@ function WorkspaceOverlay({ ports }: { ports: ComponentGenPorts }): JSX.Element 
   const { open, page } = useWorkspaceState()
   const lang = detectLocale()
   const close = useCallback(() => setOpen(false), [])
+  // Esc closes the workspace popup, matching the backdrop-click close. Active
+  // only while the overlay is open; removed on close/unmount.
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, close])
   if (!open) return <></>
   return (
     <div
