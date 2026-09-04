@@ -107,6 +107,30 @@ it('reopens a generated history entry from the history dialog into the result st
   expect(ports.imageIds).toEqual(['img-1'])
 })
 
+it('closes the history dialog with Escape', async () => {
+  const ports = fakePorts()
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+
+  await act(async () => {
+    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" />)
+  })
+
+  const viewBtn = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    .find((b) => b.textContent?.trim() === '查看历史')
+  await act(async () => {
+    viewBtn!.click()
+  })
+  expect(container.querySelector('.cga-history-dialog')).not.toBeNull()
+
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  })
+
+  expect(container.querySelector('.cga-history-dialog')).toBeNull()
+})
+
 it('does not leak a reopen request across a page switch', async () => {
   const ports = fakePorts()
   const container = document.createElement('div')
