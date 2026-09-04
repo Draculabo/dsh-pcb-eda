@@ -35,6 +35,24 @@ describe('HistoryStore', () => {
     }
   })
 
+  it('uses the default page size for non-finite limits', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
+    try {
+      const store = new HistoryStore(dir)
+      const older = makeEntry({ createdAt: '2026-09-04T00:00:00.000Z' })
+      const newer = makeEntry({ createdAt: '2026-09-04T01:00:00.000Z' })
+      await store.append(older)
+      await store.append(newer)
+
+      expect(await store.list({ limit: Number.NaN })).toEqual({
+        entries: [newer, older],
+        nextCursor: null,
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('round-trips image input into inputs/ and back', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
     try {
