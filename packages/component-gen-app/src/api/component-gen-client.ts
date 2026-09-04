@@ -126,7 +126,8 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
     },
 
     async abortJob(jobId: string): Promise<void> {
-      await doFetch(url(`/jobs/${encodeURIComponent(jobId)}`), { method: 'DELETE' })
+      const res = await doFetch(url(`/jobs/${encodeURIComponent(jobId)}`), { method: 'DELETE' })
+      if (!res.ok) await readJson<never>(res)
     },
 
     async history(query: HistoryQuery): Promise<HistoryPage> {
@@ -154,7 +155,8 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
     },
 
     async deleteHistory(id: string): Promise<void> {
-      await doFetch(url(`/history/${encodeURIComponent(id)}`), { method: 'DELETE' })
+      const res = await doFetch(url(`/history/${encodeURIComponent(id)}`), { method: 'DELETE' })
+      if (!res.ok) await readJson<never>(res)
     },
 
     async artifactContent(artifactId: string): Promise<string> {
