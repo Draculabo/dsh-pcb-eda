@@ -8,7 +8,7 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ComponentGenBackend } from './backend.js'
-import { HistoryStore, newImageId } from './history.js'
+import { HistoryStore, newImageId, parseDataUrl } from './history.js'
 import { JobStore, runGeneration, type JobMeta } from './jobs.js'
 import {
   COMPONENT_GEN_ROUTE_PREFIX, MAX_IMAGE_BYTES,
@@ -101,9 +101,12 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
           return
         }
         const input = body.input ?? {}
-        if (input.imageDataUrl && input.imageDataUrl.length > MAX_IMAGE_BYTES) {
-          sendJson(res, 413, { error: 'image too large', detail: `max ${MAX_IMAGE_BYTES} bytes` })
-          return
+        if (input.imageDataUrl) {
+          const image = parseDataUrl(input.imageDataUrl)
+          if (image && image.bytes.byteLength > MAX_IMAGE_BYTES) {
+            sendJson(res, 413, { error: 'image too large', detail: `max ${MAX_IMAGE_BYTES} bytes` })
+            return
+          }
         }
         const meta: JobMeta = {}
         if (input.imageDataUrl) {
