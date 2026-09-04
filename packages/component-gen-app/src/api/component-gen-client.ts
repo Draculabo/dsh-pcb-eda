@@ -108,6 +108,7 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
             const { done, value } = await reader.read()
             if (done) break
             buf += decoder.decode(value, { stream: true })
+            buf = buf.replace(/\r\n/g, '\n')
             let idx: number
             while ((idx = buf.indexOf('\n\n')) >= 0) {
               const frame = buf.slice(0, idx)
