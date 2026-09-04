@@ -7,7 +7,7 @@
  * at POST /jobs time. `imageId` in an entry's `input` points into `inputs/`.
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { HistoryEntry, HistoryPage, HistoryPatch, HistoryQuery } from './types.js'
 
@@ -25,6 +25,23 @@ function readJsonFile<T>(path: string, fallback: T): T {
 function writeJsonFile(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, JSON.stringify(value, null, 2), 'utf8')
+}
+
+function inputPathFor(dir: string, imageId: string): string | null {
+  const root = resolve(dir, INPUT_DIR)
+  const path = resolve(root, imageId)
+  const fromRoot = relative(root, path)
+
+  if (
+    fromRoot === '' ||
+    fromRoot === '..' ||
+    fromRoot.startsWith(`..${sep}`) ||
+    isAbsolute(fromRoot)
+  ) {
+    return null
+  }
+
+  return path
 }
 
 /** `data:image/...;base64,....` → { mime, bytes } | null. */
@@ -94,8 +111,10 @@ export class HistoryStore {
     this.entries = this.entries.filter((e) => e.id !== id)
     writeJsonFile(this.file, this.entries)
     if (entry?.input?.imageId) {
-      try { unlinkSync(join(this.dir, INPUT_DIR, entry.input.imageId)) } catch { /* already gone */ }
-      try { unlinkSync(join(this.dir, INPUT_DIR, `${entry.input.imageId}.mime`)) } catch { /* already gone */ }
+      const path = inputPathFor(this.dir, entry.input.imageId)
+      if (!path) return
+      try { unlinkSync(path) } catch { /* already gone */ }
+      try { unlinkSync(`${path}.mime`) } catch { /* already gone */ }
     }
   }
 
@@ -107,19 +126,19 @@ export class HistoryStore {
   async saveImage(imageId: string, dataUrl: string): Promise<void> {
     const parsed = parseDataUrl(dataUrl)
     if (!parsed) throw new Error('component-gen: invalid image data URL')
-    const dir = join(this.dir, INPUT_DIR)
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, imageId), parsed.bytes)
-    writeFileSync(join(dir, `${imageId}.mime`), parsed.mime, 'utf8')
+    const path = inputPathFor(this.dir, imageId)
+    if (!path) throw new Error('component-gen: invalid image id')
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, parsed.bytes)
+    writeFileSync(`${path}.mime`, parsed.mime, 'utf8')
   }
 
   async readImage(imageId: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
-    const dir = join(this.dir, INPUT_DIR)
-    const path = join(dir, imageId)
-    if (!existsSync(path)) return null
+    const path = inputPathFor(this.dir, imageId)
+    if (!path || !existsSync(path)) return null
     let mime = 'image/png'
     try {
-      const sidecar = readFileSync(join(dir, `${imageId}.mime`), 'utf8').trim()
+      const sidecar = readFileSync(`${path}.mime`, 'utf8').trim()
       if (sidecar) mime = sidecar
     } catch { /* legacy entry stored before the mime sidecar existed */ }
     return { bytes: readFileSync(path), mime }
