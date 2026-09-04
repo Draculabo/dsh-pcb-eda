@@ -97,10 +97,6 @@ export function FootprintGenPage({ ports, t, reopen = null }: FootprintGenPagePr
     <div className="cga-app">
       <div className="cga-panel">
         <div className="cga-panel__body">
-          <div className="cga-app__head">
-            <span className="cga-app__head-title">{t('app.footprintTitle')}</span>
-          </div>
-
           {auth.phase === 'unknown' ? <div className="cga-progress"><span className="cga-spinner" />{t('app.loading')}</div> : null}
           {auth.phase === 'unauthenticated'
             ? (

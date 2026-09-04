@@ -77,7 +77,7 @@ function mount(): void {
   })
   createRoot(rootEl).render(
     <StrictMode>
-      <ComponentGenApp ports={ports} page={page} lang={lang} showHistory />
+      <ComponentGenApp ports={ports} page={page} lang={lang} />
     </StrictMode>,
   )
 }

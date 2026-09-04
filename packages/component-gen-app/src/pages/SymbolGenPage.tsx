@@ -72,10 +72,6 @@ export function SymbolGenPage({ ports, t, reopen = null }: SymbolGenPageProps): 
     <div className="cga-app">
       <div className="cga-panel">
         <div className="cga-panel__body">
-          <div className="cga-app__head">
-            <span className="cga-app__head-title">{t('app.symbolTitle')}</span>
-          </div>
-
           {auth.phase === 'unknown' ? <div className="cga-progress"><span className="cga-spinner" />{t('app.loading')}</div> : null}
           {auth.phase === 'unauthenticated'
             ? (

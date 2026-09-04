@@ -125,6 +125,7 @@ export const ZH = {
     delete: '删除',
     download: '下载',
     reopen: '打开',
+    view: '查看历史',
     createdAt: '创建时间',
     loadMore: '加载更多',
     noMore: '没有更多了',

@@ -19,7 +19,7 @@
  * same sanctioned source the GenHit card uses. The ports adapter only
  * consumes its public surface.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import {
   ComponentGenApp, createHttpPorts, injectAppStyles, translateFor,
   type ComponentGenAuthPort, type ComponentGenPage, type ComponentGenPorts,
@@ -162,36 +162,51 @@ function WorkspaceOverlay({ ports }: { ports: ComponentGenPorts }): JSX.Element 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [open, close])
   if (!open) return <></>
+  // Chrome follows dsh's Modal primitive (which the settings dialog shares):
+  // mask-1 + mask-blur overlay, layer-2 surface with elevation-prominent,
+  // r24 panel, l2 scrollbar rebinding.
+  const panelStyle = {
+    position: 'relative' as const,
+    zIndex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    width: 'min(880px, 100%)',
+    height: 'min(860px, 100%)',
+    overflow: 'hidden',
+    borderRadius: '24px',
+    background: 'var(--dsw-alias-bg-layer-2)',
+    boxShadow: 'var(--dsw-elevation-prominent)',
+    '--dsh-scrollbar-thumb': 'var(--dsw-alias-scrollbar-bg-l2)',
+    '--dsh-scrollbar-thumb-hover': 'var(--dsw-alias-scrollbar-hover-l2)',
+  } as CSSProperties
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 120,
+        zIndex: 1000,
         display: 'flex',
-        alignItems: 'stretch',
+        alignItems: 'center',
         justifyContent: 'center',
         padding: 'clamp(8px, 2.5vh, 28px)',
         boxSizing: 'border-box',
-        background: 'color-mix(in srgb, var(--dsw-alias-bg-layer-1, #0b0d10) 82%, transparent)',
-        backdropFilter: 'blur(2px)',
         pointerEvents: 'auto',
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) close() }}
     >
       <div
+        aria-hidden="true"
+        onClick={(e) => { if (e.target === e.currentTarget) close() }}
         style={{
-          width: 'min(880px, 100%)',
-          height: '100%',
-          overflow: 'auto',
-          background: 'var(--dsw-alias-bg-layer-1, #0b0d10)',
-          border: '1px solid var(--dsw-alias-border-l1, rgba(127,127,127,0.3))',
-          borderRadius: '12px',
-          padding: '16px',
-          boxSizing: 'border-box',
+          position: 'absolute',
+          inset: 0,
+          background: 'var(--dsw-alias-bg-mask-1)',
+          backdropFilter: 'var(--dsw-mask-blur)',
         }}
-      >
-        <ComponentGenApp ports={ports} page={page} lang={lang} showHistory onClose={close} />
+      />
+      <div style={panelStyle}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px' }}>
+          <ComponentGenApp ports={ports} page={page} lang={lang} onClose={close} />
+        </div>
       </div>
     </div>
   )

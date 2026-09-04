@@ -67,24 +67,33 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-it('reopens a generated history entry into the result stage', async () => {
+it('reopens a generated history entry from the history dialog into the result stage', async () => {
   const ports = fakePorts()
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
 
   await act(async () => {
-    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" showHistory />)
+    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" />)
   })
 
-  // History entry rendered; no result stage yet.
-  const item = container.querySelector('.cga-history__item')
-  expect(item).toBeTruthy()
+  // History is not shown inline — open the dialog from the header action.
+  const viewBtn = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    .find((b) => b.textContent?.trim() === '查看历史')
+  expect(viewBtn).toBeTruthy()
+  expect(container.querySelector('.cga-history-dialog')).toBeNull()
+
+  await act(async () => {
+    viewBtn!.click()
+  })
+  const dialog = container.querySelector('.cga-history-dialog')
+  expect(dialog).toBeTruthy()
+  expect(dialog!.querySelector('.cga-history__item')).toBeTruthy()
   expect(container.querySelector('canvas')).toBeNull()
   expect(ports.artifactIds).toEqual([])
 
-  // Click "打开" on the generated entry.
-  const reopenBtn = [...container.querySelectorAll<HTMLButtonElement>('button')]
+  // Click "打开" on the generated entry — dialog closes and result mounts.
+  const reopenBtn = [...dialog!.querySelectorAll<HTMLButtonElement>('button')]
     .find((b) => b.textContent?.trim() === '打开')
   expect(reopenBtn).toBeTruthy()
 
@@ -92,7 +101,7 @@ it('reopens a generated history entry into the result stage', async () => {
     reopenBtn!.click()
   })
 
-  // Result stage mounted: preview canvas present, artifact + input image fetched.
+  expect(container.querySelector('.cga-history-dialog')).toBeNull()
   expect(container.querySelector('canvas')).not.toBeNull()
   expect(ports.artifactIds).toEqual(['art-1'])
   expect(ports.imageIds).toEqual(['img-1'])
@@ -105,7 +114,12 @@ it('does not leak a reopen request across a page switch', async () => {
   root = createRoot(container)
 
   await act(async () => {
-    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" showHistory />)
+    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" />)
+  })
+  const viewBtn = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    .find((b) => b.textContent?.trim() === '查看历史')
+  await act(async () => {
+    viewBtn!.click()
   })
   const reopenBtn = [...container.querySelectorAll<HTMLButtonElement>('button')]
     .find((b) => b.textContent?.trim() === '打开')
@@ -117,7 +131,7 @@ it('does not leak a reopen request across a page switch', async () => {
   // Switch to the symbol page — the stale footprint reopen request must not
   // leak and re-open a footprint result on the symbol page.
   await act(async () => {
-    root!.render(<ComponentGenApp ports={ports} page="symbol" lang="zh" showHistory />)
+    root!.render(<ComponentGenApp ports={ports} page="symbol" lang="zh" />)
   })
   // No additional artifact fetch happened for the switched page.
   expect(ports.artifactIds).toEqual(['art-1'])

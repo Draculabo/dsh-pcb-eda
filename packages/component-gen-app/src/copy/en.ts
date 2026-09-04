@@ -128,6 +128,7 @@ export const EN: DeepStrings<typeof ZH> = {
     delete: 'Delete',
     download: 'Download',
     reopen: 'Open',
+    view: 'View history',
     createdAt: 'Created',
     loadMore: 'Load more',
     noMore: 'No more',
