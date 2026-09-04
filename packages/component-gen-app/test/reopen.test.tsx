@@ -24,7 +24,16 @@ const ENTRY: HistoryEntry = {
   result: { artifactId: 'art-1', filename: 'SOP-8_3.895x4.9mm_P1.27mm.kicad_mod' },
 }
 
-function fakePorts(): ComponentGenPorts & { artifactIds: string[]; imageIds: string[] } {
+const ENTRY_WITHOUT_INPUT: HistoryEntry = {
+  id: 'fp-2',
+  kind: 'footprint',
+  createdAt: '2026-09-04T10:01:00.000Z',
+  status: 'generated',
+  input: {},
+  result: { artifactId: 'art-2', filename: 'generic.kicad_mod' },
+}
+
+function fakePorts(entries: HistoryEntry[] = [ENTRY]): ComponentGenPorts & { artifactIds: string[]; imageIds: string[] } {
   const artifactIds: string[] = []
   const imageIds: string[] = []
   return {
@@ -44,7 +53,7 @@ function fakePorts(): ComponentGenPorts & { artifactIds: string[]; imageIds: str
     startJob: async () => { throw new Error('not expected') },
     jobEvents: () => () => {},
     abortJob: async () => {},
-    history: async () => ({ entries: [ENTRY] }),
+    history: async () => ({ entries }),
     historyEntry: async () => null,
     patchHistory: async () => ENTRY,
     deleteHistory: async () => {},
@@ -96,6 +105,34 @@ it('reopens a generated history entry into the result stage', async () => {
   expect(container.querySelector('canvas')).not.toBeNull()
   expect(ports.artifactIds).toEqual(['art-1'])
   expect(ports.imageIds).toEqual(['img-1'])
+})
+
+it('does not retain input state from a previously reopened entry', async () => {
+  const ports = fakePorts([ENTRY, ENTRY_WITHOUT_INPUT])
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+
+  await act(async () => {
+    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" showHistory />)
+  })
+
+  const reopenButtons = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    .filter((button) => button.textContent?.trim() === '打开')
+
+  await act(async () => {
+    reopenButtons[0]!.click()
+  })
+
+  expect(container.querySelector<HTMLInputElement>('.cga-field__input')?.value).toBe('SOP-8')
+  expect(container.querySelector('.cga-upload__thumb')).not.toBeNull()
+
+  await act(async () => {
+    reopenButtons[1]!.click()
+  })
+
+  expect(container.querySelector<HTMLInputElement>('.cga-field__input')?.value).toBe('')
+  expect(container.querySelector('.cga-upload__thumb')).toBeNull()
 })
 
 it('does not leak a reopen request across a page switch', async () => {
