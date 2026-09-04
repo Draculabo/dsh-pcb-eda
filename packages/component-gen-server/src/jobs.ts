@@ -227,13 +227,13 @@ export async function runGeneration(
     return { state, recorded: true }
   }
 
-  function fail(kind: 'needs_auth'): { state: JobState; recorded: boolean } {
+  async function fail(kind: 'needs_auth'): Promise<{ state: JobState; recorded: boolean }> {
     const state = store.settle(id, {
       status: 'failed',
       error: kind === 'needs_auth' ? 'Huaqiu EDA login required' : 'generation failed',
       result: { status: kind },
     })
-    void record(history, meta, req, state).catch(() => {})
+    await record(history, meta, req, state).catch(() => {})
     return { state, recorded: true }
   }
 }
