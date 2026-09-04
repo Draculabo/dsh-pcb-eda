@@ -63,8 +63,12 @@ export class HistoryStore {
   async list(query: HistoryQuery): Promise<HistoryPage> {
     const limit = Math.max(1, Math.min(100, query.limit ?? 20))
     const sorted = this.sorted()
-    const start = query.cursor ? sorted.findIndex((e) => e.id === query.cursor) + 1 : 0
-    const slice = start < 0 ? [] : sorted.slice(start, start + limit)
+    const cursorIndex = query.cursor ? sorted.findIndex((e) => e.id === query.cursor) : -1
+    if (query.cursor && cursorIndex < 0) {
+      return { entries: [], nextCursor: null }
+    }
+    const start = cursorIndex + 1
+    const slice = sorted.slice(start, start + limit)
     const next = start + slice.length < sorted.length ? slice[slice.length - 1]?.id ?? null : null
     return { entries: slice, nextCursor: next }
   }
