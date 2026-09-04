@@ -25,6 +25,10 @@ export interface ComponentGenHandlerDeps {
 
 export type ComponentGenHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
 
+const MAX_REQUEST_BODY_BYTES = 8 * 1024 * 1024
+
+class PayloadTooLargeError extends Error {}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
   res.end(JSON.stringify(body))
@@ -33,8 +37,28 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
-    req.on('data', (c: Buffer) => chunks.push(c))
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    let bytes = 0
+    let tooLarge = false
+
+    req.on('data', (c: Buffer) => {
+      if (tooLarge) {
+        return
+      }
+
+      bytes += c.byteLength
+      if (bytes > MAX_REQUEST_BODY_BYTES) {
+        tooLarge = true
+        reject(new PayloadTooLargeError())
+        return
+      }
+
+      chunks.push(c)
+    })
+    req.on('end', () => {
+      if (!tooLarge) {
+        resolve(Buffer.concat(chunks).toString('utf8'))
+      }
+    })
     req.on('error', reject)
   })
 }
@@ -221,6 +245,11 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
 
       sendJson(res, 404, { error: 'not found' })
     } catch (err) {
+      if (err instanceof PayloadTooLargeError) {
+        sendJson(res, 413, { error: 'request body too large', detail: `max ${MAX_REQUEST_BODY_BYTES} bytes` })
+        return
+      }
+
       sendJson(res, 500, { error: 'internal error', detail: String(err) })
     }
   }
