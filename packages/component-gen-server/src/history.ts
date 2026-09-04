@@ -31,8 +31,20 @@ function writeJsonFile(path: string, value: unknown): void {
 export function parseDataUrl(dataUrl: string): { mime: string; bytes: Buffer } | null {
   const m = /^data:([^;,]+);base64,(.+)$/s.exec(dataUrl)
   if (!m) return null
+  const payload = m[2]!
+  if (
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)
+    || payload.length % 4 === 1
+    || (payload.includes('=') && payload.length % 4 !== 0)
+  ) {
+    return null
+  }
   try {
-    return { mime: m[1]!, bytes: Buffer.from(m[2]!, 'base64') }
+    const bytes = Buffer.from(payload, 'base64')
+    if (bytes.toString('base64').replace(/=+$/, '') !== payload.replace(/=+$/, '')) {
+      return null
+    }
+    return { mime: m[1]!, bytes }
   } catch {
     return null
   }
