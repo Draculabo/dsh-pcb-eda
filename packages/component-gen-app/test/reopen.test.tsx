@@ -24,6 +24,15 @@ const ENTRY: HistoryEntry = {
   result: { artifactId: 'art-1', filename: 'SOP-8_3.895x4.9mm_P1.27mm.kicad_mod' },
 }
 
+const SYMBOL_ENTRY: HistoryEntry = {
+  id: 'sym-1',
+  kind: 'symbol',
+  createdAt: '2026-09-04T11:00:00.000Z',
+  status: 'generated',
+  input: {},
+  result: { artifactId: 'art-sym-1', filename: 'Device_Test.kicad_sym' },
+}
+
 function fakePorts(): ComponentGenPorts & { artifactIds: string[]; imageIds: string[] } {
   const artifactIds: string[] = []
   const imageIds: string[] = []
@@ -105,6 +114,42 @@ it('reopens a generated history entry from the history dialog into the result st
   expect(container.querySelector('canvas')).not.toBeNull()
   expect(ports.artifactIds).toEqual(['art-1'])
   expect(ports.imageIds).toEqual(['img-1'])
+})
+
+it('keeps pagination reachable when the first history page is filtered out', async () => {
+  const ports = fakePorts()
+  const history = vi.fn(async ({ cursor }: { cursor?: string | null }) => cursor
+    ? { entries: [ENTRY], nextCursor: null }
+    : { entries: [SYMBOL_ENTRY], nextCursor: 'sym-1' })
+  ports.history = history
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+
+  await act(async () => {
+    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" />)
+  })
+  const viewBtn = [...container.querySelectorAll<HTMLButtonElement>('button')]
+    .find((b) => b.textContent?.trim() === '查看历史')
+
+  await act(async () => {
+    viewBtn!.click()
+  })
+
+  const dialog = container.querySelector('.cga-history-dialog')
+  expect(dialog!.querySelector('.cga-history__item')).toBeNull()
+  const loadMore = dialog!.querySelector<HTMLButtonElement>('.cga-history > .cga-btn')
+  expect(loadMore).toBeTruthy()
+
+  await act(async () => {
+    loadMore!.click()
+  })
+
+  expect(dialog!.querySelector('.cga-history__item')).toBeTruthy()
+  expect(history.mock.calls).toEqual([
+    [{ limit: 12, cursor: null }],
+    [{ limit: 12, cursor: 'sym-1' }],
+  ])
 })
 
 it('does not leak a reopen request across a page switch', async () => {
