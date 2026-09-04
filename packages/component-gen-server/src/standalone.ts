@@ -18,7 +18,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { join, extname, resolve } from 'node:path'
+import { isAbsolute, join, extname, relative, resolve, sep } from 'node:path'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { InMemoryHuaqiuAuthService, createAuthHandler, AUTH_ROUTE_PREFIX, type HuaqiuAuthService } from '@huaqiu/dsh-auth'
 import { HuaqiuArtifactService, createArtifactsHandler, ARTIFACTS_ROUTE_PREFIX } from '@huaqiu/dsh-artifacts'
@@ -82,8 +82,10 @@ function serveStatic(root: string, urlPath: string, res: ServerResponse): void {
   const decoded = decodeURIComponent(urlPath.split('?')[0] ?? '/')
   let rel = decoded === '/' ? '/index.html' : decoded
   if (rel.startsWith('/')) rel = rel.slice(1)
-  const target = resolve(root, rel)
-  if (!target.startsWith(resolve(root)) || !target.startsWith(root)) {
+  const rootPath = resolve(root)
+  const target = resolve(rootPath, rel)
+  const targetFromRoot = relative(rootPath, target)
+  if (targetFromRoot === '..' || targetFromRoot.startsWith(`..${sep}`) || isAbsolute(targetFromRoot)) {
     res.writeHead(403); res.end('forbidden'); return
   }
   if (!existsSync(target) || !statSync(target).isFile()) {
