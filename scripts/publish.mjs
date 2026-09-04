@@ -30,8 +30,13 @@ const argv = process.argv.slice(2)
 const dryRun = argv.includes('--dry-run')
 const provenance = argv.includes('--provenance')
 const tagIndex = argv.indexOf('--tag')
-const tagArg = argv.find((a) => a.startsWith('--tag='))?.split('=')[1]
+const inlineTagArg = argv.find((a) => a.startsWith('--tag='))
+const tagArg = inlineTagArg?.slice('--tag='.length)
   ?? (tagIndex >= 0 ? argv[tagIndex + 1] : undefined)
+if ((inlineTagArg !== undefined || tagIndex >= 0) && (!tagArg || tagArg.startsWith('-'))) {
+  console.error('FATAL: --tag requires a value such as v1.2.3')
+  process.exit(1)
+}
 
 const PACKAGES = [
   'dsh-auth',
