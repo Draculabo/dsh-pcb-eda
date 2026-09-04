@@ -54,9 +54,17 @@ describe('HistoryStore', () => {
 
 describe('parseDataUrl', () => {
   it('parses a base64 data URL', () => {
-    const parsed = parseDataUrl(`data:image/png;base64,${Buffer.from('hi').toString('base64')}`)
-    expect(parsed?.mime).toBe('image/png')
-    expect(parsed?.bytes.toString()).toBe('hi')
+    expect(parseDataUrl(`data:image/png;base64,${Buffer.from('hi').toString('base64')}`)).toEqual({
+      mime: 'image/png',
+      bytes: Buffer.from('hi'),
+    })
+  })
+  it('returns null for malformed base64 payloads', () => {
+    expect([
+      parseDataUrl('data:image/png;base64,%%%'),
+      parseDataUrl('data:image/png;base64,AAAA!'),
+      parseDataUrl('data:image/png;base64,YQ='),
+    ]).toEqual([null, null, null])
   })
   it('returns null for non-data URLs', () => {
     expect(parseDataUrl('https://example.com/a.png')).toBeNull()
