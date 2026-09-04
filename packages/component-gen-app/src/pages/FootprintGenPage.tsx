@@ -75,13 +75,17 @@ export function FootprintGenPage({ ports, t, reopen = null }: FootprintGenPagePr
     void runner.run({
       kind: 'generate-footprint',
       input: {
+        // Re-stamp the source image so the server keeps an authoritative copy
+        // and the generated history entry can reopen it (the extract job's
+        // entry is not the one shown in history).
+        imageDataUrl: imageDataUrl ?? undefined,
         packageType: (runner.pkgType ?? hint.trim()) || undefined,
         fileName: runner.fileName ?? undefined,
         dimensions: values,
         edited,
       },
     })
-  }, [runner, hint])
+  }, [runner, hint, imageDataUrl])
 
   const cancelConfirm = useCallback((): void => {
     runner.clear()

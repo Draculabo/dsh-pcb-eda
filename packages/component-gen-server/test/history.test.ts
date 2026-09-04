@@ -1,7 +1,7 @@
 /**
  * `@huaqiu/component-gen-server` — history store tests.
  */
-import { mkdtempSync, existsSync, rmSync } from 'node:fs'
+import { mkdtempSync, existsSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -46,6 +46,37 @@ describe('HistoryStore', () => {
       expect(read?.mime).toBe('image/png')
       expect(Buffer.from(read!.bytes).toString()).toBe('abc')
       expect(await store.readImage('nope')).toBeNull()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves the original media type via a mime sidecar (non-PNG pastes)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
+    try {
+      const store = new HistoryStore(dir)
+      const imageId = newImageId()
+      await store.saveImage(imageId, `data:image/jpeg;base64,${Buffer.from('jpeg-bytes').toString('base64')}`)
+      const read = await store.readImage(imageId)
+      expect(read?.mime).toBe('image/jpeg')
+      expect(Buffer.from(read!.bytes).toString()).toBe('jpeg-bytes')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to image/png for legacy entries without a mime sidecar', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
+    try {
+      const store = new HistoryStore(dir)
+      const imageId = newImageId()
+      // Legacy write: bytes only, no sidecar file.
+      const inputs = join(dir, 'inputs')
+      mkdirSync(inputs, { recursive: true })
+      writeFileSync(join(inputs, imageId), Buffer.from('abc'))
+      const read = await store.readImage(imageId)
+      expect(read?.mime).toBe('image/png')
+      expect(Buffer.from(read!.bytes).toString()).toBe('abc')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

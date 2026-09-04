@@ -95,10 +95,14 @@ export class HistoryStore {
     writeJsonFile(this.file, this.entries)
     if (entry?.input?.imageId) {
       try { unlinkSync(join(this.dir, INPUT_DIR, entry.input.imageId)) } catch { /* already gone */ }
+      try { unlinkSync(join(this.dir, INPUT_DIR, `${entry.input.imageId}.mime`)) } catch { /* already gone */ }
     }
   }
 
   // ── input thumbnails ──────────────────────────────────────────────────────
+  // Bytes are stored as `<imageId>`; the original media type in a `<imageId>.mime`
+  // sidecar so reopen serves pasted/selected JPEG/WebP/… images correctly (the
+  // local file the user pasted may be long gone — this copy is authoritative).
 
   async saveImage(imageId: string, dataUrl: string): Promise<void> {
     const parsed = parseDataUrl(dataUrl)
@@ -106,12 +110,19 @@ export class HistoryStore {
     const dir = join(this.dir, INPUT_DIR)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, imageId), parsed.bytes)
+    writeFileSync(join(dir, `${imageId}.mime`), parsed.mime, 'utf8')
   }
 
   async readImage(imageId: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
-    const path = join(this.dir, INPUT_DIR, imageId)
+    const dir = join(this.dir, INPUT_DIR)
+    const path = join(dir, imageId)
     if (!existsSync(path)) return null
-    return { bytes: readFileSync(path), mime: 'image/png' }
+    let mime = 'image/png'
+    try {
+      const sidecar = readFileSync(join(dir, `${imageId}.mime`), 'utf8').trim()
+      if (sidecar) mime = sidecar
+    } catch { /* legacy entry stored before the mime sidecar existed */ }
+    return { bytes: readFileSync(path), mime }
   }
 }
 

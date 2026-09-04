@@ -180,12 +180,12 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
         return
       }
 
-      // GET /history/:id/image
+      // GET /history/:imageId/image
+      // `:imageId` is the stored thumbnail id (`img_…`), not a history entry
+      // id — the client's `ports.inputImage` sends it directly.
       const histImage = /^\/history\/([^/]+)\/image$/.exec(path)
       if (method === 'GET' && histImage) {
-        const entry = await deps.history.get(histImage[1]!)
-        if (!entry?.input?.imageId) { sendJson(res, 404, { error: 'no input image' }); return }
-        const img = await deps.history.readImage(entry.input.imageId)
+        const img = await deps.history.readImage(histImage[1]!)
         if (!img) { sendJson(res, 404, { error: 'image not found' }); return }
         res.writeHead(200, { 'content-type': img.mime, 'cache-control': 'public, max-age=3600' })
         res.end(Buffer.from(img.bytes))
