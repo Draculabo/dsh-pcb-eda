@@ -1,22 +1,27 @@
 /**
  * `@huaqiu/dsh-tool-symbol-footprint` — Component Gen workspace (browser half).
  *
- * Two `sidebar.footer.action` rows (Symbol Gen / Footprint Gen) + one
+ * Two sidebar entry rows (封装生成 / Symbol 生成), injected between the shell's
+ * New Session button and the workspace browser (task-board style), + one
  * `shell.overlay` that draws the `@huaqiu/component-gen-app` workspace. A
- * single shared `{ open, page }` state drives both slots (the pattern from
- * dsh-web-files / dsh-web-terminal), and the app is the single HIL driver —
- * generation runs through the plugin's own webServer routes
- * (`/api/v1/huaqiu/component-gen/*`) with no agent tool involved.
+ * single shared `{ open, page }` state drives both rows and the overlay, and
+ * the app is the single HIL driver — generation runs through the plugin's own
+ * webServer routes (`/api/v1/huaqiu/component-gen/*`) with no agent tool
+ * involved.
  *
  * Auth is the `huaqiuAuth` CLIENT service (structural, never imported): the
  * same sanctioned source the GenHit card uses. The ports adapter only
  * consumes its public surface.
  */
-import { createElement, useCallback, useEffect, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ComponentGenApp, createHttpPorts, injectAppStyles,
   type ComponentGenAuthPort, type ComponentGenPage, type ComponentGenPorts,
 } from '@huaqiu/component-gen-app'
+import {
+  FOOTPRINT_ENTRY_SELECTOR, FOOTPRINT_ICON, SYMBOL_ENTRY_SELECTOR, SYMBOL_ICON,
+  mountComponentGenSidebarEntries,
+} from './sidebar-entry.js'
 import type { HuaqiuAuthClientService } from './index.js'
 
 /** Shared workspace state for the two sidebar actions + the overlay. */
@@ -33,6 +38,12 @@ function announce(): void {
   }
 }
 
+/** Subscribe to workspace state changes (active bridge for sidebar entries). */
+export function subscribeWorkspace(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => { listeners.delete(listener) }
+}
+
 function setOpen(open: boolean): void {
   if (state.open === open) return
   state.open = open
@@ -43,6 +54,12 @@ function openPage(page: ComponentGenPage): void {
   state.page = page
   state.open = true
   announce()
+}
+
+/** Toggle: close when already open on this page, otherwise open it. */
+function togglePage(page: ComponentGenPage): void {
+  if (state.open && state.page === page) setOpen(false)
+  else openPage(page)
 }
 
 function useWorkspaceState(): WorkspaceState {
@@ -132,38 +149,6 @@ function WorkspaceOverlay({ ports }: { ports: ComponentGenPorts }): JSX.Element 
   )
 }
 
-/** Sidebar footer action row for one generator. */
-function WorkspaceAction({ page, label, wide }: { page: ComponentGenPage; label: string; wide: boolean }): JSX.Element {
-  const { open } = useWorkspaceState()
-  const toggle = useCallback(() => {
-    if (state.open && state.page === page) setOpen(false)
-    else openPage(page)
-  }, [page])
-  return createElement(
-    'button',
-    {
-      type: 'button',
-      onClick: toggle,
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        width: '100%',
-        padding: '6px 10px',
-        border: '1px solid var(--dsw-alias-border-l1, rgba(127,127,127,0.3))',
-        borderRadius: '6px',
-        background: open && state.page === page
-          ? 'var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,0.12))'
-          : 'var(--dsw-alias-bg-layer-1, transparent)',
-        color: 'var(--dsw-alias-label-primary, currentColor)',
-        font: 'var(--dsw-font-xxs-12, 12px/1.4 system-ui, sans-serif)',
-        cursor: 'pointer',
-      },
-    },
-    wide ? createElement('span', { style: { textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, label) : null,
-  )
-}
-
 /**
  * Register the workspace UI. Call from the client `apply()`; returns a
  * disposer. `auth` is the `huaqiuAuth` client service (may be absent).
@@ -175,19 +160,35 @@ export function installWorkspace(
   const disposers: Array<() => void> = []
   const ports = createWorkspacePorts(auth)
 
+  // Two task-board-style sidebar rows (between New Session and the workspace
+  // browser). Ordered deterministically: footprint first, symbol second.
+  disposers.push(mountComponentGenSidebarEntries([
+    {
+      selector: FOOTPRINT_ENTRY_SELECTOR,
+      attribute: 'data-hqcg-footprint-entry',
+      icon: FOOTPRINT_ICON,
+      label: '封装生成',
+      tooltip: '打开封装生成',
+      position: 'before',
+      onToggle: () => togglePage('footprint'),
+      isOpen: () => state.open && state.page === 'footprint',
+    },
+    {
+      selector: SYMBOL_ENTRY_SELECTOR,
+      attribute: 'data-hqcg-symbol-entry',
+      icon: SYMBOL_ICON,
+      label: 'Symbol 生成',
+      tooltip: '打开 Symbol 生成',
+      position: 'after',
+      onToggle: () => togglePage('symbol'),
+      isOpen: () => state.open && state.page === 'symbol',
+    },
+  ], subscribeWorkspace))
+
   const slots = ctx.slots
   if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
     const Overlay = (): JSX.Element => <WorkspaceOverlay ports={ports} />
     disposers.push(slots.inject('shell.overlay', () => slots.register({ name: 'shell.overlay', id: 'huaqiu-component-gen' }, Overlay) as () => void))
-
-    const SymbolAction: ComponentType<{ wide: boolean }> = ({ wide }) =>
-      <WorkspaceAction page="symbol" label="Symbol 生成" wide={wide} />
-    const FootprintAction: ComponentType<{ wide: boolean }> = ({ wide }) =>
-      <WorkspaceAction page="footprint" label="封装生成" wide={wide} />
-
-    // Explicit adjacent order so the two rows sit together above defaults.
-    disposers.push(slots.inject('sidebar.footer.action', () => slots.register({ name: 'sidebar.footer.action', id: 'huaqiu-symbol-gen', order: -2 }, SymbolAction) as () => void))
-    disposers.push(slots.inject('sidebar.footer.action', () => slots.register({ name: 'sidebar.footer.action', id: 'huaqiu-footprint-gen', order: -3 }, FootprintAction) as () => void))
   }
 
   injectAppStyles()
