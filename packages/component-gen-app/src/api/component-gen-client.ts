@@ -76,10 +76,14 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
         signal,
       })
       if (res.status === 202) {
-        const body = (await res.json()) as { jobId?: string }
+        const body = (await res.json()) as { jobId?: unknown }
+        if (typeof body.jobId !== 'string' || body.jobId.length === 0) {
+          throw new Error('invalid start job response: missing jobId')
+        }
+
         // Return a minimal queued JobState; the caller follows /jobs/:id.
         return {
-          id: String(body.jobId ?? ''),
+          id: body.jobId,
           kind: req.kind,
           status: 'queued',
           createdAt: new Date().toISOString(),
