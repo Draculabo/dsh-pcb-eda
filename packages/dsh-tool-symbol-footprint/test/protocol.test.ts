@@ -200,6 +200,13 @@ describe('resolveImageDataUrl', () => {
     expect(await resolveImageDataUrl({ image_url: 'data:image/png;base64,AAAA' }))
       .toBe('data:image/png;base64,AAAA')
   })
+  it('passes through a caller-held image data URL (component-gen backend path)', async () => {
+    expect(await resolveImageDataUrl({ image: 'data:image/jpeg;base64,AAAA' }))
+      .toBe('data:image/jpeg;base64,AAAA')
+  })
+  it('rejects a caller-held image that is not a data URL', async () => {
+    await expect(resolveImageDataUrl({ image: '/tmp/foo.png' })).rejects.toThrow(/data: URL carrying an image/)
+  })
   it('rejects a data URL that is not an image', async () => {
     await expect(resolveImageDataUrl({ image_url: 'data:text/plain;base64,AAAA' })).rejects.toThrow(/image\/\*/)
   })

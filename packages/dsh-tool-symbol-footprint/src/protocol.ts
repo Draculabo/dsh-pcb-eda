@@ -365,11 +365,12 @@ export interface ImageDeps {
  * Turn the tool's image argument into the `data:<mime>;base64,<...>` URL the
  * backend expects in `context.chat.base64_images`.
  *
- * Accepts, in precedence order: an existing data URL, an http(s) URL, or a
- * local filesystem path.
+ * Accepts, in precedence order: a caller-held data URL (`image`), an existing
+ * data URL / http(s) URL (`image_url`), or a local filesystem path
+ * (`image_path`).
  */
 export async function resolveImageDataUrl(
-  args: { image_path?: unknown; image_url?: unknown },
+  args: { image?: unknown; image_path?: unknown; image_url?: unknown },
   deps?: ImageDeps,
 ): Promise<string> {
   const readImpl = (deps && deps.readFileImpl) || readFile
@@ -377,6 +378,18 @@ export async function resolveImageDataUrl(
 
   const rawUrl = args && typeof args.image_url === 'string' ? args.image_url.trim() : ''
   const rawPath = args && typeof args.image_path === 'string' ? args.image_path.trim() : ''
+
+  // A caller may already hold the decoded image as a data URL — e.g. the
+  // component-gen workspace backend hands over the browser-uploaded image via
+  // `image`. Accept it directly before the generic image_url/image_path
+  // resolution.
+  const rawImage = args && typeof args.image === 'string' ? args.image.trim() : ''
+  if (rawImage.length > 0) {
+    if (!/^data:image\//.test(rawImage)) {
+      throw new Error('symbol-footprint: image must be a data: URL carrying an image/* media type')
+    }
+    return rawImage
+  }
 
   if (rawUrl.length === 0 && rawPath.length === 0) {
     throw new Error('symbol-footprint: provide image_path (a local file) or image_url')
