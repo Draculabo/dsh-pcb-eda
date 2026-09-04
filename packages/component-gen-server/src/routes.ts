@@ -157,7 +157,7 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
             res.end()
           }
         })
-        req.on('close', () => unsub?.())
+        res.on('close', () => unsub?.())
         return
       }
 
