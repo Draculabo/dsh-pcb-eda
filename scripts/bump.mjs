@@ -2,12 +2,13 @@
 /**
  * Workspace-wide version bump for the Huaqiu DSH plugin set.
  *
- * The five `@huaqiu/dsh-*` packages are released as one unit (auth/artifacts
- * are peer-dependencies of the tool packages, so their versions must move
- * together). This script keeps every package.json — plus the private root
+ * Every package under `packages/` is released as one unit (the repo is public
+ * on GitHub), so this script keeps every package.json — plus the private root
  * package.json as a release marker — on the same version, and rewrites the
- * in-workspace `@huaqiu/*` peer references (which are hardcoded like `^0.0.0`
- * and would otherwise be broken at publish time) to `^<newVersion>`.
+ * in-workspace `@huaqiu/*` peer/dep references (which are hardcoded like
+ * `^0.0.0` / `>=0.3.3` and would otherwise be stale at publish time) to
+ * `^<newVersion>`. The package set is discovered from `packages/*`, so new
+ * packages are picked up automatically.
  *
  * Usage:
  *   node scripts/bump.mjs [major|minor|patch] [--apply]   # semver bump
@@ -19,24 +20,8 @@
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const PACKAGES = [
-  'dsh-auth',
-  'dsh-artifacts',
-  'dsh-tool-part-search',
-  'dsh-tool-symbol-footprint',
-  'dsh-tool-schematic-gen',
-]
-const MANIFESTS = [join(root, 'package.json'), ...PACKAGES.map((p) => join(root, 'packages', p, 'package.json'))]
-
-/** Sibling @huaqiu packages that must be rewritten when the version moves. */
-const SIBLING_NAMES = PACKAGES.map((p) => {
-  const raw = JSON.parse(readFileSync(join(root, 'packages', p, 'package.json'), 'utf8'))
-  return raw.name
-})
+import { join } from 'node:path'
+import { discoverPackages, repoRoot, rootManifestPath } from './lib/packages.mjs'
 
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'))
 const writeJson = (p, data) => writeFileSync(p, JSON.stringify(data, null, 2) + '\n')
@@ -60,8 +45,19 @@ function main() {
   }
   const target = positional[0]
 
+  // Discovered package set — every publishable package under packages/.
+  const pkgs = discoverPackages().filter((p) => p.manifest.private !== true)
+  if (pkgs.length === 0) {
+    console.error('FATAL: no packages discovered under packages/')
+    process.exit(1)
+  }
+  // Sibling @huaqiu packages that must be rewritten when the version moves.
+  const SIBLING_NAMES = pkgs.map((p) => p.name)
+  // Manifests to bump: root marker + every discovered package.
+  const manifestPaths = [rootManifestPath(), ...pkgs.map((p) => join(p.dir, 'package.json'))]
+
   // Current versions — normally all manifests agree.
-  const manifests = MANIFESTS.map((p) => ({ path: p, data: readJson(p) }))
+  const manifests = manifestPaths.map((path) => ({ path, data: readJson(path) }))
   const versions = new Set(manifests.map((m) => m.data.version).filter(Boolean))
   const explicit = /^\d+\.\d+\.\d+/.test(target)
   let current
@@ -82,7 +78,7 @@ function main() {
 
   const plan = []
   for (const { path, data } of manifests) {
-    const rel = path.slice(root.length + 1)
+    const rel = path.slice(repoRoot.length + 1)
     const changes = { version: [data.version, next] }
     // Rewrite in-workspace @huaqiu/* references in dep maps (keep workspace:).
     for (const depKey of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
@@ -125,7 +121,7 @@ function main() {
 
   // Refresh pnpm-lock.yaml so `--frozen-lockfile` CI stays green.
   console.log('\nrefreshing lockfile (pnpm install --no-frozen-lockfile)…')
-  execFileSync('pnpm', ['install', '--no-frozen-lockfile'], { cwd: root, stdio: 'inherit' })
+  execFileSync('pnpm', ['install', '--no-frozen-lockfile'], { cwd: repoRoot, stdio: 'inherit' })
 
   console.log(`\nNext steps (tag MUST match package.json version):`)
   console.log(`  git add -A`)

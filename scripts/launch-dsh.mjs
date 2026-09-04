@@ -23,6 +23,7 @@ import { accessSync, readFileSync } from 'node:fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { dshPlugins } from './lib/packages.mjs';
 
 const PORT = 3080;
 const PROFILE = 'web';
@@ -35,15 +36,10 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 // Local DeepSeek Harness repo — always a sibling of this repo.
 const HARNESS_DIR = path.resolve(SCRIPT_DIR, '..', '..', 'deepseek-harness');
 
-// Plugins live in this repo; resolve to absolute paths because `pnpm dsh` runs
-// with cwd = HARNESS_DIR.
-const PLUGINS = [
-  './packages/dsh-auth',
-  './packages/dsh-artifacts',
-  './packages/dsh-tool-part-search',
-  './packages/dsh-tool-symbol-footprint',
-  './packages/dsh-tool-schematic-gen',
-].map((p) => path.resolve(REPO_ROOT, p));
+// Discover the real dsh plugins under packages/ (those declaring a `dsh`
+// config) — app/server/utility packages are not plugins and are excluded.
+// Resolve to absolute paths because `pnpm dsh` runs with cwd = HARNESS_DIR.
+const PLUGINS = dshPlugins().map((p) => p.dir);
 
 /**
  * Kill any process currently listening on the given port.

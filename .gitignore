@@ -1,6 +1,8 @@
 node_modules/
 dist/
 lib/
+# scripts/lib is checked-in source (shared package discovery), not build output
+!scripts/lib/
 coverage/
 *.tgz
 .DS_Store

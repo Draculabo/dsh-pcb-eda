@@ -1,32 +1,24 @@
 #!/usr/bin/env node
 /**
- * Pre-publish integrity gate for the Huaqiu DSH plugin set (workspace-wide).
+ * Pre-publish integrity gate for the Huaqiu DSH package set (workspace-wide).
  *
  * Adapted from the community pattern (dsh-git-worktree `check-publish.mjs`):
- * validates — for every publishable package — that the built entry + client
- * bundle exist, that the Host mount patch is declared and actually shipped in
- * `files`, that exports resolve, and that no `@hqedge/*` reference survives
- * anywhere. `--require-clean` additionally demands a clean git tree (used by
- * release CI so the tarball is built from exactly what was reviewed).
+ * validates every publishable package under `packages/` — the built entry +
+ * client bundle exist, exports resolve, no `@hqedge/*` reference survives
+ * anywhere, and, for real DSH plugins (packages declaring a `dsh` config), that
+ * the Host mount patch is declared and actually shipped in `files`.
+ * `--require-clean` additionally demands a clean git tree (used by release CI
+ * so the tarball is built from exactly what was reviewed).
  *
  * Usage:
  *   node scripts/check-publish.mjs [--require-clean]
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+import { publishablePackages, repoRoot } from './lib/packages.mjs'
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const requireClean = process.argv.includes('--require-clean')
-
-const PACKAGES = [
-  'dsh-auth',
-  'dsh-artifacts',
-  'dsh-tool-part-search',
-  'dsh-tool-symbol-footprint',
-  'dsh-tool-schematic-gen',
-]
 
 let failures = 0
 const fail = (msg) => { console.error(`check-publish: FAIL: ${msg}`); failures += 1 }
@@ -44,7 +36,7 @@ function includedByFiles(manifest, target) {
 // 1. Clean-tree guard (release lane only).
 if (requireClean) {
   try {
-    const status = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()
+    const status = execFileSync('git', ['status', '--porcelain'], { cwd: repoRoot, encoding: 'utf8' }).trim()
     if (status.length > 0) fail(`git tree is not clean — release must be built from a tagged, committed state:\n${status}`)
     else ok('git tree is clean')
   } catch (e) {
@@ -52,38 +44,47 @@ if (requireClean) {
   }
 }
 
-// 2. Per-package integrity.
-for (const pkg of PACKAGES) {
-  const dir = join(root, 'packages', pkg)
+// 2. Per-package integrity (discovered set).
+const pkgs = publishablePackages()
+if (pkgs.length === 0) {
+  fail('no publishable packages discovered under packages/')
+} else {
+  ok(`discovered ${pkgs.length} publishable package(s): ${pkgs.map((p) => p.rel).join(', ')}`)
+}
+for (const pkg of pkgs) {
+  const { rel, dir, name, version, manifest } = pkg
   const pj = join(dir, 'package.json')
-  if (!existsSync(pj)) { fail(`${pkg}/package.json missing`); continue }
-  const manifest = JSON.parse(readFileSync(pj, 'utf8'))
 
-  if (typeof manifest.name !== 'string' || manifest.name !== `@huaqiu/${pkg}`) {
-    fail(`${pkg}: name must be "@huaqiu/${pkg}"`)
+  if (name !== `@huaqiu/${rel}`) {
+    fail(`${rel}: name must be "@huaqiu/${rel}" (got "${name}")`)
   }
-  if (typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+/.test(manifest.version)) {
-    fail(`${pkg}: invalid version ${manifest.version}`)
+  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+/.test(version)) {
+    fail(`${rel}: invalid version ${version}`)
   }
 
-  // Host mount patch — declared and shipped.
-  const patchRel = manifest.dsh?.bundle?.patch
-  if (typeof patchRel !== 'string' || patchRel.length === 0) {
-    fail(`${pkg}: dsh.bundle.patch is missing`)
+  // Host mount patch — only real DSH plugins declare dsh.bundle.patch.
+  const isPlugin = manifest.dsh != null
+  if (isPlugin) {
+    const patchRel = manifest.dsh?.bundle?.patch
+    if (typeof patchRel !== 'string' || patchRel.length === 0) {
+      fail(`${rel}: dsh.bundle.patch is missing`)
+    } else {
+      if (!existsSync(join(dir, patchRel))) fail(`${rel}: dsh.bundle.patch file missing (${patchRel})`)
+      if (!includedByFiles(manifest, patchRel)) fail(`${rel}: ${patchRel} is not covered by files[] (it must ship in the tarball)`)
+    }
   } else {
-    if (!existsSync(join(dir, patchRel))) fail(`${pkg}: dsh.bundle.patch file missing (${patchRel})`)
-    if (!includedByFiles(manifest, patchRel)) fail(`${pkg}: ${patchRel} is not covered by files[] (it must ship in the tarball)`)
+    ok(`${rel}: not a dsh plugin — skipping Host patch checks`)
   }
 
   // Built entry (node half).
   const mainRel = manifest.main || 'lib/index.mjs'
-  if (!existsSync(join(dir, mainRel))) fail(`${pkg}: built entry missing (${mainRel}) — run pnpm -r build first`)
+  if (!existsSync(join(dir, mainRel))) fail(`${rel}: built entry missing (${mainRel}) — run pnpm -r build first`)
   const typesRel = manifest.types || 'lib/index.d.mts'
-  if (!existsSync(join(dir, typesRel))) fail(`${pkg}: built types missing (${typesRel})`)
+  if (!existsSync(join(dir, typesRel))) fail(`${rel}: built types missing (${typesRel})`)
 
   // Client bundle (dual-face packages).
   if (manifest.dsh?.client && !existsSync(join(dir, 'lib/client.js'))) {
-    fail(`${pkg}: dsh.client is declared but lib/client.js is missing`)
+    fail(`${rel}: dsh.client is declared but lib/client.js is missing`)
   }
 
   // Exports resolve to shipped files.
@@ -94,7 +95,7 @@ for (const pkg of PACKAGES) {
       for (const [cond, v] of Object.entries(o)) {
         if (typeof v === 'string') { targets.push([cond, v]); continue }
         if (v && typeof v === 'object') collect(v)
-        else fail(`${pkg}: malformed exports.${cond}`)
+        else fail(`${rel}: malformed exports.${cond}`)
       }
     }
     collect(manifest.exports)
@@ -102,12 +103,20 @@ for (const pkg of PACKAGES) {
       if (seen.has(target)) continue
       seen.add(target)
       if (target === 'package.json') continue
-      if (!includedByFiles(manifest, target)) fail(`${pkg}: exports.${cond} → ${target} is not covered by files[]`)
-      if (!existsSync(join(dir, target))) fail(`${pkg}: exports.${cond} → ${target} does not exist`)
+      if (!includedByFiles(manifest, target)) fail(`${rel}: exports.${cond} → ${target} is not covered by files[]`)
+      // Glob subpath exports (e.g. `./dist/*`) resolve to any file under the
+      // base dir — verify the base dir ships rather than the literal pattern.
+      const globIdx = target.indexOf('*')
+      if (globIdx >= 0) {
+        const base = target.slice(0, globIdx).replace(/\/+$/, '')
+        if (!existsSync(join(dir, base))) fail(`${rel}: exports.${cond} → ${target}: base dir ${base} does not exist`)
+      } else if (!existsSync(join(dir, target))) {
+        fail(`${rel}: exports.${cond} → ${target} does not exist`)
+      }
     }
   }
 
-  ok(`@huaqiu/${pkg} v${manifest.version} — entry/client/patch/exports/clean`)
+  ok(`@huaqiu/${rel} v${version} — entry/types/exports/patch/clean`)
 }
 
 if (failures > 0) {
