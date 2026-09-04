@@ -9,13 +9,19 @@
  * webServer routes (`/api/v1/huaqiu/component-gen/*`) with no agent tool
  * involved.
  *
+ * Copy follows the host UI language: the sidebar rows translate through the
+ * app's copy pack (`app.footprintTitle` / `app.symbolTitle` / tooltips) and
+ * re-apply whenever `<html lang>` changes (`dsh-client-locale` rewrites the
+ * attribute), so both dsh web and the HQ Edge host stay in sync without a
+ * `locale` service dependency.
+ *
  * Auth is the `huaqiuAuth` CLIENT service (structural, never imported): the
  * same sanctioned source the GenHit card uses. The ports adapter only
  * consumes its public surface.
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
-  ComponentGenApp, createHttpPorts, injectAppStyles,
+  ComponentGenApp, createHttpPorts, injectAppStyles, translateFor,
   type ComponentGenAuthPort, type ComponentGenPage, type ComponentGenPorts,
 } from '@huaqiu/component-gen-app'
 import {
@@ -82,6 +88,38 @@ function detectLocale(): string | undefined {
     }
   }
   return undefined
+}
+
+/** Latest resolved UI language (zh/en/undefined) driving the sidebar copy. */
+let currentLang: string | undefined = detectLocale()
+
+let localeObserver: MutationObserver | null = null
+/**
+ * Watch `<html lang>` — `dsh-client-locale` rewrites it on every language
+ * change (dsh web) and HQ Edge mirrors it too. On change, re-resolve the
+ * language and announce so the sidebar rows re-apply their localized labels
+ * and the open overlay re-renders with the new language.
+ */
+function startLocaleObserver(): () => void {
+  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined' || !document.documentElement) {
+    return () => {}
+  }
+  if (localeObserver === null) {
+    localeObserver = new MutationObserver(() => {
+      const next = detectLocale()
+      if (next !== currentLang) {
+        currentLang = next
+        announce()
+      }
+    })
+    localeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] })
+  }
+  return () => {
+    if (localeObserver !== null) {
+      localeObserver.disconnect()
+      localeObserver = null
+    }
+  }
 }
 
 /** Build the workspace ports: component-gen HTTP + dsh-auth client auth. */
@@ -159,16 +197,19 @@ export function installWorkspace(
 ): () => void {
   const disposers: Array<() => void> = []
   const ports = createWorkspacePorts(auth)
+  disposers.push(startLocaleObserver())
 
   // Two task-board-style sidebar rows (between New Session and the workspace
   // browser). Ordered deterministically: footprint first, symbol second.
+  // Labels/tooltips are functions so the shared refresh subscription re-applies
+  // them whenever the UI language changes.
   disposers.push(mountComponentGenSidebarEntries([
     {
       selector: FOOTPRINT_ENTRY_SELECTOR,
       attribute: 'data-hqcg-footprint-entry',
       icon: FOOTPRINT_ICON,
-      label: '封装生成',
-      tooltip: '打开封装生成',
+      label: () => translateFor(currentLang)('app.footprintTitle'),
+      tooltip: () => translateFor(currentLang)('app.footprintTooltip'),
       position: 'before',
       onToggle: () => togglePage('footprint'),
       isOpen: () => state.open && state.page === 'footprint',
@@ -177,8 +218,8 @@ export function installWorkspace(
       selector: SYMBOL_ENTRY_SELECTOR,
       attribute: 'data-hqcg-symbol-entry',
       icon: SYMBOL_ICON,
-      label: 'Symbol 生成',
-      tooltip: '打开 Symbol 生成',
+      label: () => translateFor(currentLang)('app.symbolTitle'),
+      tooltip: () => translateFor(currentLang)('app.symbolTooltip'),
       position: 'after',
       onToggle: () => togglePage('symbol'),
       isOpen: () => state.open && state.page === 'symbol',

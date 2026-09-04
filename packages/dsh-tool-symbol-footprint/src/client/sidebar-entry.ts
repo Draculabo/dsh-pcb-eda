@@ -148,8 +148,10 @@ export interface SidebarRowOptions {
   selector: string
   attribute: string
   icon: string
-  label: string
-  tooltip: string
+  /** Localized label; re-read on every locale refresh (see `subscribe`). */
+  label: () => string
+  /** Localized tooltip; re-read on every locale refresh (see `subscribe`). */
+  tooltip: () => string
   position: 'before' | 'after'
   onToggle(): void
   isOpen(): boolean
@@ -179,8 +181,8 @@ export function mountComponentGenSidebarEntries(
       plugin: PLUGIN_ID,
       icon: row.icon,
       css: ENTRY_CSS,
-      label: () => row.label,
-      tooltip: () => row.tooltip,
+      label: row.label,
+      tooltip: row.tooltip,
       refresh: { subscribe },
       onToggle: row.onToggle,
       position: row.position,

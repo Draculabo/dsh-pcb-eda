@@ -8,8 +8,10 @@
 export const ZH = {
   app: {
     title: '华秋元器件生成',
-    symbolTitle: 'Symbol 生成',
+    symbolTitle: '符号生成',
     footprintTitle: '封装生成',
+    footprintTooltip: '打开封装生成',
+    symbolTooltip: '打开符号生成',
     close: '关闭',
     back: '返回',
     loading: '加载中…',
@@ -27,10 +29,10 @@ export const ZH = {
     hint: '提示',
   },
   symbol: {
-    generate: '生成 Symbol',
+    generate: '生成符号',
     regenerate: '重新生成',
     instructionPlaceholder: '可选：补充生成说明，如“3 引脚 LDO，引脚 1 为 VIN”',
-    progress: '正在生成 Symbol…',
+    progress: '正在生成符号…',
     ready: '生成完成',
     failed: '生成失败',
     download: '下载 .kicad_sym',
@@ -114,7 +116,7 @@ export const ZH = {
   history: {
     title: '历史记录',
     empty: '暂无历史',
-    symbol: 'Symbol',
+    symbol: '符号',
     footprint: '封装',
     generated: '已生成',
     failed: '失败',

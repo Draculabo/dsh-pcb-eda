@@ -38,8 +38,8 @@ function rows(): [SidebarRowOptions, SidebarRowOptions] {
       selector: FOOTPRINT_ENTRY_SELECTOR,
       attribute: 'data-hqcg-footprint-entry',
       icon: '<svg viewBox="0 0 16 16"></svg>',
-      label: '封装生成',
-      tooltip: '打开封装生成',
+      label: () => '封装生成',
+      tooltip: () => '打开封装生成',
       position: 'before',
       onToggle: () => {},
       isOpen: () => false,
@@ -48,8 +48,8 @@ function rows(): [SidebarRowOptions, SidebarRowOptions] {
       selector: SYMBOL_ENTRY_SELECTOR,
       attribute: 'data-hqcg-symbol-entry',
       icon: '<svg viewBox="0 0 16 16"></svg>',
-      label: 'Symbol 生成',
-      tooltip: '打开 Symbol 生成',
+      label: () => 'Symbol 生成',
+      tooltip: () => '打开 Symbol 生成',
       position: 'after',
       onToggle: () => {},
       isOpen: () => false,
@@ -146,5 +146,40 @@ describe('component-gen sidebar entries', () => {
     dispose()
     expect(document.querySelectorAll(FOOTPRINT_ENTRY_SELECTOR).length).toBe(0)
     expect(document.querySelectorAll(SYMBOL_ENTRY_SELECTOR).length).toBe(0)
+  })
+
+  it('re-applies localized labels when the language changes (i18n refresh)', () => {
+    mountShell()
+    let lang: 'zh' | 'en' = 'zh'
+    // Label functions read the live language, like workspace.tsx's
+    // translateFor(currentLang) — a refresh notify re-runs applyLabel.
+    const [footRow, symRow] = rows()
+    footRow.label = () => (lang === 'zh' ? '封装生成' : 'Footprint Gen')
+    footRow.tooltip = () => (lang === 'zh' ? '打开封装生成' : 'Open footprint generator')
+    symRow.label = () => (lang === 'zh' ? 'Symbol 生成' : 'Symbol Gen')
+
+    const listeners = new Set<() => void>()
+    const subscribe = (fn: () => void): (() => void) => {
+      listeners.add(fn)
+      return () => { listeners.delete(fn) }
+    }
+    const notify = (): void => { for (const fn of [...listeners]) fn() }
+
+    const dispose = mountComponentGenSidebarEntries([footRow, symRow], subscribe)
+    const foot = document.querySelector<HTMLElement>(FOOTPRINT_ENTRY_SELECTOR)!
+
+    expect(foot.textContent).toContain('封装生成')
+    expect(foot.getAttribute('aria-label')).toBe('封装生成')
+    expect(foot.getAttribute('title')).toBe('打开封装生成')
+
+    // Host switches to English → dsh-client-locale rewrites <html lang> →
+    // our workspace announce() fires the refresh subscription → label re-applies.
+    lang = 'en'
+    notify()
+    expect(foot.textContent).toContain('Footprint Gen')
+    expect(foot.getAttribute('aria-label')).toBe('Footprint Gen')
+    expect(foot.getAttribute('title')).toBe('Open footprint generator')
+
+    dispose()
   })
 })

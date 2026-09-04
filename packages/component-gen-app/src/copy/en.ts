@@ -13,6 +13,8 @@ export const EN: DeepStrings<typeof ZH> = {
     title: 'Huaqiu Component Gen',
     symbolTitle: 'Symbol Gen',
     footprintTitle: 'Footprint Gen',
+    footprintTooltip: 'Open footprint generator',
+    symbolTooltip: 'Open symbol generator',
     close: 'Close',
     back: 'Back',
     loading: 'Loading…',
