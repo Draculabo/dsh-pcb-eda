@@ -40,11 +40,12 @@ describe('HistoryStore', () => {
     try {
       const store = new HistoryStore(dir)
       const imageId = newImageId()
-      const dataUrl = `data:image/png;base64,${Buffer.from('abc').toString('base64')}`
+      const dataUrl = `data:image/jpeg;base64,${Buffer.from('abc').toString('base64')}`
       await store.saveImage(imageId, dataUrl)
-      const read = await store.readImage(imageId)
-      expect(read?.mime).toBe('image/png')
-      expect(Buffer.from(read!.bytes).toString()).toBe('abc')
+      expect(await store.readImage(imageId)).toEqual({
+        bytes: Buffer.from('abc'),
+        mime: 'image/jpeg',
+      })
       expect(await store.readImage('nope')).toBeNull()
     } finally {
       rmSync(dir, { recursive: true, force: true })
