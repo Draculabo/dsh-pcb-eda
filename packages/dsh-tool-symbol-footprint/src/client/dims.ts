@@ -11,9 +11,16 @@ const DIM_BOUNDS: Record<string, { min: number; max: number }> = {
   W: { min: 0.1, max: 500 },
   L: { min: 0.1, max: 500 },
   width: { min: 0.1, max: 500 },
+  Width: { min: 0.1, max: 500 },
   height: { min: 0.1, max: 500 },
+  Height: { min: 0.1, max: 500 },
+  Length: { min: 0.1, max: 500 },
   bodyWidth: { min: 0.1, max: 500 },
+  body_width: { min: 0.1, max: 500 },
   bodyLength: { min: 0.1, max: 500 },
+  body_length: { min: 0.1, max: 500 },
+  boardWidth: { min: 0.1, max: 500 },
+  boardHeight: { min: 0.1, max: 500 },
   pitch: { min: 0.05, max: 100 },
 }
 
