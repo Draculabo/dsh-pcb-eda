@@ -22,11 +22,13 @@ describe('JobStore state snapshots', () => {
     }
 
     updated.dimensions!.pitch = 5.08
-    ;(updated.result!.artifact as { id: string }).id = 'art_changed'
+    const updatedArtifact = updated.result!.artifact as { id: string }
+    updatedArtifact.id = 'art_changed'
 
     const fetched = store.get(created.id)!
     fetched.dimensions!.pitch = 7.62
-    ;(fetched.result!.artifact as { id: string }).id = 'art_fetched'
+    const fetchedArtifact = fetched.result!.artifact as { id: string }
+    fetchedArtifact.id = 'art_fetched'
 
     expect(store.get(created.id)).toEqual(expected)
   })
