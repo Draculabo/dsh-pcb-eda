@@ -51,6 +51,17 @@ describe('createWebServerAuthTransport', () => {
     await expect(t.fetchSession()).resolves.toEqual({ authenticated: false, user: null })
   })
 
+  it('fetchSession returns authenticated=false for malformed JSON', async () => {
+    const doFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('Unexpected token')
+      },
+    })) as unknown as typeof fetch
+    const t = createWebServerAuthTransport('/api/v1/huaqiu/auth', doFetch)
+    await expect(t.fetchSession()).resolves.toEqual({ authenticated: false, user: null })
+  })
+
   it('fetchSession tolerates a missing user object', async () => {
     const doFetch = vi.fn(async () => ({
       ok: true,
