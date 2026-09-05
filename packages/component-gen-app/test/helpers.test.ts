@@ -25,6 +25,11 @@ describe('parseEvent', () => {
   it('returns null for an empty frame', () => {
     expect(parseEvent('')).toBeNull()
   })
+  it('rejects JSON values that are not job event objects', () => {
+    expect(parseEvent('data: "unexpected"')).toBeNull()
+    expect(parseEvent('data: [{"type":"progress"}]')).toBeNull()
+    expect(parseEvent('data: {"message":"missing type"}')).toBeNull()
+  })
 })
 
 describe('humanizeKey', () => {
