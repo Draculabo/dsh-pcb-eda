@@ -82,6 +82,18 @@ function artOf(a: unknown): ArtifactRef | null {
   }
 }
 
+function countOf(value: unknown): number | null {
+  if (
+    typeof value !== 'number'
+    || !Number.isFinite(value)
+    || !Number.isInteger(value)
+    || value < 0
+  ) {
+    return null
+  }
+  return value
+}
+
 export function parseSchResult(text: string): SchResult | null {
   const t = text.trim()
   if (!t) return null
@@ -112,8 +124,8 @@ export function parseSchResult(text: string): SchResult | null {
     designName: typeof o.design_name === 'string' && o.design_name ? o.design_name : null,
     fileCount: Array.isArray(o.schFiles) ? (o.schFiles as unknown[]).length
       : (Array.isArray(o.schArtifacts) ? (o.schArtifacts as unknown[]).length : null),
-    moduleCount: typeof o.module_count === 'number' ? o.module_count : null,
-    connectionCount: typeof o.connection_count === 'number' ? o.connection_count : null,
+    moduleCount: countOf(o.module_count),
+    connectionCount: countOf(o.connection_count),
     note: typeof o.note === 'string' ? o.note : null,
     agentNote: typeof o.agentNote === 'string' ? o.agentNote : null,
   }
