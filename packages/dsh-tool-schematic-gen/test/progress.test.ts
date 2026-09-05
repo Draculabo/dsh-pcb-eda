@@ -160,7 +160,7 @@ describe('ProgressStore', () => {
     const store = new ProgressStore({ now: () => 3000 })
     store.start('c1', 't', 'system')
     store.setNote('c1', { phase: 'error', stage: 'plan', message: 'Planning failed', ts: 30 })
-    const failed = store.get('c1')
+    const failed = structuredClone(store.get('c1'))
 
     store.finish('c1')
 
