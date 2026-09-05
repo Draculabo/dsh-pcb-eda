@@ -64,7 +64,9 @@ export function createArtifactsHandler(service: HuaqiuArtifacts): ArtifactsHandl
           sendJson(res, 404, { error: 'artifact content missing' })
           return
         }
-        const safeFilename = encodeURIComponent(meta.filename)
+        const safeFilename = encodeURIComponent(meta.filename).replace(/['()*]/g, (char) =>
+          `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+        )
         res.writeHead(200, {
           'content-type': meta.mimeType || 'application/octet-stream',
           'content-length': String(bytes.byteLength),
