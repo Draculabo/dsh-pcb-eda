@@ -92,6 +92,14 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
         sendJson(res, 200, cfg)
         return
       }
+      if (path === '/config') {
+        res.writeHead(405, {
+          allow: 'GET',
+          'content-type': 'application/json; charset=utf-8',
+        })
+        res.end(JSON.stringify({ error: 'method not allowed' }))
+        return
+      }
 
       // POST /jobs
       if (method === 'POST' && path === '/jobs') {
