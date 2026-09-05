@@ -44,7 +44,9 @@ export function normalizeDimensions(context: unknown): ExtractedDimensions {
     pkgType?: unknown
     dimensions?: unknown
   }
-  const raw = body.dimensions && typeof body.dimensions === 'object' ? body.dimensions as Record<string, unknown> : {}
+  const raw = body.dimensions && typeof body.dimensions === 'object' && !Array.isArray(body.dimensions)
+    ? body.dimensions as Record<string, unknown>
+    : {}
   const dimensions: Record<string, string | number | boolean> = {}
   for (const key of Object.keys(raw)) {
     const value = raw[key]
