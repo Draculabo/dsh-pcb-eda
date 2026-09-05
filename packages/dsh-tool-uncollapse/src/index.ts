@@ -37,9 +37,13 @@ export function keepToolCardVisible(
   const skipSelector = options?.skipWhenContains
   const root = document.documentElement
   const revealSeat = (seat: HTMLElement): void => {
-    if (!seat.querySelector(cardRootSelector)) return
+    if (!seat.querySelector(cardRootSelector)) {
+      return
+    }
     // Leave transient sub-states (e.g. the login HIT) collapsed by default.
-    if (skipSelector && seat.querySelector(skipSelector)) return
+    if (skipSelector && seat.querySelector(skipSelector)) {
+      return
+    }
     seat.removeAttribute('hidden')
   }
   let scheduled = false
@@ -50,7 +54,9 @@ export function keepToolCardVisible(
     }
   }
   const observer = new MutationObserver(() => {
-    if (scheduled) return
+    if (scheduled) {
+      return
+    }
     scheduled = true
     requestAnimationFrame(sweep)
   })
