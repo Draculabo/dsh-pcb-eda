@@ -156,6 +156,17 @@ describe('ProgressStore', () => {
     })
   })
 
+  it('does not overwrite a progress failure when finish arrives later', () => {
+    const store = new ProgressStore({ now: () => 3000 })
+    store.start('c1', 't', 'system')
+    store.setNote('c1', { phase: 'error', stage: 'plan', message: 'Planning failed', ts: 30 })
+    const failed = store.get('c1')
+
+    store.finish('c1')
+
+    expect(store.get('c1')).toEqual(failed)
+  })
+
   it('finish() closes every still-open span', () => {
     const store = new ProgressStore({ now: () => 9000 })
     store.start('c1', 't', 'schematic')
