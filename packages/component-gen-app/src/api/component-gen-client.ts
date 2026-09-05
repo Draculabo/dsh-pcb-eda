@@ -200,12 +200,16 @@ export function parseEvent(frame: string): JobEvent | null {
   const data = dataLines.join('\n')
   if (!data) return null
   try {
-    const raw = JSON.parse(data) as JobEvent
-    if (eventName === 'needs_confirmation' && 'dimensions' in raw) return raw as JobEvent
-    if (eventName === 'completed' && 'job' in raw) return raw as JobEvent
-    if (eventName === 'failed') return raw as JobEvent
-    if (eventName === 'cancelled') return raw as JobEvent
-    return raw as JobEvent
+    const raw = JSON.parse(data) as unknown
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof (raw as { type?: unknown }).type !== 'string') {
+      return null
+    }
+    const event = raw as JobEvent
+    if (eventName === 'needs_confirmation' && 'dimensions' in event) return event
+    if (eventName === 'completed' && 'job' in event) return event
+    if (eventName === 'failed') return event
+    if (eventName === 'cancelled') return event
+    return event
   } catch {
     return null
   }
