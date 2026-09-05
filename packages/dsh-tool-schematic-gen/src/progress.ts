@@ -261,7 +261,7 @@ export class ProgressStore {
 
   finish(callId: string): void {
     const rec = this.runs.get(callId)
-    if (!rec) return
+    if (!rec || rec.doc.status === 'failed') return
     rec.doc.status = 'completed'
     rec.doc.updatedAt = this.now()
     // Close any span still open — the stream ended, so nothing is running.
