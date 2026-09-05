@@ -205,6 +205,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
       const histPatch = /^\/history\/([^/]+)$/.exec(path)
       if (method === 'PATCH' && histPatch) {
         const patch = jsonBodyOf<HistoryPatch>(await readBody(req))
+        if (patch.status !== undefined && patch.status !== 'generated' && patch.status !== 'failed' && patch.status !== 'cancelled') {
+          sendJson(res, 400, { error: 'invalid history status (expected generated | failed | cancelled)' })
+          return
+        }
         const entry = await deps.history.patch(histPatch[1]!, patch)
         if (!entry) { sendJson(res, 404, { error: 'history not found' }); return }
         sendJson(res, 200, entry)
