@@ -221,6 +221,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
 
       sendJson(res, 404, { error: 'not found' })
     } catch (err) {
+      if (err instanceof SyntaxError) {
+        sendJson(res, 400, { error: 'invalid json body' })
+        return
+      }
       sendJson(res, 500, { error: 'internal error', detail: String(err) })
     }
   }
