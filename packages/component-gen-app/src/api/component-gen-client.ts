@@ -116,6 +116,9 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
               if (event) onEvent(event)
             }
           }
+          buf += decoder.decode()
+          const event = parseEvent(buf)
+          if (event) onEvent(event)
         } catch (err) {
           if ((err as Error)?.name === 'AbortError') return
           onEvent({ type: 'failed', error: String((err as Error)?.message || err), at: new Date().toISOString() })
