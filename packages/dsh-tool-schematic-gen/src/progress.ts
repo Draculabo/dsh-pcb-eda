@@ -216,7 +216,7 @@ export class ProgressStore {
   /** Append trace events and re-pair the frame list. */
   pushTrace(callId: string, events: readonly TraceEvent[]): void {
     const rec = this.runs.get(callId)
-    if (!rec || events.length === 0) return
+    if (!rec || rec.doc.status !== 'running' || events.length === 0) return
     for (const ev of events) rec.events.push(ev)
     if (rec.events.length > MAX_FRAMES * 4) {
       // Keep the tail: newer spans are what the user is waiting on. Frames
@@ -230,7 +230,7 @@ export class ProgressStore {
   /** Merge an agent state snapshot and re-evaluate the stage ladder. */
   updateState(callId: string, state: Record<string, unknown>): void {
     const rec = this.runs.get(callId)
-    if (!rec) return
+    if (!rec || rec.doc.status !== 'running') return
     Object.assign(rec.state, state)
     rec.doc.stage = stageOf(rec.doc.kind, rec.state)
     rec.doc.updatedAt = this.now()
@@ -239,7 +239,7 @@ export class ProgressStore {
   /** Replace the todo list. Only ever set by the system-design agent. */
   setTodos(callId: string, todos: readonly TodoItem[]): void {
     const rec = this.runs.get(callId)
-    if (!rec) return
+    if (!rec || rec.doc.status !== 'running') return
     rec.doc.todos = todos.map((todo) => ({ ...todo }))
     rec.doc.updatedAt = this.now()
   }
@@ -247,7 +247,7 @@ export class ProgressStore {
   /** Record the latest stage announcement. */
   setNote(callId: string, note: ProgressNote): void {
     const rec = this.runs.get(callId)
-    if (!rec) return
+    if (!rec || rec.doc.status !== 'running') return
     // A later revision always wins, but never let an older one clobber it.
     if (rec.doc.note && note.ts < rec.doc.note.ts) return
     rec.doc.note = { ...note }
