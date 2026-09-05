@@ -201,11 +201,8 @@ export function parseEvent(frame: string): JobEvent | null {
   if (!data) return null
   try {
     const raw = JSON.parse(data) as JobEvent
-    if (eventName === 'needs_confirmation' && 'dimensions' in raw) return raw as JobEvent
-    if (eventName === 'completed' && 'job' in raw) return raw as JobEvent
-    if (eventName === 'failed') return raw as JobEvent
-    if (eventName === 'cancelled') return raw as JobEvent
-    return raw as JobEvent
+    if (eventName !== 'message' && raw.type !== eventName) return null
+    return raw
   } catch {
     return null
   }
