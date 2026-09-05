@@ -55,9 +55,10 @@ export class HistoryStore {
   }
 
   async append(entry: HistoryEntry): Promise<HistoryEntry> {
-    this.entries = [entry, ...this.entries.filter((e) => e.id !== entry.id)]
+    const stored = structuredClone(entry)
+    this.entries = [stored, ...this.entries.filter((e) => e.id !== entry.id)]
     writeJsonFile(this.file, this.entries)
-    return entry
+    return structuredClone(stored)
   }
 
   async list(query: HistoryQuery): Promise<HistoryPage> {
@@ -66,27 +67,28 @@ export class HistoryStore {
     const start = query.cursor ? sorted.findIndex((e) => e.id === query.cursor) + 1 : 0
     const slice = start < 0 ? [] : sorted.slice(start, start + limit)
     const next = start + slice.length < sorted.length ? slice[slice.length - 1]?.id ?? null : null
-    return { entries: slice, nextCursor: next }
+    return { entries: structuredClone(slice), nextCursor: next }
   }
 
   async get(id: string): Promise<HistoryEntry | null> {
-    return this.entries.find((e) => e.id === id) ?? null
+    const entry = this.entries.find((e) => e.id === id)
+    return entry ? structuredClone(entry) : null
   }
 
   async patch(id: string, patch: HistoryPatch): Promise<HistoryEntry | null> {
     const idx = this.entries.findIndex((e) => e.id === id)
     if (idx < 0) return null
     const current = this.entries[idx]!
-    const next: HistoryEntry = {
+    const next: HistoryEntry = structuredClone({
       ...current,
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.error !== undefined ? { error: patch.error } : {}),
       ...(patch.edited !== undefined ? { edited: patch.edited } : {}),
       ...(patch.result !== undefined ? { result: patch.result } : {}),
-    }
+    })
     this.entries[idx] = next
     writeJsonFile(this.file, this.entries)
-    return next
+    return structuredClone(next)
   }
 
   async delete(id: string): Promise<void> {
