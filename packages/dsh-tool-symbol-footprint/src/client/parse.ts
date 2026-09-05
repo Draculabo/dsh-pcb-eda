@@ -119,7 +119,7 @@ export function parseGenResult(text: string): GenResult | null {
   }
 
   const content = (typeof obj.content === 'string' && obj.content.trim() !== '') ? obj.content : null
-  const fileUrl = typeof obj.fileUrl === 'string' ? obj.fileUrl : null
+  const fileUrl = typeof obj.fileUrl === 'string' && obj.fileUrl.trim() !== '' ? obj.fileUrl : null
   const filename = typeof obj.filename === 'string' ? obj.filename
     : (artifact?.filename ?? null)
 
