@@ -46,7 +46,8 @@ export class HistoryStore {
   constructor(dir: string) {
     this.dir = dir
     this.file = join(dir, 'history.json')
-    this.entries = readJsonFile<HistoryEntry[]>(this.file, [])
+    const entries = readJsonFile<unknown>(this.file, [])
+    this.entries = Array.isArray(entries) ? entries as HistoryEntry[] : []
   }
 
   /** All entries, newest first. */
