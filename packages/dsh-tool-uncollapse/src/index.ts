@@ -36,6 +36,14 @@ export function keepToolCardVisible(
   }
   const skipSelector = options?.skipWhenContains
   const root = document.documentElement
+  try {
+    root.matches(cardRootSelector)
+    if (skipSelector) {
+      root.matches(skipSelector)
+    }
+  } catch {
+    return () => {}
+  }
   const revealSeat = (seat: HTMLElement): void => {
     if (!seat.querySelector(cardRootSelector)) return
     // Leave transient sub-states (e.g. the login HIT) collapsed by default.
