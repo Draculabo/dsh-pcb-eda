@@ -78,7 +78,7 @@ function artOf(a: unknown): ArtifactRef | null {
     id,
     type: typeof o.type === 'string' ? o.type : null,
     filename: typeof o.filename === 'string' ? o.filename : null,
-    size: typeof o.size === 'number' ? o.size : null,
+    size: typeof o.size === 'number' && Number.isFinite(o.size) && o.size >= 0 ? o.size : null,
   }
 }
 
