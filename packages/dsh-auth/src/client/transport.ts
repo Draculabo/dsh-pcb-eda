@@ -76,7 +76,12 @@ export function createWebServerAuthTransport(
         headers: { accept: 'application/json' },
       })
       if (!res.ok) return { authenticated: false, user: null }
-      const body = await res.json() as { authenticated?: unknown; user?: unknown }
+      let body: { authenticated?: unknown; user?: unknown }
+      try {
+        body = await res.json() as { authenticated?: unknown; user?: unknown }
+      } catch {
+        return { authenticated: false, user: null }
+      }
       const user = body.user && typeof body.user === 'object' ? body.user as HostSessionUser : null
       return { authenticated: body.authenticated === true, user }
     },
