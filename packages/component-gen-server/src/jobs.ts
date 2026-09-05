@@ -24,6 +24,10 @@ interface JobRecord {
   controller: AbortController
 }
 
+function snapshotJobState(state: JobState): JobState {
+  return structuredClone(state)
+}
+
 export class JobStore {
   private readonly jobs = new Map<string, JobRecord>()
   private readonly listeners = new Map<string, Set<(e: JobEvent) => void>>()
@@ -38,12 +42,13 @@ export class JobStore {
       createdAt: now,
       updatedAt: now,
     }
-    this.jobs.set(id, { state, controller: new AbortController() })
-    return state
+    this.jobs.set(id, { state: snapshotJobState(state), controller: new AbortController() })
+    return snapshotJobState(state)
   }
 
   get(id: string): JobState | undefined {
-    return this.jobs.get(id)?.state
+    const state = this.jobs.get(id)?.state
+    return state ? snapshotJobState(state) : undefined
   }
 
   abort(id: string): boolean {
@@ -82,10 +87,10 @@ export class JobStore {
   /** Update job state (public — the runner writes progress/status). */
   update(id: string, patch: Partial<JobState>, event?: JobEvent): JobState {
     const rec = this.jobs.get(id)
-    if (!rec) return patch as JobState
+    if (!rec) return snapshotJobState(patch as JobState)
     rec.state = { ...rec.state, ...patch, updatedAt: new Date().toISOString() }
     if (event) this.emit(id, event)
-    return rec.state
+    return snapshotJobState(rec.state)
   }
 
   /** Update + emit the canonical event for a terminal state. */
