@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { get } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,7 +23,8 @@ describe('standalone static server', () => {
     const appDist = join(root, 'app')
     const historyDir = join(root, 'history')
     const artifactsDir = join(root, 'artifacts')
-    writeFileSync(join(root, 'index.html'), '')
+    mkdirSync(appDist)
+    writeFileSync(join(appDist, 'index.html'), '')
 
     app = await createStandaloneServer({
       port: 0,
