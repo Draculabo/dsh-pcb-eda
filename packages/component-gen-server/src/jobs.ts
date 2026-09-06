@@ -48,7 +48,9 @@ export class JobStore {
 
   abort(id: string): boolean {
     const rec = this.jobs.get(id)
-    if (!rec) return false
+    if (!rec) {
+      return false
+    }
     rec.controller.abort()
     return true
   }
@@ -58,7 +60,9 @@ export class JobStore {
   }
 
   subscribe(id: string, cb: (e: JobEvent) => void): (() => void) | null {
-    if (!this.jobs.has(id)) return null
+    if (!this.jobs.has(id)) {
+      return null
+    }
     let set = this.listeners.get(id)
     if (!set) {
       set = new Set()
@@ -67,24 +71,36 @@ export class JobStore {
     set.add(cb)
     return () => {
       set?.delete(cb)
-      if (set && set.size === 0) this.listeners.delete(id)
+      if (set && set.size === 0) {
+        this.listeners.delete(id)
+      }
     }
   }
 
   private emit(id: string, event: JobEvent): void {
     const set = this.listeners.get(id)
-    if (!set) return
+    if (!set) {
+      return
+    }
     for (const cb of [...set]) {
-      try { cb(event) } catch { /* a bad subscriber must not strand the stream */ }
+      try {
+        cb(event)
+      } catch {
+        // A bad subscriber must not strand the stream.
+      }
     }
   }
 
   /** Update job state (public — the runner writes progress/status). */
   update(id: string, patch: Partial<JobState>, event?: JobEvent): JobState {
     const rec = this.jobs.get(id)
-    if (!rec) return patch as JobState
+    if (!rec) {
+      return patch as JobState
+    }
     rec.state = { ...rec.state, ...patch, updatedAt: new Date().toISOString() }
-    if (event) this.emit(id, event)
+    if (event) {
+      this.emit(id, event)
+    }
     return rec.state
   }
 
@@ -92,10 +108,13 @@ export class JobStore {
   settle(id: string, patch: Partial<JobState>): JobState {
     const state = this.update(id, patch)
     const now = new Date().toISOString()
-    if (state.status === 'completed') this.emit(id, { type: 'completed', job: state, at: now })
-    else if (state.status === 'failed') this.emit(id, { type: 'failed', error: state.error ?? 'generation failed', result: state.result, at: now })
-    else if (state.status === 'cancelled') this.emit(id, { type: 'cancelled', at: now })
-    else if (state.status === 'needs_confirmation') {
+    if (state.status === 'completed') {
+      this.emit(id, { type: 'completed', job: state, at: now })
+    } else if (state.status === 'failed') {
+      this.emit(id, { type: 'failed', error: state.error ?? 'generation failed', result: state.result, at: now })
+    } else if (state.status === 'cancelled') {
+      this.emit(id, { type: 'cancelled', at: now })
+    } else if (state.status === 'needs_confirmation') {
       this.emit(id, {
         type: 'needs_confirmation',
         dimensions: state.dimensions ?? {},
