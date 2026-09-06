@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
-import { humanizeKey } from '../src/utils/labels.js'
+import { fieldLabel, humanizeKey } from '../src/utils/labels.js'
 import { translateFor } from '../src/copy/index.js'
 
 describe('defaultArtifactsBase', () => {
@@ -31,6 +31,21 @@ describe('humanizeKey', () => {
   it('humanizes camelCase keys', () => {
     expect(humanizeKey('a1Min')).toBe('A1 Min')
     expect(humanizeKey('pitch_d')).toBe('Pitch d')
+  })
+})
+
+describe('fieldLabel', () => {
+  it('recognizes bound suffixes across supported separators', () => {
+    const t = translateFor('en')
+    expect({
+      underscore: fieldLabel('width_max', t),
+      hyphen: fieldLabel('width-max', t),
+      space: fieldLabel('width min', t),
+    }).toEqual({
+      underscore: 'Width max',
+      hyphen: 'Width max',
+      space: 'Width min',
+    })
   })
 })
 
