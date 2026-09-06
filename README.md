@@ -189,9 +189,10 @@ version.
 ### 1. Bump
 
 ```bash
-node scripts/bump.mjs 0.1.1            # dry-run: preview every change
-node scripts/bump.mjs 0.1.1 --apply    # write versions, rewrite @huaqiu/* peer deps, refresh lockfile
+node scripts/bump.mjs 0.1.1    # write versions, rewrite @huaqiu/* peer deps, refresh lockfile
 ```
+
+The bump is always applied — there is no dry-run mode.
 
 `bump.mjs` keeps the root marker + all five packages on one version and rewrites the
 hardcoded in-workspace peer references (`^0.0.0` → `^<new>`). It can force-resync an

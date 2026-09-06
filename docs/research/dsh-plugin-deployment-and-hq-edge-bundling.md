@@ -551,7 +551,7 @@ npx @deepseek-ai/dsh web          # → http://127.0.0.1:3080
 
 **Production/release workflow (distinct from dev):**
 ```
-dsh-pcb-eda:  node scripts/bump.mjs X.Y.Z --apply
+dsh-pcb-eda:  node scripts/bump.mjs X.Y.Z
               git commit -m "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --tags
               → release.yml: validate versions↔tag → build → check:publish → publish --provenance
 hq-edge:      bump the pinned @huaqiu/* versions in the plugin manifest

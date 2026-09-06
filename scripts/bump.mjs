@@ -11,12 +11,11 @@
  * packages are picked up automatically.
  *
  * Usage:
- *   node scripts/bump.mjs [major|minor|patch] [--apply]   # semver bump
- *   node scripts/bump.mjs 0.3.1 [--apply]                # explicit version
+ *   node scripts/bump.mjs [major|minor|patch]   # semver bump
+ *   node scripts/bump.mjs 0.3.1                 # explicit version
  *
- * Dry-run by default: prints every planned change without writing. Pass
- * `--apply` to write the files, refresh the lockfile, and print the git
- * commands for tagging the release.
+ * Always applies: prints every change, writes the files, refreshes the
+ * lockfile, and prints the git commands for tagging the release.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -37,10 +36,9 @@ function semverBump(current, kind) {
 
 function main() {
   const argv = process.argv.slice(2)
-  const apply = argv.includes('--apply')
   const positional = argv.filter((a) => !a.startsWith('-'))
   if (positional.length !== 1) {
-    console.error('usage: node scripts/bump.mjs [major|minor|patch|<version>] [--apply]')
+    console.error('usage: node scripts/bump.mjs [major|minor|patch|<version>]')
     process.exit(1)
   }
   const target = positional[0]
@@ -70,11 +68,11 @@ function main() {
     console.warn(`warn: workspace versions out of sync (${[...versions].join(', ')}) — resyncing all to ${target}`)
   } else {
     console.error(`FATAL: workspace versions are out of sync (${[...versions].join(', ')}).`)
-    console.error('Pass an explicit version to force-resync, e.g.  node scripts/bump.mjs 0.1.0 --apply')
+    console.error('Pass an explicit version to force-resync, e.g.  node scripts/bump.mjs 0.1.0')
     process.exit(1)
   }
   const next = explicit ? target : semverBump(current, target)
-  console.log(`bump: ${current} → ${next}${apply ? '' : '  (dry-run; add --apply to write)'}\n`)
+  console.log(`bump: ${current} → ${next}\n`)
 
   const plan = []
   for (const { path, data } of manifests) {
@@ -94,17 +92,16 @@ function main() {
     if (Object.keys(changes).length > 0) plan.push({ rel, changes })
   }
 
+  if (plan.length === 0) {
+    console.log('  (no changes — every manifest is already on the target version)')
+  }
   for (const { rel, changes } of plan) {
     console.log(`  ${rel}`)
     for (const [key, [oldV, newV]] of Object.entries(changes)) {
       console.log(`    ${key}: ${oldV} → ${newV}`)
     }
   }
-
-  if (!apply) {
-    console.log('\nNo files were written.')
-    return
-  }
+  console.log('')
 
   for (const { path, data } of manifests) {
     if (data.version) data.version = next
