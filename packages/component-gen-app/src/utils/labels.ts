@@ -13,6 +13,7 @@ export function humanizeKey(key: string): string {
   return String(key)
     .replace(/[_-]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim()
     .replace(/^\w/, (c) => c.toUpperCase())
 }
 
