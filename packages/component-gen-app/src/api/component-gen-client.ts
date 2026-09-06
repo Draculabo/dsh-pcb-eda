@@ -61,10 +61,15 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
     async config(): Promise<ComponentGenConfig> {
       const res = await doFetch(url('/config'), { headers: { accept: 'application/json' } })
       const cfg = await readJson<Partial<ComponentGenConfig>>(res)
+      const imageBytes = cfg.limits?.imageBytes
       return {
         hostMode: cfg.hostMode ?? false,
         capabilities: cfg.capabilities ?? { symbol: true, footprint: true },
-        limits: { ...DEFAULT_LIMITS, ...(cfg.limits ?? {}) },
+        limits: {
+          imageBytes: typeof imageBytes === 'number' && Number.isFinite(imageBytes) && imageBytes > 0
+            ? imageBytes
+            : DEFAULT_LIMITS.imageBytes,
+        },
       }
     },
 
