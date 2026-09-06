@@ -30,7 +30,10 @@ describe('JobStore', () => {
   })
 
   it('returns null when subscribing to an unknown job', () => {
+    const store = new JobStore()
     const listener = vi.fn()
+
     expect(store.subscribe('missing', listener)).toBeNull()
+    expect(listener).not.toHaveBeenCalled()
   })
 })
