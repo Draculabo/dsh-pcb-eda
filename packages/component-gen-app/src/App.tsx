@@ -8,7 +8,7 @@
  * into the page. Completely DSH-agnostic — everything the app needs comes
  * through `ComponentGenPorts`.
  */
-import { useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import type { ComponentGenPage, ComponentGenPorts, ReopenRequest } from './ports.js'
 import { translateFor, type Translate } from './copy/index.js'
 import { SymbolGenPage } from './pages/SymbolGenPage.js'
@@ -58,9 +58,11 @@ export function ComponentGenApp(props: ComponentGenAppProps): ReactElement {
   const t: Translate = useMemo(() => translateFor(lang), [lang])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [reopenReq, setReopenReq] = useState<ReopenRequest | null>(null)
-  // Only forward a reopen request whose kind matches the active page (history
-  // is already filtered by activeKind, but the request must not leak across a
-  // tab switch).
+
+  useEffect(() => {
+    setReopenReq(null)
+  }, [page])
+
   const pageReopen = reopenReq && reopenReq.entry.kind === page ? reopenReq : null
 
   const openHistory = (entry: ReopenRequest['entry']): void => {
