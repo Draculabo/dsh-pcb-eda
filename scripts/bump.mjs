@@ -27,10 +27,18 @@ const writeJson = (p, data) => writeFileSync(p, JSON.stringify(data, null, 2) + 
 
 function semverBump(current, kind) {
   const parts = String(current).split('.').map((n) => parseInt(n, 10) || 0)
-  if (kind === 'major') { parts[0] += 1; parts[1] = 0; parts[2] = 0 }
-  else if (kind === 'minor') { parts[1] += 1; parts[2] = 0 }
-  else if (kind === 'patch') { parts[2] += 1 }
-  else throw new Error(`unknown bump kind: ${kind} (expected major|minor|patch)`)
+  if (kind === 'major') {
+    parts[0] += 1
+    parts[1] = 0
+    parts[2] = 0
+  } else if (kind === 'minor') {
+    parts[1] += 1
+    parts[2] = 0
+  } else if (kind === 'patch') {
+    parts[2] += 1
+  } else {
+    throw new Error(`unknown bump kind: ${kind} (expected major|minor|patch)`)
+  }
   return parts.join('.')
 }
 
@@ -81,15 +89,25 @@ function main() {
     // Rewrite in-workspace @huaqiu/* references in dep maps (keep workspace:).
     for (const depKey of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
       const map = data[depKey]
-      if (!map || typeof map !== 'object') continue
+      if (!map || typeof map !== 'object') {
+        continue
+      }
       for (const name of Object.keys(map)) {
-        if (!SIBLING_NAMES.includes(name)) continue
-        if (map[name] === 'workspace:*') continue
+        if (!SIBLING_NAMES.includes(name)) {
+          continue
+        }
+        if (map[name] === 'workspace:*') {
+          continue
+        }
         const oldRange = map[name]
-        if (oldRange !== `^${next}`) changes[`${depKey}.${name}`] = [oldRange, `^${next}`]
+        if (oldRange !== `^${next}`) {
+          changes[`${depKey}.${name}`] = [oldRange, `^${next}`]
+        }
       }
     }
-    if (Object.keys(changes).length > 0) plan.push({ rel, changes })
+    if (Object.keys(changes).length > 0) {
+      plan.push({ rel, changes })
+    }
   }
 
   if (plan.length === 0) {
@@ -104,12 +122,18 @@ function main() {
   console.log('')
 
   for (const { path, data } of manifests) {
-    if (data.version) data.version = next
+    if (data.version) {
+      data.version = next
+    }
     for (const depKey of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
       const map = data[depKey]
-      if (!map || typeof map !== 'object') continue
+      if (!map || typeof map !== 'object') {
+        continue
+      }
       for (const name of Object.keys(map)) {
-        if (!SIBLING_NAMES.includes(name) || map[name] === 'workspace:*') continue
+        if (!SIBLING_NAMES.includes(name) || map[name] === 'workspace:*') {
+          continue
+        }
         map[name] = `^${next}`
       }
     }
