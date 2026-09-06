@@ -214,10 +214,18 @@ export function parseEvent(frame: string): JobEvent | null {
 /** Default auth port: optimistic (used when the host supplies no auth). */
 function createPassthroughAuth(): ComponentGenAuthPort {
   return {
-    async isAuthenticated() { return true },
-    async getUserInfo() { return null },
-    async login() { /* no-op */ },
-    onAuthStateChanged() { return () => {} },
+    async isAuthenticated() {
+      return true
+    },
+    async getUserInfo() {
+      return null
+    },
+    async login() {
+      /* no-op */
+    },
+    onAuthStateChanged() {
+      return () => {}
+    },
   }
 }
 
