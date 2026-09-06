@@ -122,9 +122,8 @@ export function translate(lang: 'zh' | 'en', key: string, params?: Record<string
   if (v === undefined) v = COPY.zh[key as CopyKey]
   if (v === undefined) v = key
   if (params) {
-    for (const k of Object.keys(params)) {
-      v = v.split(`{${k}}`).join(String(params[k]))
-    }
+    v = v.replace(/\{(\w+)\}/g, (match, name: string) =>
+      Object.hasOwn(params, name) ? String(params[name]) : match)
   }
   return v
 }
