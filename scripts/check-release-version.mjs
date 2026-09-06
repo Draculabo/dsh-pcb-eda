@@ -15,7 +15,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { publishablePackages, repoRoot, rootManifestPath } from './lib/packages.mjs'
+import { publishablePackages, repoRoot, rootManifestPath } from './utils/packages.mjs'
 
 const argv = process.argv.slice(2)
 const requested = argv.find((a) => !a.startsWith('-'))

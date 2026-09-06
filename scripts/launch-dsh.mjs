@@ -23,7 +23,7 @@ import { accessSync, readFileSync } from 'node:fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { dshPlugins } from './lib/packages.mjs';
+import { dshPlugins } from './utils/packages.mjs';
 
 const PORT = 3080;
 const PROFILE = 'web';

@@ -21,7 +21,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { discoverPackages, repoRoot, rootManifestPath } from './lib/packages.mjs'
+import { discoverPackages, repoRoot, rootManifestPath } from './utils/packages.mjs'
 
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'))
 const writeJson = (p, data) => writeFileSync(p, JSON.stringify(data, null, 2) + '\n')

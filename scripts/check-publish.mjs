@@ -16,7 +16,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { publishablePackages, repoRoot } from './lib/packages.mjs'
+import { publishablePackages, repoRoot } from './utils/packages.mjs'
 
 const requireClean = process.argv.includes('--require-clean')
 

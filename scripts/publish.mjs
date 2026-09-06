@@ -23,7 +23,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { publishablePackages, repoRoot } from './lib/packages.mjs'
+import { publishablePackages, repoRoot } from './utils/packages.mjs'
 
 const argv = process.argv.slice(2)
 const dryRun = argv.includes('--dry-run')
