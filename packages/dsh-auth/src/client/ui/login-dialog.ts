@@ -35,7 +35,7 @@
 import { LOGIN_IFRAME_HEIGHT } from './common.js'
 import { buildLoginUrl, type AuthLocale, type AuthTheme } from '../lib.js'
 import { translate } from '../i18n.js'
-import { getCurrentLocale, getCurrentSurfaceColor, subscribeUiEnv, syncUiEnv } from '../ui-env.js'
+import { getCurrentDark, getCurrentLocale, getCurrentSurfaceColor, subscribeUiEnv, syncUiEnv } from '../ui-env.js'
 
 /** Aria / data attribute names — stable so tests and CSS can target them. */
 export const DIALOG_OVERLAY_ATTR = 'data-hq-auth-dialog'
@@ -72,6 +72,7 @@ export function openLoginDialog(options: { lang?: AuthLocale; theme?: AuthTheme 
   // card has mounted), or when a test sets the attribute after import.
   syncUiEnv()
   const locale = options.lang ?? getCurrentLocale()
+  const theme = options.theme ?? (getCurrentDark() ? 'dark' : 'light')
 
   const root = document.createElement('div')
   root.setAttribute(DIALOG_OVERLAY_ATTR, '')
@@ -142,7 +143,7 @@ export function openLoginDialog(options: { lang?: AuthLocale; theme?: AuthTheme 
 
   const iframe = document.createElement('iframe')
   iframe.setAttribute(DIALOG_IFRAME_ATTR, '')
-  iframe.src = buildLoginUrl({ lang: options.lang, theme: options.theme })
+  iframe.src = buildLoginUrl({ lang: locale, theme })
   iframe.title = translate(locale, 'card.title')
   iframe.allow = 'clipboard-write'
   // The iframe element background = the card surface. That is what masks
