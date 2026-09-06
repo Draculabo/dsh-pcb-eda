@@ -63,7 +63,10 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
       const cfg = await readJson<Partial<ComponentGenConfig>>(res)
       return {
         hostMode: cfg.hostMode ?? false,
-        capabilities: cfg.capabilities ?? { symbol: true, footprint: true },
+        capabilities: {
+          symbol: cfg.capabilities?.symbol ?? true,
+          footprint: cfg.capabilities?.footprint ?? true,
+        },
         limits: { ...DEFAULT_LIMITS, ...(cfg.limits ?? {}) },
       }
     },
