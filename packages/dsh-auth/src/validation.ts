@@ -60,8 +60,12 @@ interface ValidationCacheEntry {
  * `unauthorized` reason; local expiry is the only source of `expired`).
  */
 function classifyStatus(status: number): AuthValidationResult {
-  if (status === 401) return { status: 'invalid', reason: 'unauthorized' }
-  if (status === 403) return { status: 'invalid', reason: 'forbidden' }
+  if (status === 401) {
+    return { status: 'invalid', reason: 'unauthorized' }
+  }
+  if (status === 403) {
+    return { status: 'invalid', reason: 'forbidden' }
+  }
   return { status: 'unavailable', error: new Error(`token validation HTTP ${status}`) }
 }
 
@@ -87,7 +91,9 @@ export class TokenValidator {
    * Unknown expiry ⇒ not assumed invalid (spec §6).
    */
   isLocallyExpired(expiresAt?: number): boolean {
-    if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return false
+    if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+      return false
+    }
     return expiresAt * 1000 <= this.now()
   }
 
@@ -96,7 +102,9 @@ export class TokenValidator {
    * by concurrent callers. Never treats a network failure as "invalid".
    */
   async validate(token: string, session?: { expiresAt?: number }): Promise<AuthValidationResult> {
-    if (!token) return { status: 'invalid', reason: 'invalid' }
+    if (!token) {
+      return { status: 'invalid', reason: 'invalid' }
+    }
 
     // Local expiry first — no remote call (spec §6/§7).
     if (this.isLocallyExpired(session?.expiresAt)) {
@@ -112,7 +120,9 @@ export class TokenValidator {
 
     // Reuse an in-flight request instead of stacking duplicates (§16).
     const inFlight = this.inFlight.get(token)
-    if (inFlight) return inFlight
+    if (inFlight) {
+      return inFlight
+    }
 
     const promise = this.validateRemotely(token)
     this.inFlight.set(token, promise)
@@ -139,7 +149,9 @@ export class TokenValidator {
   /** Resolve a currently-cached result (no remote call), or null. */
   peek(token: string): AuthValidationResult | null {
     const cached = this.cache.get(token)
-    if (!cached) return null
+    if (!cached) {
+      return null
+    }
     if (this.now() - cached.at >= this.ttlMs) {
       this.cache.delete(token)
       return null
@@ -161,7 +173,9 @@ export class TokenValidator {
       return { status: 'unavailable', error: err as Error }
     }
 
-    if (!res.ok) return classifyStatus(res.status)
+    if (!res.ok) {
+      return classifyStatus(res.status)
+    }
 
     let body: unknown
     try {
