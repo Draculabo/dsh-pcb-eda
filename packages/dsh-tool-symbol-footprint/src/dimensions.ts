@@ -235,8 +235,12 @@ export async function confirmDimensionsWithHuman(
       ],
     }],
   }
-  if (exec && exec.agent !== undefined) askOptions.agent = exec.agent
-  if (exec && exec.signal !== undefined) askOptions.signal = exec.signal
+  if (exec && exec.agent !== undefined) {
+    askOptions.agent = exec.agent
+  }
+  if (exec && exec.signal !== undefined) {
+    askOptions.signal = exec.signal
+  }
 
   const answer = await userQuestions.ask(askOptions)
   const first = answer && Array.isArray(answer.answers) ? answer.answers[0] : undefined
@@ -258,12 +262,17 @@ export async function confirmDimensionsWithHuman(
         detail: renderDimensionsForHuman(extracted.dimensions, locale),
       }],
     }
-    if (exec && exec.agent !== undefined) followUpOptions.agent = exec.agent
-    if (exec && exec.signal !== undefined) followUpOptions.signal = exec.signal
+    if (exec && exec.agent !== undefined) {
+      followUpOptions.agent = exec.agent
+    }
+    if (exec && exec.signal !== undefined) {
+      followUpOptions.signal = exec.signal
+    }
     const followUp = await userQuestions.ask(followUpOptions)
     const followFirst = followUp && Array.isArray(followUp.answers) ? followUp.answers[0] : undefined
-    if (followFirst && typeof followFirst.custom === 'string') correction = followFirst.custom
-    else if (followFirst && Array.isArray(followFirst.selected) && followFirst.selected.length > 0) {
+    if (followFirst && typeof followFirst.custom === 'string') {
+      correction = followFirst.custom
+    } else if (followFirst && Array.isArray(followFirst.selected) && followFirst.selected.length > 0) {
       correction = followFirst.selected.join(', ')
     }
   }
@@ -310,8 +319,12 @@ export async function confirmDirectFootprintWithHuman(
       ],
     }],
   }
-  if (exec && exec.agent !== undefined) askOptions.agent = exec.agent
-  if (exec && exec.signal !== undefined) askOptions.signal = exec.signal
+  if (exec && exec.agent !== undefined) {
+    askOptions.agent = exec.agent
+  }
+  if (exec && exec.signal !== undefined) {
+    askOptions.signal = exec.signal
+  }
 
   const answer = await userQuestions.ask(askOptions)
   const first = answer && Array.isArray(answer.answers) ? answer.answers[0] : undefined
