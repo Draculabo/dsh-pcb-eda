@@ -25,13 +25,17 @@ function parseSymbol(source: string): schematicProto.I_LibSymbol {
     throw new Error('parseLibSymbols is not a method on SchematicParser')
   }
   const symbols = sp.parseLibSymbols(source)
-  if (!symbols || symbols.length === 0) throw new Error('no symbols found in .kicad_sym source')
+  if (!symbols || symbols.length === 0) {
+    throw new Error('no symbols found in .kicad_sym source')
+  }
   return symbols[0]!
 }
 
 function parseFootprint(source: string): boardProto.I_Footprint {
   const bp = new BoardParser()
-  if (typeof bp.parse !== 'function') throw new Error('parse is not a method on BoardParser')
+  if (typeof bp.parse !== 'function') {
+    throw new Error('parse is not a method on BoardParser')
+  }
   const toParse = /^\s*\(\s*kicad_pcb\b/.test(source) ? source : wrapFootprintInBoard(source)
   const board = bp.parse(toParse)
   if (!board || !Array.isArray(board.footprints) || board.footprints.length === 0) {
@@ -61,7 +65,13 @@ export async function renderArtifactToCanvas(
   } else {
     throw new Error(`unsupported preview kind: ${kind}`)
   }
-  return () => { try { dispose?.() } catch { /* ignore */ } }
+  return () => {
+    try {
+      dispose?.()
+    } catch {
+      // Renderer cleanup failures must not escape the caller's disposer.
+    }
+  }
 }
 
 /** Size a canvas to its CSS box (device-pixel-ratio aware). */
@@ -84,7 +94,13 @@ export function triggerDownload(filename: string, text: string, mime = 'text/pla
     document.body.appendChild(a)
     a.click()
     a.remove()
-    setTimeout(() => { try { URL.revokeObjectURL(url) } catch { /* ignore */ } }, 2000)
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        // Ignore cleanup failures after the download has already started.
+      }
+    }, 2000)
   } catch (err) {
     console.warn('[hq-cga] download failed', err)
   }
