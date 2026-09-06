@@ -79,8 +79,10 @@ for (const pkg of pkgs) {
   // Built entry (node half).
   const mainRel = manifest.main || 'lib/index.mjs'
   if (!existsSync(join(dir, mainRel))) fail(`${rel}: built entry missing (${mainRel}) — run pnpm -r build first`)
+  if (!includedByFiles(manifest, mainRel)) fail(`${rel}: built entry ${mainRel} is not covered by files[]`)
   const typesRel = manifest.types || 'lib/index.d.mts'
   if (!existsSync(join(dir, typesRel))) fail(`${rel}: built types missing (${typesRel})`)
+  if (!includedByFiles(manifest, typesRel)) fail(`${rel}: built types ${typesRel} is not covered by files[]`)
 
   // Client bundle (dual-face packages).
   if (manifest.dsh?.client && !existsSync(join(dir, 'lib/client.js'))) {
