@@ -52,7 +52,9 @@ export function discoverPackages() {
   }
   const found = []
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue
+    if (!entry.isDirectory()) {
+      continue
+    }
     const rel = entry.name
     const dir = join(packagesDir, rel)
     let manifest
@@ -62,7 +64,9 @@ export function discoverPackages() {
       // Not a package (no parseable package.json) — skip.
       continue
     }
-    if (typeof manifest?.name !== 'string' || manifest.name.length === 0) continue
+    if (typeof manifest?.name !== 'string' || manifest.name.length === 0) {
+      continue
+    }
     found.push({
       rel,
       dir,
