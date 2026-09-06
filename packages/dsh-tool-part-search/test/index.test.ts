@@ -31,6 +31,29 @@ describe('@huaqiu/dsh-tool-part-search plugin', () => {
     expect(typeof dispose).toBe('function')
   })
 
+  it('disposes registered tools in reverse order and continues after failures', () => {
+    const disposed: string[] = []
+    const ctx = {
+      tools: {
+        register: (def: { name: string }) => () => {
+          disposed.push(def.name)
+          if (def.name === 'get_hqsch_part_models') {
+            throw new Error('dispose failed')
+          }
+        },
+      },
+    }
+
+    apply(ctx as never)()
+
+    expect(disposed).toEqual([
+      'get_hqsch_supply_chain',
+      'get_hqsch_part_models',
+      'get_hqsch_part',
+      'search_hqsch_parts',
+    ])
+  })
+
   it('throws loudly when the tools service is missing', () => {
     expect(() => apply({} as never)).toThrow(/requires the DSH/)
   })
