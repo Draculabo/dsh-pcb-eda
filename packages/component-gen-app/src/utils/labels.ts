@@ -65,7 +65,7 @@ export const FIELD_LABEL_KEY: Record<string, string> = {
 /** Localized label for a dimension key (`w`/`width` → 宽度, …). */
 export function fieldLabel(key: string, t: Translate): string {
   const raw = String(key)
-  const bounds = /^(.*?)_(max|min)$/i.exec(raw)
+  const bounds = /^(.*?)[\s_-]+(max|min)$/i.exec(raw)
   if (bounds) {
     const base = fieldLabel(bounds[1]!, t)
     return t(bounds[2]!.toLowerCase() === 'max' ? 'field.maxOf' : 'field.minOf', { field: base })
