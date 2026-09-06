@@ -128,11 +128,13 @@ it('does not leak a reopen request across a page switch', async () => {
   })
   expect(ports.artifactIds).toEqual(['art-1'])
 
-  // Switch to the symbol page — the stale footprint reopen request must not
-  // leak and re-open a footprint result on the symbol page.
   await act(async () => {
     root!.render(<ComponentGenApp ports={ports} page="symbol" lang="zh" />)
   })
-  // No additional artifact fetch happened for the switched page.
+  expect(ports.artifactIds).toEqual(['art-1'])
+
+  await act(async () => {
+    root!.render(<ComponentGenApp ports={ports} page="footprint" lang="zh" />)
+  })
   expect(ports.artifactIds).toEqual(['art-1'])
 })
