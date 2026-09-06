@@ -50,14 +50,20 @@ function topoOrder(pkgs) {
   const state = new Map() // name -> 'visiting' | 'done'
   const visit = (name, chain) => {
     const st = state.get(name)
-    if (st === 'done') return
-    if (st === 'visiting') throw new Error(`dependency cycle among publishable packages: ${[...chain, name].join(' → ')}`)
+    if (st === 'done') {
+      return
+    }
+    if (st === 'visiting') {
+      throw new Error(`dependency cycle among publishable packages: ${[...chain, name].join(' → ')}`)
+    }
     state.set(name, 'visiting')
     const pkg = byName.get(name)
     if (pkg) {
       const deps = pkg.manifest.dependencies ?? {}
       for (const dep of Object.keys(deps)) {
-        if (names.has(dep)) visit(dep, [...chain, name])
+        if (names.has(dep)) {
+          visit(dep, [...chain, name])
+        }
       }
     }
     state.set(name, 'done')
@@ -125,9 +131,13 @@ for (const pkg of topoOrder(pkgs)) {
   }
 
   const args = ['--dir', dir, 'publish', '--no-git-checks', '--access', 'public']
-  if (provenance) args.push('--provenance')
+  if (provenance) {
+    args.push('--provenance')
+  }
   const registry = process.env.npm_config_registry || process.env.NPM_CONFIG_REGISTRY
-  if (registry) args.push('--registry', registry)
+  if (registry) {
+    args.push('--registry', registry)
+  }
   run('pnpm', args)
   console.log(`✓ published ${pkg.name}@${version}`)
 }
