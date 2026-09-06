@@ -58,9 +58,9 @@ export function apply(ctx: Context): () => void {
   console.log(LOG_TAG, 'registered agent tools', { tools: disposers.length })
 
   return function dispose() {
-    for (const disposeTool of disposers) {
+    for (let index = disposers.length - 1; index >= 0; index -= 1) {
       try {
-        disposeTool()
+        disposers[index]!()
       } catch {
         // One failing unregister must not hide the others.
       }
