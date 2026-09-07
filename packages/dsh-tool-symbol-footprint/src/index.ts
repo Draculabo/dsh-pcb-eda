@@ -129,7 +129,6 @@ export function apply(ctx: Context, config: SymbolFootprintConfig = {}): () => v
   }
   const appBackend = createComponentGenBackend(appEnv)
   const history = new HistoryStore(dshHomePath('component-gen'))
-  let webServerDisposer: (() => void) | undefined
   if (ctx.webServer && typeof ctx.webServer.register === 'function') {
     ctx.effect(() => ctx.webServer.register(createComponentGenRoutes({
       backend: appBackend,
