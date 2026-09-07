@@ -37,8 +37,10 @@ export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
   const [error, setError] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
   const unsubRef = useRef<(() => void) | null>(null)
+  const runGenerationRef = useRef(0)
 
   const cleanup = useCallback((): void => {
+    runGenerationRef.current += 1
     unsubRef.current?.()
     unsubRef.current = null
   }, [])
@@ -76,6 +78,7 @@ export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
 
   const run = useCallback(async (req: StartJobRequest): Promise<void> => {
     cleanup()
+    const runGeneration = runGenerationRef.current
     setPhase('running')
     setProgress('')
     setDimensions(null)
@@ -84,6 +87,9 @@ export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
     setResult({})
     setError('')
     const job = await ports.startJob(req)
+    if (runGeneration !== runGenerationRef.current) {
+      return
+    }
     setJobId(job.id)
     unsubRef.current = ports.jobEvents(job.id, onEvent)
   }, [ports, cleanup, onEvent])
