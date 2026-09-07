@@ -14,7 +14,7 @@
  *   node scripts/check-publish.mjs [--require-clean]
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { publishablePackages, repoRoot } from './utils/packages.mjs'
 
@@ -53,7 +53,6 @@ if (pkgs.length === 0) {
 }
 for (const pkg of pkgs) {
   const { rel, dir, name, version, manifest } = pkg
-  const pj = join(dir, 'package.json')
 
   if (name !== `@huaqiu/${rel}`) {
     fail(`${rel}: name must be "@huaqiu/${rel}" (got "${name}")`)
