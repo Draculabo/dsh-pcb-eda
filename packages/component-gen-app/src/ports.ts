@@ -76,7 +76,7 @@ export interface HistoryPage {
 
 export interface HistoryEntry {
   id: string
-  kind: 'symbol' | 'footprint'
+  kind: ComponentGenPage
   createdAt: string
   status: 'generated' | 'failed' | 'cancelled'
   input: {
@@ -143,8 +143,8 @@ export interface ComponentGenAuthPort {
  * in which case the app hides the Place action.
  */
 export interface ComponentGenPlacePort {
-  canPlace(type: 'symbol' | 'footprint'): boolean
-  placeArtifact(request: { type: 'symbol' | 'footprint'; artifactUri: string; filename?: string }): Promise<unknown>
+  canPlace(type: ComponentGenPage): boolean
+  placeArtifact(request: { type: ComponentGenPage; artifactUri: string; filename?: string }): Promise<unknown>
 }
 
 /** The whole contract the app needs from its host. */
