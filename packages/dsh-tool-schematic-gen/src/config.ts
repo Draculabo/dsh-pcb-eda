@@ -78,7 +78,9 @@ export function buildHeaders(config: SchematicGenConfig, account: EdaAccount, th
     'x-thread-id': threadId,
     Referer: 'https://gen.eda.cn/',
   }
-  if (config.cookie) h.cookie = config.cookie
+  if (config.cookie) {
+    h.cookie = config.cookie
+  }
   return h
 }
 
@@ -90,7 +92,9 @@ export function buildExportHeaders(config: SchematicGenConfig, account: EdaAccou
     'x-user-token': account.userToken,
     Referer: 'https://gen.eda.cn/',
   }
-  if (config.cookie) h.cookie = config.cookie
+  if (config.cookie) {
+    h.cookie = config.cookie
+  }
   return h
 }
 
