@@ -61,8 +61,14 @@ export function apply(ctx: Context, config: HuaqiuArtifactsConfig = {}): void {
   // disk error, and never block activation on the scan.
   ctx.effect(() => {
     void service.deleteAll({ onlyExpired: true })
-      .then((removed) => { if (removed > 0) log('debug', 'artifacts: expired sweep removed', { removed }) })
-      .catch((err) => log('warn', 'artifacts: expired sweep failed', { err }))
+      .then((removed) => {
+        if (removed > 0) {
+          log('debug', 'artifacts: expired sweep removed', { removed })
+        }
+      })
+      .catch((err) => {
+        log('warn', 'artifacts: expired sweep failed', { err })
+      })
     return () => {}
   })
 }
