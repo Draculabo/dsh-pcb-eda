@@ -5,7 +5,7 @@
  * read state, subscribe to changes, trigger the existing login flow. It never
  * implements auth itself.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ComponentGenPorts } from '../ports.js'
 
 export type AuthPhase = 'unknown' | 'authenticated' | 'unauthenticated'
@@ -21,26 +21,51 @@ export interface UseAuthGateResult {
 export function useAuthGate(ports: ComponentGenPorts): UseAuthGateResult {
   const [phase, setPhase] = useState<AuthPhase>('unknown')
   const [user, setUser] = useState<{ nickname?: string } | null>(null)
+  const authGeneration = useRef(0)
 
   const refresh = useCallback(async (): Promise<void> => {
+    const generation = ++authGeneration.current
     try {
       const ok = await ports.auth.isAuthenticated()
+      if (generation !== authGeneration.current) {
+        return
+      }
       setPhase(ok ? 'authenticated' : 'unauthenticated')
-      setUser(ok ? await ports.auth.getUserInfo() : null)
+      if (!ok) {
+        setUser(null)
+        return
+      }
+      const nextUser = await ports.auth.getUserInfo()
+      if (generation === authGeneration.current) {
+        setUser(nextUser)
+      }
     } catch {
-      setPhase('unauthenticated')
-      setUser(null)
+      if (generation === authGeneration.current) {
+        setPhase('unauthenticated')
+        setUser(null)
+      }
     }
   }, [ports])
 
   useEffect(() => {
     void refresh()
     const unsub = ports.auth.onAuthStateChanged((authenticated) => {
+      const generation = ++authGeneration.current
       setPhase(authenticated ? 'authenticated' : 'unauthenticated')
-      if (authenticated) void ports.auth.getUserInfo().then(setUser)
-      else setUser(null)
+      if (authenticated) {
+        void ports.auth.getUserInfo().then((nextUser) => {
+          if (generation === authGeneration.current) {
+            setUser(nextUser)
+          }
+        })
+      } else {
+        setUser(null)
+      }
     })
-    return unsub
+    return () => {
+      ++authGeneration.current
+      unsub()
+    }
   }, [ports, refresh])
 
   const login = useCallback(() => {
