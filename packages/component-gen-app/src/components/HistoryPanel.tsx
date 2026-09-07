@@ -6,14 +6,14 @@
  * the ports, and artifact text comes from `ports.artifactContent`.
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
-import type { ComponentGenPorts, HistoryEntry } from '../ports.js'
+import type { ComponentGenPage, ComponentGenPorts, HistoryEntry } from '../ports.js'
 import type { Translate } from '../copy/index.js'
 import { triggerDownload } from '../utils/ecad.js'
 
 export interface HistoryPanelProps {
   ports: ComponentGenPorts
   t: Translate
-  activeKind?: 'symbol' | 'footprint' | null
+  activeKind?: ComponentGenPage | null
   onReopen: (entry: HistoryEntry) => void
 }
 
