@@ -38,12 +38,20 @@ function parsePath(req: IncomingMessage): { callId: string | null } | null {
   const url = req.url ?? ''
   const q = url.indexOf('?')
   const pathname = q >= 0 ? url.slice(0, q) : url
-  if (!pathname.startsWith(PROGRESS_ROUTE_PREFIX)) return null
+  if (!pathname.startsWith(PROGRESS_ROUTE_PREFIX)) {
+    return null
+  }
   const rest = pathname.slice(PROGRESS_ROUTE_PREFIX.length)
-  if (rest === '') return { callId: null }
-  if (!rest.startsWith('/')) return null
+  if (rest === '') {
+    return { callId: null }
+  }
+  if (!rest.startsWith('/')) {
+    return null
+  }
   const segs = rest.split('/').filter(Boolean)
-  if (segs.length !== 1) return null
+  if (segs.length !== 1) {
+    return null
+  }
   let callId: string
   try {
     callId = decodeURIComponent(segs[0]!)
