@@ -33,13 +33,21 @@ function parsePath(req: IncomingMessage): { id: string; content: boolean } | nul
   const url = req.url ?? ''
   const q = url.indexOf('?')
   const pathname = q >= 0 ? url.slice(0, q) : url
-  if (!pathname.startsWith(ARTIFACTS_ROUTE_PREFIX)) return null
+  if (!pathname.startsWith(ARTIFACTS_ROUTE_PREFIX)) {
+    return null
+  }
   const rest = pathname.slice(ARTIFACTS_ROUTE_PREFIX.length)
   // rest === '' or startsWith('/')
-  if (rest === '') return null
+  if (rest === '') {
+    return null
+  }
   const segs = rest.split('/').filter(Boolean)
-  if (segs.length === 1) return { id: segs[0]!, content: false }
-  if (segs.length === 2 && segs[1] === 'content') return { id: segs[0]!, content: true }
+  if (segs.length === 1) {
+    return { id: segs[0]!, content: false }
+  }
+  if (segs.length === 2 && segs[1] === 'content') {
+    return { id: segs[0]!, content: true }
+  }
   return null
 }
 
