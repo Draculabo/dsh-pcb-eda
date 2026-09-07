@@ -15,7 +15,9 @@ const INPUT_DIR = 'inputs'
 
 function readJsonFile<T>(path: string, fallback: T): T {
   try {
-    if (!existsSync(path)) return fallback
+    if (!existsSync(path)) {
+      return fallback
+    }
     return JSON.parse(readFileSync(path, 'utf8')) as T
   } catch {
     return fallback
@@ -30,7 +32,9 @@ function writeJsonFile(path: string, value: unknown): void {
 /** `data:image/...;base64,....` → { mime, bytes } | null. */
 export function parseDataUrl(dataUrl: string): { mime: string; bytes: Buffer } | null {
   const m = /^data:([^;,]+);base64,(.+)$/s.exec(dataUrl)
-  if (!m) return null
+  if (!m) {
+    return null
+  }
   try {
     return { mime: m[1]!, bytes: Buffer.from(m[2]!, 'base64') }
   } catch {
@@ -75,7 +79,9 @@ export class HistoryStore {
 
   async patch(id: string, patch: HistoryPatch): Promise<HistoryEntry | null> {
     const idx = this.entries.findIndex((e) => e.id === id)
-    if (idx < 0) return null
+    if (idx < 0) {
+      return null
+    }
     const current = this.entries[idx]!
     const next: HistoryEntry = {
       ...current,
@@ -94,8 +100,16 @@ export class HistoryStore {
     this.entries = this.entries.filter((e) => e.id !== id)
     writeJsonFile(this.file, this.entries)
     if (entry?.input?.imageId) {
-      try { unlinkSync(join(this.dir, INPUT_DIR, entry.input.imageId)) } catch { /* already gone */ }
-      try { unlinkSync(join(this.dir, INPUT_DIR, `${entry.input.imageId}.mime`)) } catch { /* already gone */ }
+      try {
+        unlinkSync(join(this.dir, INPUT_DIR, entry.input.imageId))
+      } catch {
+        /* already gone */
+      }
+      try {
+        unlinkSync(join(this.dir, INPUT_DIR, `${entry.input.imageId}.mime`))
+      } catch {
+        /* already gone */
+      }
     }
   }
 
@@ -106,7 +120,9 @@ export class HistoryStore {
 
   async saveImage(imageId: string, dataUrl: string): Promise<void> {
     const parsed = parseDataUrl(dataUrl)
-    if (!parsed) throw new Error('component-gen: invalid image data URL')
+    if (!parsed) {
+      throw new Error('component-gen: invalid image data URL')
+    }
     const dir = join(this.dir, INPUT_DIR)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, imageId), parsed.bytes)
@@ -116,12 +132,18 @@ export class HistoryStore {
   async readImage(imageId: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
     const dir = join(this.dir, INPUT_DIR)
     const path = join(dir, imageId)
-    if (!existsSync(path)) return null
+    if (!existsSync(path)) {
+      return null
+    }
     let mime = 'image/png'
     try {
       const sidecar = readFileSync(join(dir, `${imageId}.mime`), 'utf8').trim()
-      if (sidecar) mime = sidecar
-    } catch { /* legacy entry stored before the mime sidecar existed */ }
+      if (sidecar) {
+        mime = sidecar
+      }
+    } catch {
+      /* legacy entry stored before the mime sidecar existed */
+    }
     return { bytes: readFileSync(path), mime }
   }
 }
