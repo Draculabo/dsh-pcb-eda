@@ -60,7 +60,9 @@ function killPort(port) {
 
       const pids = new Set();
       for (const line of output.split(/\r?\n/)) {
-        if (!/LISTENING/i.test(line)) continue;
+        if (!/LISTENING/i.test(line)) {
+          continue;
+        }
         const parts = line.trim().split(/\s+/);
         const pid = parts[parts.length - 1];
         if (pid && /^\d+$/.test(pid) && pid !== '0') {
@@ -134,7 +136,9 @@ function main() {
     accessSync(harnessPkg);
     // Make sure the official `dsh` script exists in the harness package.json.
     const pkg = JSON.parse(readFileSync(harnessPkg, 'utf8'));
-    if (typeof pkg?.scripts?.dsh !== 'string') throw new Error('no dsh script');
+    if (typeof pkg?.scripts?.dsh !== 'string') {
+      throw new Error('no dsh script');
+    }
   } catch {
     console.error(
       `Local DeepSeek Harness not found at:\n  ${HARNESS_DIR}\n` +
@@ -181,7 +185,9 @@ function main() {
   // Forward termination signals to the child
   for (const sig of ['SIGINT', 'SIGTERM']) {
     process.on(sig, () => {
-      if (!child.killed) child.kill(sig);
+      if (!child.killed) {
+        child.kill(sig);
+      }
     });
   }
 }
