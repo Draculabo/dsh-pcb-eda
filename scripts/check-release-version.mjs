@@ -14,8 +14,7 @@
  * Exit 0 on success, 1 on any publishable mismatch.
  */
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { publishablePackages, repoRoot, rootManifestPath } from './utils/packages.mjs'
+import { publishablePackages, rootManifestPath } from './utils/packages.mjs'
 
 const argv = process.argv.slice(2)
 const requested = argv.find((a) => !a.startsWith('-'))
