@@ -249,7 +249,7 @@ async function record(
   const status: HistoryEntry['status'] = state.status === 'completed' ? 'generated' : state.status === 'cancelled' ? 'cancelled' : 'failed'
   const result = state.result as Record<string, unknown> | undefined
   const artifact = result?.artifact && typeof result.artifact === 'object'
-    ? result.artifact as { id?: unknown; filename?: unknown; size?: unknown }
+    ? result.artifact as { id?: unknown; filename?: unknown; size?: unknown; uri?: unknown }
     : null
   const entry: HistoryEntry = {
     id: newHistoryId(),
@@ -270,6 +270,9 @@ async function record(
           filename: typeof artifact.filename === 'string' ? artifact.filename : (result?.filename as string | undefined) ?? `${kind}.kicad_${kind === 'symbol' ? 'sym' : 'mod'}`,
           ...(typeof result?.fileUrl === 'string' ? { fileUrl: result.fileUrl } : {}),
           ...(typeof artifact.size === 'number' ? { size: artifact.size } : {}),
+          // Keep the placement channel alive across reopens: the HQ
+          // Edge-resolvable URI captured by the generation tail.
+          ...(typeof artifact.uri === 'string' && artifact.uri ? { uri: artifact.uri } : {}),
         },
       }
       : {}),

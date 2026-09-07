@@ -79,6 +79,14 @@ export interface HistoryEntry {
     filename: string
     fileUrl?: string
     size?: number
+    /**
+     * HQ Edge-resolvable URI of the artifact content (`file://`), captured
+     * from the generation result so a reopened history entry can still be
+     * placed into the editor (the Place action). Absent on entries recorded
+     * before the placement channel existed, or when the URI could not be
+     * resolved at generation time.
+     */
+    uri?: string
   }
   error?: string
 }

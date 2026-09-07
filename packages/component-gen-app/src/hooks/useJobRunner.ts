@@ -114,7 +114,13 @@ export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
     setPkgType(entry.input?.packageType ?? null)
     setFileName(null)
     setResult({
-      artifact: { id: entry.result?.artifactId },
+      artifact: {
+        id: entry.result?.artifactId,
+        // The placement channel survives reopens only if the generation-time
+        // URI was recorded in history; without it Place stays hidden (the
+        // frontend cannot mint an HQ Edge-resolvable URI from a store id).
+        ...(entry.result?.uri ? { uri: entry.result.uri } : {}),
+      },
       filename: entry.result?.filename,
       ...(entry.input?.dimensions ? { dimensions: entry.input.dimensions } : {}),
     })

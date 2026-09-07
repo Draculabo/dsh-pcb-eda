@@ -92,6 +92,8 @@ export interface HistoryEntry {
     filename: string
     fileUrl?: string
     size?: number
+    /** HQ Edge-resolvable URI captured at generation time (Place action). */
+    uri?: string
   }
   error?: string
 }

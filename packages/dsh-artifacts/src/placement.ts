@@ -15,7 +15,7 @@
  */
 
 /** Artifact classes that can be placed into an EDA editor. */
-export const PLACEABLE_ARTIFACT_TYPES = ['schematic', 'symbol', 'footprint'] as const
+export const PLACEABLE_ARTIFACT_TYPES = ['schematic', 'symbol', 'footprint', 'pcb'] as const
 
 export type PlaceableArtifactType = (typeof PLACEABLE_ARTIFACT_TYPES)[number]
 
@@ -30,17 +30,24 @@ export type EditorType = 'sch' | 'pcb' | 'symbol' | 'footprint' | 'generic'
  *
  * | Artifact  | sch | pcb | symbol | footprint | generic |
  * |-----------|-----|-----|--------|-----------|---------|
- * | schematic | yes | no  | no     | no        | no      |
- * | symbol    | yes | no  | yes    | no        | no      |
- * | footprint | no  | yes | no     | yes       | no      |
+ * | schematic | yes | no  | no     | no        | yes     |
+ * | symbol    | yes | no  | yes    | no        | yes     |
+ * | footprint | no  | yes | no     | yes       | yes     |
+ * | pcb       | no  | yes | no     | no        | yes     |
  *
- * `generic` appears in no row: HQ Edge may be inside *some* EDA host without
- * knowing which editor, so placement must fail closed.
+ * `pcb` rides the same design-block RPC as schematics (`DesignContent.pcb`):
+ * the editor-side PCB placement flow is the placement team's work and builds
+ * on this channel, so it must not be assumed away. `generic` means the host
+ * did not declare a specific editor context, and per the host contract such a
+ * deployment supports ALL placement targets by design — the EDA host is the
+ * final authority (HQ Edge re-enforces the same matrix server-side). Unknown
+ * editor values still fail closed.
  */
 const COMPATIBLE_EDITORS: Record<PlaceableArtifactType, ReadonlySet<EditorType>> = {
-  schematic: new Set<EditorType>(['sch']),
-  symbol: new Set<EditorType>(['sch', 'symbol']),
-  footprint: new Set<EditorType>(['pcb', 'footprint']),
+  schematic: new Set<EditorType>(['sch', 'generic']),
+  symbol: new Set<EditorType>(['sch', 'symbol', 'generic']),
+  footprint: new Set<EditorType>(['pcb', 'footprint', 'generic']),
+  pcb: new Set<EditorType>(['pcb', 'generic']),
 }
 
 /**
@@ -58,7 +65,8 @@ export function canPlaceArtifact(
 
 /**
  * Coerce an unknown value to a {@link PlaceableArtifactType}, or `null` when
- * it is not placeable (`pcb` and `zip` artifacts have no placement support).
+ * it is not placeable (`zip` artifacts have no placement of their own — a zip
+ * is expanded into schematics before the RPC).
  */
 export function parsePlaceableArtifactType(value: unknown): PlaceableArtifactType | null {
   if (typeof value !== 'string') return null

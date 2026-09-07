@@ -11,8 +11,8 @@ import {
 const EDITORS: EditorType[] = ['sch', 'pcb', 'symbol', 'footprint', 'generic']
 
 describe('PLACEABLE_ARTIFACT_TYPES', () => {
-  it('classifies exactly schematic, symbol and footprint', () => {
-    expect(PLACEABLE_ARTIFACT_TYPES).toEqual(['schematic', 'symbol', 'footprint'])
+  it('classifies exactly schematic, symbol, footprint and pcb', () => {
+    expect(PLACEABLE_ARTIFACT_TYPES).toEqual(['schematic', 'symbol', 'footprint', 'pcb'])
   })
 })
 
@@ -24,17 +24,19 @@ describe('canPlaceArtifact — full matrix', () => {
 
     //             sch    pcb    symbol footprint generic
     expect(matrix).toEqual([
-      [true, false, false, false, false], // schematic
-      [true, false, true, false, false], //  symbol
-      [false, true, false, true, false], //  footprint
+      [true, false, false, false, true], //  schematic
+      [true, false, true, false, true], //   symbol
+      [false, true, false, true, true], //   footprint
+      [false, true, false, false, true], //  pcb
     ])
   })
 })
 
 describe('canPlaceArtifact — per-artifact expectations', () => {
-  it('schematic is only placeable in the schematic editor', () => {
+  it('schematic is only placeable in the schematic editor (plus generic)', () => {
     expect(canPlaceArtifact('schematic', 'sch')).toBe(true)
-    for (const editor of EDITORS.filter((e) => e !== 'sch')) {
+    expect(canPlaceArtifact('schematic', 'generic')).toBe(true)
+    for (const editor of EDITORS.filter((e) => e !== 'sch' && e !== 'generic')) {
       expect(canPlaceArtifact('schematic', editor)).toBe(false)
     }
   })
@@ -53,14 +55,24 @@ describe('canPlaceArtifact — per-artifact expectations', () => {
     expect(canPlaceArtifact('footprint', 'symbol')).toBe(false)
   })
 
-  it('fails closed for the generic editor on every artifact type', () => {
+  it('accepts the generic editor for every artifact type (host supports all by design)', () => {
+    // The host contract: a `generic` deployment did not declare a specific
+    // editor context and supports ALL placement targets by design — the EDA
+    // host is the final authority. Mirrors HQ Edge's server-side matrix.
     for (const artifact of PLACEABLE_ARTIFACT_TYPES) {
-      expect(canPlaceArtifact(artifact, 'generic')).toBe(false)
+      expect(canPlaceArtifact(artifact, 'generic')).toBe(true)
     }
   })
 
+  it('pcb is placeable in the pcb editor (editor-side PCB flow builds on this channel)', () => {
+    expect(canPlaceArtifact('pcb', 'pcb')).toBe(true)
+    expect(canPlaceArtifact('pcb', 'sch')).toBe(false)
+    expect(canPlaceArtifact('pcb', 'symbol')).toBe(false)
+    expect(canPlaceArtifact('pcb', 'footprint')).toBe(false)
+  })
+
   it('fails closed for an unknown artifact type', () => {
-    expect(canPlaceArtifact('pcb' as PlaceableArtifactType, 'pcb')).toBe(false)
+    expect(canPlaceArtifact('zip' as PlaceableArtifactType, 'pcb')).toBe(false)
   })
 })
 
@@ -69,11 +81,12 @@ describe('parsePlaceableArtifactType', () => {
     expect(parsePlaceableArtifactType('schematic')).toBe('schematic')
     expect(parsePlaceableArtifactType('symbol')).toBe('symbol')
     expect(parsePlaceableArtifactType('footprint')).toBe('footprint')
+    expect(parsePlaceableArtifactType('pcb')).toBe('pcb')
   })
 
   it('rejects non-placeable and malformed values', () => {
-    // 'pcb' and 'zip' exist in the artifact store but have no placement support.
-    expect(parsePlaceableArtifactType('pcb')).toBeNull()
+    // 'zip' exists in the artifact store but has no placement of its own —
+    // it is expanded into schematics before the RPC.
     expect(parsePlaceableArtifactType('zip')).toBeNull()
     expect(parsePlaceableArtifactType('')).toBeNull()
     expect(parsePlaceableArtifactType(undefined)).toBeNull()
