@@ -136,11 +136,14 @@ function placeEntry(root: HTMLElement, entry: HTMLButtonElement, options: Sideba
  * @returns disposer removing the entry and its observers.
  */
 export function mountSidebarEntry(options: SidebarEntryOptions): () => void {
+  if (typeof document === 'undefined') {
+    return () => {}
+  }
   // DOM-level idempotency: whatever path mounted an entry row before this
   // call (a duplicated apply, an HMR re-injection, a stale module still
   // alive), never mount a second one. The existing row keeps working; a full
   // page reload is the ultimate reset.
-  if (typeof document !== 'undefined' && document.querySelector(options.rowSelector) !== null) {
+  if (document.querySelector(options.rowSelector) !== null) {
     return () => {}
   }
   const { entry, applyLabel } = createEntry(options)
