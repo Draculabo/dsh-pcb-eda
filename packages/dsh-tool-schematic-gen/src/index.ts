@@ -27,7 +27,6 @@ import { HTTP_TIMEOUT_MS } from './sse.js'
 import { ProgressStore } from './progress.js'
 import { createProgressHandler, PROGRESS_ROUTE_PREFIX } from './routes.js'
 
-/** Plugin id — matches package.json. */
 export const name = '@huaqiu/dsh-tool-schematic-gen'
 
 /**
@@ -39,11 +38,9 @@ export const name = '@huaqiu/dsh-tool-schematic-gen'
  */
 export const inject = ['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer'] as const
 
-/** Console tag for filtering in logs. */
 const LOG_TAG = '[dsh-schematic-gen]'
 
 export interface SchematicGenPluginConfig {
-  /** Endpoint overrides, env-backed. */
   copilotkitUrl?: string
   exportZipUrl?: string
 }
@@ -73,7 +70,6 @@ export function apply(ctx: Context, config: SchematicGenPluginConfig = {}): () =
   const auth: HuaqiuAuthService = ctx.huaqiuAuth
   const artifacts: HuaqiuArtifacts = ctx.huaqiuArtifacts
 
-  // Fail fast at load time on a misconfigured endpoint override.
   const configOverride: Record<string, string | undefined> = {}
   if (config.copilotkitUrl) configOverride.HQ_EDA_COPILOTKIT_URL = config.copilotkitUrl
   if (config.exportZipUrl) configOverride.HQ_EDA_EXPORT_ZIP_URL = config.exportZipUrl
@@ -126,5 +122,4 @@ export function apply(ctx: Context, config: SchematicGenPluginConfig = {}): () =
   }
 }
 
-/** Exported for tests: the agent ids this plugin drives. */
 export { agentIds } from './config.js'
