@@ -145,9 +145,12 @@ export async function createStandaloneServer(options: StandaloneServerOptions = 
     server.listen(port, host, resolveListen)
   })
 
+  const address = server.address()
+  const listeningPort = typeof address === 'object' && address ? address.port : port
+
   return {
     server,
-    port,
+    port: listeningPort,
     auth,
     history,
     close: async () => new Promise((resolveClose) => server.close(() => resolveClose())),
