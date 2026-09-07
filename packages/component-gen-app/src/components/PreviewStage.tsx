@@ -27,16 +27,25 @@ export function PreviewStage({ kind, content, srcKey, t }: PreviewStageProps): R
     ;(async () => {
       try {
         const canvas = canvasRef.current
-        if (!canvas) return
+        if (!canvas) {
+          return
+        }
         // Wait one layout frame so the canvas has its final CSS size.
         await new Promise((resolve) => {
-          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(resolve)
-          else setTimeout(resolve, 16)
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(resolve)
+          } else {
+            setTimeout(resolve, 16)
+          }
         })
-        if (cancelled || canvas !== canvasRef.current) return
+        if (cancelled || canvas !== canvasRef.current) {
+          return
+        }
         sizeCanvasFor(canvas)
         disposeViewer = await renderArtifactToCanvas(kind ?? 'symbol', content, canvas)
-        if (cancelled || canvas !== canvasRef.current) return
+        if (cancelled || canvas !== canvasRef.current) {
+          return
+        }
         setView({ view: 'ready', message: '' })
       } catch (e) {
         if (!cancelled) {
@@ -47,7 +56,9 @@ export function PreviewStage({ kind, content, srcKey, t }: PreviewStageProps): R
     })()
     return () => {
       cancelled = true
-      try { disposeViewer?.() } catch { /* ignore */ }
+      try {
+        disposeViewer?.()
+      } catch {}
     }
   }, [srcKey, kind, content])
 
