@@ -61,6 +61,8 @@ function stubEnv(overrides: Partial<SymbolFootprintEnv> = {}): SymbolFootprintEn
     },
     get: async () => null,
     readContent: async () => null,
+    // The Place channel: a stable file:// URI per stored artifact.
+    getDownloadUri: async (id) => (created.some((c) => c.id === id) ? 'file:///tmp/dsh-artifacts/' + id + '/content' : null),
     delete: async () => {},
     deleteAll: async () => 0,
   }
@@ -105,6 +107,8 @@ describe('symbol-footprint tool bodies', () => {
     expect(result.status).toBe('generated')
     expect(result.kind).toBe('symbol')
     expect(result.artifact).toMatchObject({ type: 'symbol', filename: 'y.kicad_sym' })
+    // The Place channel: the stored artifact carries a resolvable file:// URI.
+    expect((result.artifact as { uri?: string }).uri).toMatch(/^file:\/\//)
     // Content is NOT inlined when the artifact store succeeds.
     expect(result.content).toBeUndefined()
   })

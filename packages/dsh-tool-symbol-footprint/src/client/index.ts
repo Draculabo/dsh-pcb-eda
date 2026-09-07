@@ -20,6 +20,7 @@ import { createElement, useEffect, useState, type ComponentType } from 'react'
 import { GenHit } from './hit-card.jsx'
 import { injectStyles, removeStyles, disposeThemeObserver, installGenHitUncollapser } from './theme.js'
 import { installWorkspace } from './workspace.jsx'
+import type { HqEdgePlaceLike } from './place.js'
 
 const TOOLVIEW_KEYS = [
   'generate_symbol_from_image',
@@ -128,6 +129,12 @@ export function apply(ctx: ClientContext): () => void {
   const authService = ctx.get<HuaqiuAuthClientService | undefined>('huaqiuAuth')
   const useAuthState = createUseAuthState(authService?.auth)
 
+  // Lazy `hqEdge` accessor for the Place action. NOT captured once: the
+  // edge-bridge plugin may load after this one, and a click should see the
+  // service as soon as it exists. Undefined in standalone DSH (no edge-bridge)
+  // — the card then simply hides Place.
+  const getHqEdge = () => ctx.get<HqEdgePlaceLike | undefined>('hqEdge')
+
   const sendPrompt: PromptSender = (sessionId, message) => {
     const sessions = ctx.get<{ binding(id: string): { session: { prompt(content: Array<{ type: 'text'; text: string }>, mode: 'queue'): Promise<unknown> } } | undefined }>('sessions')
     if (!sessions || typeof sessions.binding !== 'function' || !sessionId) {
@@ -161,6 +168,7 @@ export function apply(ctx: ClientContext): () => void {
         sessionId: props.sessionId,
         sendPrompt,
         authState: useAuthState(),
+        getHqEdge,
       })
 
     for (const toolName of TOOLVIEW_KEYS) {

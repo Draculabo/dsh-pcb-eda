@@ -22,6 +22,7 @@ import {
   resolveArtifactText, resolveArtifactBytes, renderSheetToCanvas,
   renderProjectZipToCanvas, sizeCanvasFor, downloadText, downloadBytes,
 } from './ecad.js'
+import { placeSupportOf, type HqEdgePlaceLike } from './place.js'
 import { useLocale, useTheme } from './theme.js'
 import { buildLoginUrl, loginIframeBackground } from './login-url.js'
 import { LiveProgress } from './stack-frame.jsx'
@@ -52,6 +53,13 @@ export interface GenHitProps {
   inspect?: () => void
   authState?: AuthStateLike
   sendPrompt?: PromptSender
+  /**
+   * Lazy accessor for the host's `hqEdge` service (edge-bridge browser half).
+   * Absent/undefined in standalone DSH — the Place button is then hidden.
+   * Lazy (not captured once) so plugin load order and HQ Edge restarts both
+   * resolve correctly at click time.
+   */
+  getHqEdge?: () => HqEdgePlaceLike | undefined
 }
 
 function kindOf(toolName: string): 'schematic' | 'system' {
@@ -267,6 +275,9 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
   }, [artifactKey, state.phase])
 
   const [busy, setBusy] = useState<string | null>(null)
+  // Outcome of the last Place attempt: 'ok' | 'error:<detail>'. Rendered as a
+  // one-line status under the actions so the user knows the placement landed.
+  const [placeStatus, setPlaceStatus] = useState<string | null>(null)
 
   function onDownload(): void {
     if (busy || payload.phase !== 'ready') return
@@ -296,6 +307,59 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
       () => setBusy(null),
       (err) => { console.warn('[hq-schematic-gen] regenerate failed', err); setBusy(null) },
     )
+  }
+
+  /**
+   * Place the generated design into the host EDA editor via HQ Edge.
+   *
+   * A system design sends ONE request (the project zip; HQ Edge derives the
+   * root from the `*.kicad_pro` name — the same convention as the preview).
+   * A multi-sheet schematic sends one request per sheet so every sheet lands
+   * in the editor. Failures are collected and reported as a one-line status;
+   * a partial success is explicitly surfaced, not swallowed.
+   */
+  function placeRequestsOf(): Array<{ artifactUri: string; filename: string | null }> {
+    if (!result) return []
+    // System kind: exactly one zip artifact (one request; HQ Edge derives the
+    // root from the `*.kicad_pro` name inside the zip). Schematic kind: one
+    // request per sheet. The wire shape is identical either way.
+    return result.artifacts
+      .filter((a) => a.uri)
+      .map((a) => ({ artifactUri: a.uri!, filename: a.filename }))
+  }
+
+  async function onPlace(): Promise<void> {
+    if (busy) return
+    const support = placeSupportOf(props.getHqEdge, 'schematic')?.()
+    if (!support) return
+    const requests = placeRequestsOf()
+    if (requests.length === 0) return
+    setBusy('place')
+    setPlaceStatus(null)
+    let placed = 0
+    const failures: string[] = []
+    for (const req of requests) {
+      try {
+        await support.place({
+          type: 'schematic',
+          artifactUri: req.artifactUri,
+          ...(req.filename ? { filename: req.filename } : {}),
+        })
+        placed++
+      } catch (err) {
+        const detail = String((err as Error)?.message || err)
+        console.warn('[hq-schematic-gen] place failed', detail)
+        failures.push(detail)
+      }
+    }
+    setBusy(null)
+    if (failures.length === 0) {
+      setPlaceStatus(t('card.place.done', { count: placed }))
+    } else if (placed > 0) {
+      setPlaceStatus(t('card.place.partial', { placed, failed: failures.length }) + ' ' + failures[0])
+    } else {
+      setPlaceStatus(t('card.place.failed') + ' ' + failures[0])
+    }
   }
 
   // needs_auth
@@ -355,6 +419,12 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
   }
 
   const canDownload = payload.phase === 'ready' && (payload.source != null || payload.bytes != null)
+  // Place is offered only when the host provides hqEdge, the current editor
+  // accepts schematics (frontend matrix; HQ Edge re-enforces server-side) and
+  // the node half resolved at least one artifact uri.
+  const placeSupport = placeSupportOf(props.getHqEdge, 'schematic')
+  const placeableCount = result.artifacts.filter((a) => a.uri).length
+  const canPlace = !!placeSupport?.() && placeableCount > 0
 
   return (
     <div className="hq-sch">
@@ -366,6 +436,13 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
         <button type="button" className="hq-sch__act" onClick={onDownload} disabled={!canDownload || busy === 'download'}>
           ⭳ {busy === 'download' ? t('card.action.downloading') : t('card.action.download')}
         </button>
+        {canPlace
+          ? (
+            <button type="button" className="hq-sch__act" onClick={onPlace} disabled={busy === 'place'}>
+              ⇥ {busy === 'place' ? t('card.action.placing') : t('card.action.place')}
+            </button>
+          )
+          : null}
         <button type="button" className="hq-sch__act" onClick={onRegenerate} disabled={busy === 'regenerate'}>
           ↻ {busy === 'regenerate' ? t('card.action.regenerating') : t('card.action.regenerate')}
         </button>
@@ -373,6 +450,7 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
           ? <button type="button" className="hq-sch__act" onClick={() => props.inspect?.()}>{t('card.action.inspect')}</button>
           : null}
       </div>
+      {placeStatus ? <div className="hq-sch__note">{placeStatus}</div> : null}
     </div>
   )
 })

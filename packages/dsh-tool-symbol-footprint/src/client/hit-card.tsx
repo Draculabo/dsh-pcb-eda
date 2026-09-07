@@ -23,6 +23,7 @@ import {
 } from './dims.js'
 import { type Translate, useT } from './i18n.js'
 import { resolveArtifact, renderArtifactToCanvas, sizeCanvasFor, triggerDownload } from './ecad.js'
+import { placeSupportOf, type HqEdgePlaceLike } from './place.js'
 import { useLocale, useTheme } from './theme.js'
 import { buildLoginUrl, loginIframeBackground } from './login-url.js'
 import type { AuthStateLike, PromptSender } from './index.js'
@@ -38,6 +39,13 @@ export interface GenHitProps {
   inspect?: () => void
   authState?: AuthStateLike
   sendPrompt?: PromptSender
+  /**
+   * Lazy accessor for the host's `hqEdge` service (edge-bridge browser half).
+   * Absent/undefined in standalone DSH — the Place button is then hidden.
+   * Lazy (not captured once) so plugin load order and HQ Edge restarts both
+   * resolve correctly at click time.
+   */
+  getHqEdge?: () => HqEdgePlaceLike | undefined
 }
 
 /** Kind inferred from the tool name — used while the call is not settled. */
@@ -682,6 +690,8 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
 
   const [busy, setBusy] = useState<string | null>(null)
   const [answer, setAnswer] = useState<string | null>(null)
+  // Outcome of the last Place attempt (one-line status under the actions).
+  const [placeStatus, setPlaceStatus] = useState<string | null>(null)
 
   function onDownload(): void {
     if (busy) return
@@ -710,6 +720,38 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
         setBusy(null)
       },
     )
+  }
+
+  /**
+   * Place the generated symbol/footprint into the host EDA editor via HQ Edge
+   * (`hqEdge.placeArtifact`). The artifact type is the result's own kind —
+   * symbols go to sch/symbol editors, footprints to pcb/footprint editors
+   * (gated by the shared frontend matrix; HQ Edge re-enforces server-side).
+   */
+  async function onPlace(): Promise<void> {
+    if (busy) return
+    const kind = result?.kind
+    const uri = result?.artifact?.uri
+    const filename = result?.artifact?.filename ?? result?.filename
+    if (!kind || !uri) return
+    const support = placeSupportOf(props.getHqEdge, kind === 'symbol' ? 'symbol' : 'footprint')?.()
+    if (!support) return
+    setBusy('place')
+    setPlaceStatus(null)
+    try {
+      await support.place({
+        type: kind === 'symbol' ? 'symbol' : 'footprint',
+        artifactUri: uri,
+        ...(filename ? { filename } : {}),
+      })
+      setPlaceStatus(t('card.place.done', { count: 1 }))
+    } catch (err) {
+      const detail = String((err as Error)?.message || err)
+      console.warn('[hq-genhit] place failed', detail)
+      setPlaceStatus(t('card.place.failed') + detail)
+    } finally {
+      setBusy(null)
+    }
   }
 
   function onDimsConfirm(values: DimensionValues, edited: Record<string, boolean>): void {
@@ -830,6 +872,11 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
   }
 
   const canDownload = src.phase === 'ready' && src.content != null
+  // Place is offered only when the host provides hqEdge, the current editor
+  // accepts this artifact kind (frontend matrix; HQ Edge re-enforces
+  // server-side) and the node half resolved an artifact uri.
+  const placeKind = result.kind === 'symbol' ? 'symbol' : 'footprint'
+  const canPlace = !!placeSupportOf(props.getHqEdge, placeKind)?.() && !!result.artifact?.uri
   return (
     <div className="hq-genhit">
       {genHitHeader(result.kind, 'completed', t)}
@@ -839,6 +886,13 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
         <button type="button" className="hq-genhit__act" onClick={onDownload} disabled={!canDownload || busy === 'download'}>
           ⭳ {busy === 'download' ? t('card.action.downloading') : t('card.action.download')}
         </button>
+        {canPlace
+          ? (
+            <button type="button" className="hq-genhit__act" onClick={onPlace} disabled={busy === 'place'}>
+              ⇥ {busy === 'place' ? t('card.action.placing') : t('card.action.place')}
+            </button>
+          )
+          : null}
         <button type="button" className="hq-genhit__act" onClick={onRegenerate} disabled={busy === 'regenerate'}>
           ↻ {busy === 'regenerate' ? t('card.action.regenerating') : t('card.action.regenerate')}
         </button>
@@ -846,6 +900,7 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
           ? <button type="button" className="hq-genhit__act" onClick={() => props.inspect?.()}>{t('card.action.inspect')}</button>
           : null}
       </div>
+      {placeStatus ? <div className="hq-genhit__note">{placeStatus}</div> : null}
     </div>
   )
 })

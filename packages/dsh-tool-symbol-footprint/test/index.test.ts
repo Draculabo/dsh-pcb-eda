@@ -27,6 +27,7 @@ function ctxStub() {
     create: async (): Promise<CreateArtifactResult> => ({ id: 'art_test', type: 'footprint', filename: 'x.kicad_mod', size: 1 }),
     get: async () => null,
     readContent: async () => null,
+    getDownloadUri: async () => 'file:///tmp/dsh-artifacts/art_test/content',
     delete: async () => {},
     deleteAll: async () => 0,
   }

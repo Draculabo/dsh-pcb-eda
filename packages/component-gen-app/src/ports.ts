@@ -131,6 +131,20 @@ export interface ComponentGenAuthPort {
   onAuthStateChanged(listener: (authenticated: boolean) => void): () => void
 }
 
+/**
+ * Optional Place capability: send a generated artifact into the host EDA
+ * editor through HQ Edge (`hqEdge.placeArtifact`, same-origin edge-bridge).
+ *
+ * Structurally defined — the app stays DSH-agnostic. The host adapter decides
+ * availability via `canPlace` (editor compatibility, UX-only: HQ Edge
+ * re-enforces the same matrix server-side). Absent in standalone deployments,
+ * in which case the app hides the Place action.
+ */
+export interface ComponentGenPlacePort {
+  canPlace(type: 'symbol' | 'footprint'): boolean
+  placeArtifact(request: { type: 'symbol' | 'footprint'; artifactUri: string; filename?: string }): Promise<unknown>
+}
+
 /** The whole contract the app needs from its host. */
 export interface ComponentGenPorts {
   config(): Promise<ComponentGenConfig>
@@ -146,4 +160,6 @@ export interface ComponentGenPorts {
   /** data URL of a stored input thumbnail. */
   inputImage(imageId: string): Promise<string>
   auth: ComponentGenAuthPort
+  /** Optional Place-into-editor capability (HQ Edge host only). */
+  place?: ComponentGenPlacePort
 }

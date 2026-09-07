@@ -47,6 +47,23 @@ describe('HuaqiuArtifactService', () => {
     expect(Array.from((await svc.readContent(binary.id))!)).toEqual([1, 2, 3, 250])
   })
 
+  it('exposes a cross-process download URI (not a store-local id)', async () => {
+    const art = await svc.create({ type: 'symbol', filename: 's.kicad_sym', content: '(symbol)' })
+    const uri = await svc.getDownloadUri(art.id)
+    expect(uri).toBeTruthy()
+    // A URI, not the store-local id.
+    expect(uri!.startsWith('file://')).toBe(true)
+    expect(uri).not.toBe(art.id)
+    // …and it must actually resolve to the artifact bytes.
+    const { fileURLToPath } = await import('node:url')
+    expect(fs.readFileSync(fileURLToPath(uri!), 'utf8')).toBe('(symbol)')
+  })
+
+  it('returns null from getDownloadUri for missing/expired artifacts', async () => {
+    expect(await svc.getDownloadUri('art_missing')).toBeNull()
+    expect(await svc.getDownloadUri('../etc/passwd')).toBeNull()
+  })
+
   it('rejects invalid ids (traversal, non-hex, wrong prefix)', async () => {
     expect(await svc.get('../etc/passwd')).toBeNull()
     expect(await svc.get('art_ZZZZ')).toBeNull()

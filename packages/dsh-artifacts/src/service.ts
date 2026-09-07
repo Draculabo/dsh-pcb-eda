@@ -19,6 +19,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 
@@ -67,6 +68,18 @@ export interface HuaqiuArtifacts {
   create(input: CreateArtifactInput): Promise<CreateArtifactResult>
   get(id: string): Promise<ArtifactMeta | null>
   readContent(id: string): Promise<Uint8Array | null>
+  /**
+   * Stable URI for the artifact's bytes, suitable for handing to ANOTHER
+   * process (HQ Edge) — currently a `file://` URI to the stored content.
+   *
+   * An artifact **id** is store-local and must never cross that boundary: the
+   * DSH artifact store and the HQ Edge artifact store are separate, so an id
+   * minted here is meaningless there. Callers that need to reference an
+   * artifact across processes (e.g. the Place action) must pass this URI.
+   *
+   * @returns the URI, or null when the artifact is missing/expired.
+   */
+  getDownloadUri(id: string): Promise<string | null>
   delete(id: string): Promise<void>
   deleteAll(opts?: { onlyExpired?: boolean }): Promise<number>
 }
@@ -207,6 +220,27 @@ export class HuaqiuArtifactService implements HuaqiuArtifacts {
     try {
       return new Uint8Array(await fs.promises.readFile(path.join(this.artifactDir(id), 'content')))
     } catch {
+      return null
+    }
+  }
+
+  /**
+   * @see HuaqiuArtifacts.getDownloadUri
+   *
+   * Returns a `file://` URI rather than an HTTP URL: this package has no
+   * knowledge of the DSH origin/port it will eventually be served from, and
+   * HQ Edge runs on the same host, so a filesystem URI is the narrowest
+   * boundary that is actually resolvable on the other side. HQ Edge also
+   * accepts `http(s)://` URIs, so this can be upgraded without a contract
+   * change.
+   */
+  async getDownloadUri(id: string): Promise<string | null> {
+    const meta = await this.get(id)
+    if (!meta) return null
+    try {
+      return pathToFileURL(path.join(this.artifactDir(id), 'content')).href
+    } catch (err) {
+      log('warn', 'getDownloadUri failed', { id, err })
       return null
     }
   }

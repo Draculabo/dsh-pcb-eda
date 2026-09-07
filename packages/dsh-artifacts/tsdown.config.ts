@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: ['./src/index.ts', './src/service.ts'],
+  entry: ['./src/index.ts', './src/service.ts', './src/placement.ts'],
   format: ['esm'],
   dts: true,
   deps: { neverBundle: [/^@deepseek-ai\//] },

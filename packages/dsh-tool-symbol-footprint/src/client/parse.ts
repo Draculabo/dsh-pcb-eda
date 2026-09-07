@@ -6,7 +6,7 @@
  * hq-edge client (`docs/research/dsh/research-improve-gen-hit.md §K`).
  *
  * Result shapes produced by the node half (`src/tools.ts`):
- *   { status:'generated', kind, fileUrl, filename, artifact:{id,type,filename,size}, content?, pkgType?, dimensions?, note?, serviceMessage? }
+ *   { status:'generated', kind, fileUrl, filename, artifact:{id,type,filename,size,uri?}, content?, pkgType?, dimensions?, note?, serviceMessage? }
  *   { status:'needs_confirmation', kind:'footprint', pkgType, fileName, dimensions, agentNote }
  *   { status:'cancelled', kind:'footprint', pkgType, fileName, ... }
  *   { status:'needs_auth', kind:'symbol'|'footprint', hint }
@@ -34,6 +34,13 @@ export interface ArtifactRef {
   type: string | null
   filename: string | null
   size: number | null
+  /**
+   * HQ Edge-resolvable URI (`file://`) for the artifact bytes — the handle the
+   * Place action passes to `hqEdge.placeArtifact`. `null` when the node half
+   * could not resolve it (standalone DSH, older node half): the card then
+   * hides Place.
+   */
+  uri: string | null
 }
 
 export interface GenResult {
@@ -114,6 +121,7 @@ export function parseGenResult(text: string): GenResult | null {
         type: typeof a.type === 'string' ? a.type : (kind ?? null),
         filename: typeof a.filename === 'string' ? a.filename : null,
         size: typeof a.size === 'number' ? a.size : null,
+        uri: typeof a.uri === 'string' && a.uri.length > 0 ? a.uri : null,
       }
     }
   }

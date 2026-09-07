@@ -10,6 +10,7 @@
 import type {
   ComponentGenAuthPort,
   ComponentGenConfig,
+  ComponentGenPlacePort,
   ComponentGenPorts,
   HistoryEntry,
   HistoryPage,
@@ -44,6 +45,8 @@ export interface HttpPortsOptions {
   artifactsBase?: string
   doFetch?: typeof fetch
   auth?: ComponentGenAuthPort
+  /** Optional Place-into-editor capability, forwarded verbatim. */
+  place?: ComponentGenPlacePort
 }
 
 /** The shared fetch client. */
@@ -58,6 +61,8 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
   const artifactUrl = (p: string): string => `${artifactsBase}${p}`
 
   return {
+    // Optional Place capability, forwarded from the host adapter verbatim.
+    ...(options.place ? { place: options.place } : {}),
     async config(): Promise<ComponentGenConfig> {
       const res = await doFetch(url('/config'), { headers: { accept: 'application/json' } })
       const cfg = await readJson<Partial<ComponentGenConfig>>(res)

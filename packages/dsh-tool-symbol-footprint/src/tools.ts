@@ -157,12 +157,28 @@ async function createPreviewArtifact(
   return env.artifacts.create({ type, filename, content })
 }
 
+/**
+ * Best-effort cross-process URI for a stored artifact (`file://` to its
+ * content on disk). This is what the Place action hands to HQ Edge — an
+ * artifact *id* is store-local and meaningless there. Never throws: when the
+ * URI cannot be resolved the card simply hides Place.
+ */
+async function artifactUriOf(env: SymbolFootprintEnv, id: string): Promise<string | null> {
+  try {
+    if (!env.artifacts || typeof env.artifacts.getDownloadUri !== 'function') return null
+    return await env.artifacts.getDownloadUri(id)
+  } catch (err) {
+    console.warn(LOG_TAG, 'getDownloadUri failed for', id, String((err as Error)?.message || err))
+    return null
+  }
+}
+
 /** Shared tail of both generation paths: artifact URL → download → store. */
 async function finishGeneration(
   kind: 'symbol' | 'footprint',
   response: { action: { action: string; context: unknown } | null; actions: Array<{ action: string; context: unknown }>; text: string },
   env: SymbolFootprintEnv,
-): Promise<{ fileUrl: string; filename: string; artifact?: { id: string; type: string; filename: string; size: number }; content?: string; note?: string; serviceMessage?: string }> {
+): Promise<{ fileUrl: string; filename: string; artifact?: { id: string; type: string; filename: string; size: number; uri?: string }; content?: string; note?: string; serviceMessage?: string }> {
   const action = response.action
   if (action === null) {
     const notFound = findAction(response.actions, [agentActions.PKG_TYPE_NOT_FOUND])
@@ -183,7 +199,7 @@ async function finishGeneration(
   const result: {
     fileUrl: string
     filename: string
-    artifact?: { id: string; type: string; filename: string; size: number }
+    artifact?: { id: string; type: string; filename: string; size: number; uri?: string }
     content?: string
     note?: string
     serviceMessage?: string
@@ -198,6 +214,10 @@ async function finishGeneration(
         filename: created.filename,
         size: created.size,
       }
+      // The Place channel: a stable HQ Edge-resolvable URI. Best-effort —
+      // without it the card hides Place and everything else still works.
+      const uri = await artifactUriOf(env, created.id)
+      if (uri) result.artifact.uri = uri
     } catch (storeErr) {
       result.note = (artifact.note ? artifact.note + ' ' : '') +
         'Preview artifact storage failed (' +
@@ -494,7 +514,8 @@ function createGenerateSymbolTool(env: SymbolFootprintEnv) {
     description:
       'Generate a KiCad schematic symbol from an image of a component (datasheet pinout drawing, ' +
       'package picture, or a photo of a part). Returns the URL of the generated KiCad symbol library ' +
-      'file PLUS a preview artifact reference (id, type, filename, size) in the `artifact` field. ' +
+      'file PLUS a preview artifact reference (id, type, filename, size, and a ' +
+      'uri when the cross-process placement channel is available) in the `artifact` field. ' +
       'Use this when the user asks to create, generate or draw a schematic symbol for a part that ' +
       'is not in the component library. ' +
       'IMPORTANT: The generated symbol renders automatically as a result card in the web client — ' +

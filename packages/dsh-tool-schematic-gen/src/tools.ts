@@ -166,6 +166,40 @@ async function createPreviewArtifact(
   return env.artifacts.create({ type, filename, content, contentEncoding })
 }
 
+/**
+ * Best-effort cross-process URI for a stored artifact (`file://` to its
+ * content on disk). This is what the Place action hands to HQ Edge — an
+ * artifact *id* is store-local and meaningless there. Never throws: a
+ * generation must not fail because the URI is unavailable; the card simply
+ * hides Place when there is no uri.
+ */
+async function artifactUriOf(env: SchematicGenEnv, id: string): Promise<string | null> {
+  try {
+    if (!env.artifacts || typeof env.artifacts.getDownloadUri !== 'function') return null
+    return await env.artifacts.getDownloadUri(id)
+  } catch (err) {
+    console.warn(LOG_TAG, 'getDownloadUri failed for', id, String((err as Error)?.message || err))
+    return null
+  }
+}
+
+/** Artifact entry shape in the tool result (parsed by the client card). */
+interface ArtifactEntry {
+  id: string
+  type: string
+  filename: string
+  size: number
+  /** HQ Edge-resolvable URI (`file://`), present when resolvable. */
+  uri?: string
+}
+
+async function toArtifactEntry(env: SchematicGenEnv, created: CreateArtifactResult): Promise<ArtifactEntry> {
+  const entry: ArtifactEntry = { id: created.id, type: created.type, filename: created.filename, size: created.size }
+  const uri = await artifactUriOf(env, created.id)
+  if (uri) entry.uri = uri
+  return entry
+}
+
 // ── Deliverable extraction ───────────────────────────────────────────────────
 
 export interface SchematicSheet {
@@ -219,7 +253,7 @@ export function extractModuleGraph(state: Record<string, unknown>): Record<strin
 
 interface MaterializedSchematic {
   schFiles: Array<{ filename: string; content?: string }>
-  schArtifacts?: Array<{ id: string; type: string; filename: string; size: number }>
+  schArtifacts?: Array<ArtifactEntry>
   /** User-safe status detail — the client card renders this. */
   note?: string
   /** Agent-only explanation/directive — the client card MUST NOT render it. */
@@ -234,7 +268,7 @@ interface MaterializedSchematic {
  */
 async function materializeSchematicArtifacts(env: SchematicGenEnv, schFiles: SchematicSheet[]): Promise<MaterializedSchematic> {
   const outFiles: Array<{ filename: string; content?: string }> = schFiles.map((f) => ({ filename: f.filename }))
-  const artifacts: Array<{ id: string; type: string; filename: string; size: number }> = []
+  const artifacts: ArtifactEntry[] = []
   let anyFailed = false
   let errorNote = ''
 
@@ -242,7 +276,7 @@ async function materializeSchematicArtifacts(env: SchematicGenEnv, schFiles: Sch
     const file = schFiles[i]!
     try {
       const created = await createPreviewArtifact(env, 'schematic', file.filename, file.content)
-      artifacts.push({ id: created.id, type: created.type, filename: created.filename, size: created.size })
+      artifacts.push(await toArtifactEntry(env, created))
     } catch (storeErr) {
       anyFailed = true
       outFiles[i]!.content = file.content // data-loss guard
@@ -445,11 +479,11 @@ export async function runGenerateSystem(
   // Store the project zip as a `zip` preview artifact (primary). Keeping the
   // zip OUT of the JSON keeps the result small — inlining base64 used to
   // truncate the tool result and fail the card.
-  let zipArtifact: { id: string; type: string; filename: string; size: number } | null = null
+  let zipArtifact: ArtifactEntry | null = null
   try {
     const safeName = sanitizeZipBaseName(designName)
     const created = await createPreviewArtifact(env, 'zip', safeName + '.zip', zipBuf.toString('base64'), 'base64')
-    zipArtifact = { id: created.id, type: created.type, filename: created.filename, size: created.size }
+    zipArtifact = await toArtifactEntry(env, created)
   } catch (storeErr) {
     notes.push('Could not store the project zip as an artifact (' +
       String((storeErr as Error)?.message || storeErr) + '); kept it in the result instead.')
@@ -507,7 +541,8 @@ function createSchematicTool(env: SchematicGenEnv) {
       'regulator power supply with input and output filter capacitors". Calls the ' +
       'online HQ-EDA schematic generation agent and returns ' +
       'schFiles (filename references), schArtifacts (preview artifact references ' +
-      'with id/type/filename/size per sheet), kicadPro and project_achieve_url. ' +
+      'with id/type/filename/size plus a uri when the cross-process placement ' +
+      'channel is available), kicadPro and project_achieve_url. ' +
       'Use this when the user asks to draw, generate or create a circuit ' +
       'schematic from a description (not from an image — for that use the ' +
       'symbol/footprint tools). ' +
@@ -549,7 +584,8 @@ function createSystemTool(env: SchematicGenEnv) {
       'parts, wires the connections, and produces a module graph; the graph is ' +
       'then exported to a KiCad project zip. Returns: a zipArtifact reference ' +
       '(preview-artifact id of the full project zip — the zip is never inlined ' +
-      'into the conversation) and a summary (design name, module count, ' +
+      'into the conversation; a uri field is included when the cross-process ' +
+      'placement channel is available) and a summary (design name, module count, ' +
       'connection count, module names). Use this when the user wants a whole ' +
       'system/module-level design, not a single schematic or symbol. ' +
       'IMPORTANT: The generated system design renders automatically as a result ' +

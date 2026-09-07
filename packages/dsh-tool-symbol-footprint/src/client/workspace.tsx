@@ -29,6 +29,7 @@ import {
   mountComponentGenSidebarEntries,
 } from './sidebar-entry.js'
 import type { HuaqiuAuthClientService } from './index.js'
+import { placeSupportOf, type HqEdgePlaceLike } from './place.js'
 
 /** Shared workspace state for the two sidebar actions + the overlay. */
 interface WorkspaceState {
@@ -122,9 +123,18 @@ function startLocaleObserver(): () => void {
   }
 }
 
-/** Build the workspace ports: component-gen HTTP + dsh-auth client auth. */
+/**
+ * Build the workspace ports: component-gen HTTP + dsh-auth client auth.
+ *
+ * When the host provides `hqEdge` (edge-bridge browser half, HQ Edge-hosted
+ * DSH only), a Place port is attached so generated symbols/footprints can be
+ * sent straight into the editor. Editor compatibility is resolved lazily at
+ * every call via the shared frontend matrix — standalone DSH (no `hqEdge`
+ * service) simply gets no Place capability.
+ */
 export function createWorkspacePorts(
   auth: HuaqiuAuthClientService['auth'] | undefined,
+  getHqEdge?: () => HqEdgePlaceLike | undefined,
 ): ComponentGenPorts {
   const authPort: ComponentGenAuthPort = {
     isAuthenticated: async () => auth?.isAuthenticated() ?? false,
@@ -139,10 +149,22 @@ export function createWorkspacePorts(
       return auth.onAuthStateChanged((info) => cb(!!info))
     },
   }
+  const place = getHqEdge
+    ? {
+        canPlace: (type: 'symbol' | 'footprint'): boolean =>
+          placeSupportOf(getHqEdge, type)?.() != null,
+        placeArtifact: async (request: { type: 'symbol' | 'footprint'; artifactUri: string; filename?: string }) => {
+          const support = placeSupportOf(getHqEdge, request.type)?.()
+          if (!support) throw new Error('placement unavailable in the current editor')
+          return support.place(request)
+        },
+      }
+    : undefined
   return createHttpPorts({
     base: '/api/v1/huaqiu/component-gen',
     artifactsBase: '/api/v1/huaqiu/artifacts',
     auth: authPort,
+    ...(place ? { place } : {}),
   })
 }
 
@@ -215,13 +237,20 @@ function WorkspaceOverlay({ ports }: { ports: ComponentGenPorts }): JSX.Element 
 /**
  * Register the workspace UI. Call from the client `apply()`; returns a
  * disposer. `auth` is the `huaqiuAuth` client service (may be absent).
+ * `getHqEdge` lazily resolves the `hqEdge` service (absent in standalone DSH
+ * — Place then stays hidden).
  */
 export function installWorkspace(
-  ctx: { slots?: { inject(key: string, callback: () => () => void): () => void; register(spec: { name: string; key?: string; id?: string; order?: number }, component: unknown): unknown } },
+  ctx: {
+    slots?: { inject(key: string, callback: () => () => void): () => void; register(spec: { name: string; key?: string; id?: string; order?: number }, component: unknown): unknown }
+    get?(name: string): unknown
+  },
   auth: HuaqiuAuthClientService['auth'] | undefined,
 ): () => void {
   const disposers: Array<() => void> = []
-  const ports = createWorkspacePorts(auth)
+  const getHqEdge = (): HqEdgePlaceLike | undefined =>
+    (typeof ctx.get === 'function' ? ctx.get('hqEdge') : undefined) as HqEdgePlaceLike | undefined
+  const ports = createWorkspacePorts(auth, getHqEdge)
   disposers.push(startLocaleObserver())
 
   // Two task-board-style sidebar rows (between New Session and the workspace

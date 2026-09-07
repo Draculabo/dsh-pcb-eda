@@ -4,12 +4,14 @@
  * Result shapes produced by the node half (`src/tools.ts`):
  *   generate_schematic_from_description →
  *     { status:'generated', kind:'schematic', design_name, schFiles:[{filename}],
- *       schArtifacts:[{id,type,filename,size}], kicadPro, project_achieve_url, note? }
+ *       schArtifacts:[{id,type,filename,size,uri?}], kicadPro, project_achieve_url, note? }
  *   generate_system_module_graph →
  *     { status:'generated', kind:'system', design_name, module_count,
  *       connection_count, module_names, zip_bytes,
- *       zipArtifact:{id,type:'zip',filename,size}, note? }
+ *       zipArtifact:{id,type:'zip',filename,size,uri?}, note? }
  *   both may return { status:'needs_auth', kind, hint }
+ *
+ * `uri` (when present) is the HQ Edge-resolvable handle the Place action uses.
  */
 
 export interface ContentBlockLike {
@@ -28,12 +30,21 @@ export interface ArtifactRef {
   type: string | null
   filename: string | null
   size: number | null
+  /**
+   * HQ Edge-resolvable URI (`file://`) for the artifact bytes — the handle the
+   * Place action passes to `hqEdge.placeArtifact`. `null` when the node half
+   * could not resolve it (standalone DSH, older node half): the card then
+   * hides Place.
+   */
+  uri: string | null
 }
 
 export interface SchResult {
   status: string | null
   kind: string | null
   artifact: ArtifactRef | null
+  /** Every placeable artifact (schematic sheets / the project zip). */
+  artifacts: ArtifactRef[]
   designName: string | null
   fileCount: number | null
   moduleCount: number | null
@@ -79,6 +90,7 @@ function artOf(a: unknown): ArtifactRef | null {
     type: typeof o.type === 'string' ? o.type : null,
     filename: typeof o.filename === 'string' ? o.filename : null,
     size: typeof o.size === 'number' ? o.size : null,
+    uri: typeof o.uri === 'string' && o.uri.length > 0 ? o.uri : null,
   }
 }
 
@@ -98,17 +110,24 @@ export function parseSchResult(text: string): SchResult | null {
   const kind = typeof o.kind === 'string' ? o.kind : null
 
   let artifact: ArtifactRef | null = null
+  const artifacts: ArtifactRef[] = []
   if (kind === 'system') {
     artifact = artOf(o.zipArtifact)
+    if (artifact) artifacts.push(artifact)
   } else {
     const list = Array.isArray(o.schArtifacts) ? (o.schArtifacts as unknown[]) : []
-    artifact = list.length > 0 ? artOf(list[0]) : null
+    for (const entry of list) {
+      const ref = artOf(entry)
+      if (ref) artifacts.push(ref)
+    }
+    artifact = artifacts.length > 0 ? artifacts[0]! : null
   }
 
   return {
     status,
     kind,
     artifact,
+    artifacts,
     designName: typeof o.design_name === 'string' && o.design_name ? o.design_name : null,
     fileCount: Array.isArray(o.schFiles) ? (o.schFiles as unknown[]).length
       : (Array.isArray(o.schArtifacts) ? (o.schArtifacts as unknown[]).length : null),

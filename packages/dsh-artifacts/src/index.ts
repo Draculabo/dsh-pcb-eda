@@ -20,6 +20,17 @@ export type {
 export { HuaqiuArtifactService } from './service.js'
 export { ARTIFACTS_ROUTE_PREFIX, createArtifactsHandler, type ArtifactsHandler } from './routes.js'
 
+// Placement compatibility — shared by the generation tools so none of them
+// re-derives the artifact × editor matrix on its own.
+export {
+  PLACEABLE_ARTIFACT_TYPES,
+  canPlaceArtifact,
+  parsePlaceableArtifactType,
+  type PlaceableArtifactType,
+  type EditorType,
+  type PlaceArtifactRequest,
+} from './placement.js'
+
 export const name = '@huaqiu/dsh-artifacts'
 export const inject = ['webServer'] as const
 

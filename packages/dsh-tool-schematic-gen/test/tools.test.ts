@@ -29,6 +29,8 @@ function stubArtifacts(store = true): { artifacts: HuaqiuArtifacts; created: Cre
     },
     get: async () => null,
     readContent: async () => null,
+    // The Place channel: a stable file:// URI per stored artifact.
+    getDownloadUri: async (id) => (created.some((c) => c.id === id) ? 'file:///tmp/dsh-artifacts/' + id + '/content' : null),
     delete: async () => {},
     deleteAll: async () => 0,
   }
@@ -113,6 +115,8 @@ describe('runGenerateSchematic', () => {
     expect(result.design_name).toBe('PSU')
     expect((result.schFiles as Array<{ filename: string }>)[0]!.filename).toBe('PSU.kicad_sch')
     expect((result.schArtifacts as Array<{ id: string; type: string }>)[0]).toMatchObject({ type: 'schematic' })
+    // The Place channel: each stored artifact carries a resolvable file:// URI.
+    expect((result.schArtifacts as Array<{ uri?: string }>)[0]!.uri).toMatch(/^file:\/\//)
     expect(created).toHaveLength(1)
   })
 

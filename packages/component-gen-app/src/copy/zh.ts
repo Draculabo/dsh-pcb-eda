@@ -130,6 +130,12 @@ export const ZH = {
     loadMore: '加载更多',
     noMore: '没有更多了',
   },
+  result: {
+    place: '放置到编辑器',
+    placing: '放置中…',
+    placeDone: '已放置到编辑器',
+    placeFailed: '放置失败：',
+  },
   auth: {
     notLoggedIn: '未登录华秋账号',
     login: '登录华秋 EDA',

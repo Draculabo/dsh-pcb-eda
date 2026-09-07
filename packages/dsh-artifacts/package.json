@@ -9,6 +9,10 @@
       "types": "./lib/index.d.mts",
       "default": "./lib/index.mjs"
     },
+    "./placement": {
+      "types": "./lib/placement.d.mts",
+      "default": "./lib/placement.mjs"
+    },
     "./service": {
       "types": "./lib/service.d.mts",
       "default": "./lib/service.mjs"

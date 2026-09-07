@@ -133,6 +133,12 @@ export const EN: DeepStrings<typeof ZH> = {
     loadMore: 'Load more',
     noMore: 'No more',
   },
+  result: {
+    place: 'Place in editor',
+    placing: 'Placing…',
+    placeDone: 'Placed into the editor',
+    placeFailed: 'Placement failed: ',
+  },
   auth: {
     notLoggedIn: 'Not logged in to Huaqiu EDA',
     login: 'Login to Huaqiu EDA',
