@@ -21,7 +21,18 @@ export default defineConfig([
     dts: false,
     sourcemap: true,
     clean: false,
-    deps: { neverBundle: [/^react$/, /^react\//, /^@deepseek-ai\//] },
+    // react stays external (platform seed word), @deepseek-ai stays external
+    // (provided by the DSH platform). The browser-safe
+    // @huaqiu/dsh-artifacts/placement subpath is a plain library module (not a
+    // DSH client plugin) that never registers itself in the DSH client module
+    // table, so it MUST be bundled into this client bundle or the runtime
+    // fails with "missed the module table". Note the subpath-aware pattern: an
+    // anchored `^...$` regex would NOT match `@huaqiu/dsh-artifacts/placement`
+    // and would silently externalize it. Force-bundle it here.
+    deps: {
+      neverBundle: [/^react$/, /^react\//, /^@deepseek-ai\//],
+      alwaysBundle: [/^@huaqiu\/dsh-artifacts(\/|$)/],
+    },
     outputOptions: {
       entryFileNames: 'client.js',
       banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(CLIENT_ID)}, factory: (require) => {`,

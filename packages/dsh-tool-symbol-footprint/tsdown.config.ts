@@ -24,14 +24,17 @@ export default defineConfig([
     sourcemap: true,
     clean: false,
     // react stays external (platform seed word), @deepseek-ai stays external
-    // (provided by the DSH platform). @huaqiu/component-gen-app is a peer
-    // dependency, so tsdown would otherwise externalize it — but it is a plain
-    // library (not a plugin) that never registers itself in the DSH client
-    // module table, so it MUST be bundled into this client bundle or the
-    // runtime fails with "missed the module table". Force-bundle it here.
+    // (provided by the DSH platform). @huaqiu/component-gen-app and the
+    // browser-safe @huaqiu/dsh-artifacts/placement subpath are plain library
+    // modules (not DSH client plugins) that never register themselves in the
+    // DSH client module table, so they MUST be bundled into this client
+    // bundle or the runtime fails with "missed the module table". Note the
+    // subpath-aware pattern: an anchored `^...$` regex would NOT match
+    // `@huaqiu/dsh-artifacts/placement` and would silently externalize it.
+    // Force-bundle them here.
     deps: {
       neverBundle: [/^react$/, /^react\//, /^@deepseek-ai\//],
-      alwaysBundle: [/^@huaqiu\/component-gen-app$/],
+      alwaysBundle: [/^@huaqiu\/component-gen-app$/, /^@huaqiu\/dsh-artifacts(\/|$)/],
     },
     outputOptions: {
       entryFileNames: 'client.js',
