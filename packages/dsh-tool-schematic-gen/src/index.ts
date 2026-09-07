@@ -75,8 +75,12 @@ export function apply(ctx: Context, config: SchematicGenPluginConfig = {}): () =
 
   // Fail fast at load time on a misconfigured endpoint override.
   const configOverride: Record<string, string | undefined> = {}
-  if (config.copilotkitUrl) configOverride.HQ_EDA_COPILOTKIT_URL = config.copilotkitUrl
-  if (config.exportZipUrl) configOverride.HQ_EDA_EXPORT_ZIP_URL = config.exportZipUrl
+  if (config.copilotkitUrl) {
+    configOverride.HQ_EDA_COPILOTKIT_URL = config.copilotkitUrl
+  }
+  if (config.exportZipUrl) {
+    configOverride.HQ_EDA_EXPORT_ZIP_URL = config.exportZipUrl
+  }
   const finalConfig = resolveConfig({ ...(typeof process !== 'undefined' ? process.env : undefined), ...configOverride })
 
   // Live progress: an in-memory store the tool bodies write to and the browser
