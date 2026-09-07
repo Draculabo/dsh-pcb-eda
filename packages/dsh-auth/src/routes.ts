@@ -43,7 +43,9 @@ function normalizeUserInfo(data: Record<string, unknown>): HuaqiuUserInfo | null
     : typeof data.id === 'string' && data.id.length > 0 ? data.id
     : typeof data.id === 'number' && Number.isFinite(data.id) ? String(data.id)
     : null
-  if (!token || !id) return null
+  if (!token || !id) {
+    return null
+  }
   const nickname = typeof data.nickname === 'string' && data.nickname.length > 0 ? data.nickname : undefined
   const expiresAt = typeof data.expiresAt === 'number' && Number.isFinite(data.expiresAt)
     ? data.expiresAt
