@@ -22,12 +22,16 @@ export interface ToolBlockLike {
 
 /** Best-effort JSON.parse of the tool's text output blocks. */
 export function parseToolResult(block: ToolBlockLike | undefined): Record<string, unknown> | null {
-  if (!block || !Array.isArray(block.content)) return null
+  if (!block || !Array.isArray(block.content)) {
+    return null
+  }
   const text = block.content
     .filter((c): c is ContentBlockLike => !!c && c.type === 'text' && typeof c.text === 'string')
     .map((c) => c.text as string)
     .join('')
-  if (!text) return null
+  if (!text) {
+    return null
+  }
   try {
     const parsed = JSON.parse(text) as unknown
     return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
