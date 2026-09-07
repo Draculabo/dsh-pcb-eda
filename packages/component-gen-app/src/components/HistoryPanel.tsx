@@ -30,10 +30,15 @@ export function HistoryPanel({ ports, t, activeKind = null, onReopen }: HistoryP
     setLoading(true)
     try {
       const page = await ports.history({ limit: PAGE, cursor: nextCursor })
-      if (!nextCursor) setEntries(page.entries)
-      else setEntries((prev) => [...prev, ...page.entries])
+      if (!nextCursor) {
+        setEntries(page.entries)
+      } else {
+        setEntries((prev) => [...prev, ...page.entries])
+      }
       setCursor(page.nextCursor ?? null)
-      if (!page.nextCursor) setDone(true)
+      if (!page.nextCursor) {
+        setDone(true)
+      }
     } catch (e) {
       console.warn('[hq-component-gen] history load failed', e)
       setDone(true)
@@ -42,7 +47,9 @@ export function HistoryPanel({ ports, t, activeKind = null, onReopen }: HistoryP
     }
   }, [ports])
 
-  useEffect(() => { void load(null) }, [load])
+  useEffect(() => {
+    void load(null)
+  }, [load])
 
   const doDelete = useCallback(async (entry: HistoryEntry): Promise<void> => {
     setBusy(entry.id)
@@ -55,7 +62,9 @@ export function HistoryPanel({ ports, t, activeKind = null, onReopen }: HistoryP
   }, [ports])
 
   const doDownload = useCallback(async (entry: HistoryEntry): Promise<void> => {
-    if (!entry.result?.artifactId) return
+    if (!entry.result?.artifactId) {
+      return
+    }
     setBusy(entry.id)
     try {
       const content = await ports.artifactContent(entry.result.artifactId)
