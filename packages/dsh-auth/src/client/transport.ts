@@ -48,11 +48,15 @@ export function createWebServerAuthTransport(
           ...(info.expiresAt !== undefined ? { expiresAt: info.expiresAt } : {}),
         }),
       })
-      if (!res.ok) throw new Error(`auth push failed: HTTP ${res.status}`)
+      if (!res.ok) {
+        throw new Error(`auth push failed: HTTP ${res.status}`)
+      }
     },
     async pushLogout() {
       const res = await doFetch(`${base}/logout`, { method: 'POST' })
-      if (!res.ok) throw new Error(`auth logout push failed: HTTP ${res.status}`)
+      if (!res.ok) {
+        throw new Error(`auth logout push failed: HTTP ${res.status}`)
+      }
     },
     async fetchHostMode() {
       try {
@@ -60,7 +64,9 @@ export function createWebServerAuthTransport(
           method: 'GET',
           headers: { accept: 'application/json' },
         })
-        if (!res.ok) return false
+        if (!res.ok) {
+          return false
+        }
         const body = await res.json() as { hostMode?: unknown }
         return body.hostMode === true
       } catch {
@@ -75,7 +81,9 @@ export function createWebServerAuthTransport(
         method: 'GET',
         headers: { accept: 'application/json' },
       })
-      if (!res.ok) return { authenticated: false, user: null }
+      if (!res.ok) {
+        return { authenticated: false, user: null }
+      }
       const body = await res.json() as { authenticated?: unknown; user?: unknown }
       const user = body.user && typeof body.user === 'object' ? body.user as HostSessionUser : null
       return { authenticated: body.authenticated === true, user }
