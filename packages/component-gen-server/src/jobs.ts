@@ -151,12 +151,15 @@ export async function runGeneration(
   const exec = { signal }
 
   try {
+    signal?.throwIfAborted()
+
     if (req.kind === 'symbol') {
       progress('正在生成 Symbol…')
       const result = await backend.generateSymbol(
         { imageDataUrl: req.input.imageDataUrl ?? '', instruction: req.input.instruction },
         exec,
       )
+      signal?.throwIfAborted()
       if (isNeedsAuth(result)) return fail('needs_auth')
       const state = store.settle(id, { status: 'completed', result })
       await record(history, meta, req, state)
@@ -173,6 +176,7 @@ export async function runGeneration(
         },
         exec,
       )
+      signal?.throwIfAborted()
       if (isNeedsAuth(result)) return fail('needs_auth')
       if (result.status === 'needs_confirmation') {
         const dims = result.dimensions && typeof result.dimensions === 'object' ? result.dimensions : {}
@@ -206,6 +210,7 @@ export async function runGeneration(
       },
       exec,
     )
+    signal?.throwIfAborted()
     if (isNeedsAuth(result)) return fail('needs_auth')
     if (result.status === 'cancelled') {
       const state = store.settle(id, { status: 'cancelled', result })
