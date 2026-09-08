@@ -34,13 +34,37 @@ export function useAuthGate(ports: ComponentGenPorts): UseAuthGateResult {
   }, [ports])
 
   useEffect(() => {
+    let authStateVersion = 0
+
     void refresh()
     const unsub = ports.auth.onAuthStateChanged((authenticated) => {
+      const version = ++authStateVersion
       setPhase(authenticated ? 'authenticated' : 'unauthenticated')
-      if (authenticated) void ports.auth.getUserInfo().then(setUser)
-      else setUser(null)
+
+      if (!authenticated) {
+        setUser(null)
+        return
+      }
+
+      setUser(null)
+      void ports.auth.getUserInfo().then(
+        (nextUser) => {
+          if (version === authStateVersion) {
+            setUser(nextUser)
+          }
+        },
+        () => {
+          if (version === authStateVersion) {
+            setUser(null)
+          }
+        },
+      )
     })
-    return unsub
+
+    return () => {
+      authStateVersion += 1
+      unsub()
+    }
   }, [ports, refresh])
 
   const login = useCallback(() => {
