@@ -101,6 +101,8 @@ export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
     setPhase('idle')
     setProgress('')
     setDimensions(null)
+    setPkgType(null)
+    setFileName(null)
     setResult({})
     setError('')
     setJobId(null)
