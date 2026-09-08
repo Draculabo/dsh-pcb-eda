@@ -18,12 +18,10 @@ import { HistoryPanel } from './components/HistoryPanel.js'
 export interface ComponentGenAppProps {
   ports: ComponentGenPorts
   page: ComponentGenPage
-  /** host UI language: 'zh' | 'en' (default zh). */
   lang?: string
   onClose?: () => void
 }
 
-/** Modal history dialog — chrome follows dsh's Modal primitive. */
 function HistoryDialog({
   ports, page, t, onReopen, onClose,
 }: {
@@ -64,7 +62,6 @@ export function ComponentGenApp(props: ComponentGenAppProps): ReactElement {
   const pageReopen = reopenReq && reopenReq.entry.kind === page ? reopenReq : null
 
   const openHistory = (entry: ReopenRequest['entry']): void => {
-    // Reopening lands back in the workspace, so drop the dialog too.
     setHistoryOpen(false)
     setReopenReq((prev) => ({ n: (prev?.n ?? 0) + 1, entry }))
   }
