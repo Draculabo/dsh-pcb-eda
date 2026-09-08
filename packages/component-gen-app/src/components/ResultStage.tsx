@@ -23,7 +23,9 @@ function artifactIdOf(result: Record<string, unknown>): string | null {
   const art = result.artifact
   if (art && typeof art === 'object') {
     const id = (art as { id?: unknown }).id
-    if (typeof id === 'string' && id) return id
+    if (typeof id === 'string' && id) {
+      return id
+    }
   }
   return null
 }
@@ -37,14 +39,18 @@ function artifactUriOf(result: Record<string, unknown>): string | null {
   const art = result.artifact
   if (art && typeof art === 'object') {
     const uri = (art as { uri?: unknown }).uri
-    if (typeof uri === 'string' && uri) return uri
+    if (typeof uri === 'string' && uri) {
+      return uri
+    }
   }
   return null
 }
 
 function filenameOf(result: Record<string, unknown>, kind: string): string {
   const f = result.filename
-  if (typeof f === 'string' && f) return f
+  if (typeof f === 'string' && f) {
+    return f
+  }
   return `generated.${kind === 'symbol' ? 'kicad_sym' : 'kicad_mod'}`
 }
 
@@ -58,14 +64,26 @@ export function ResultStage({ ports, kind, result, t, srcKey }: ResultStageProps
   const [placeStatus, setPlaceStatus] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!artifactId) return
+    if (!artifactId) {
+      return
+    }
     let cancelled = false
     setContent(null)
     setPreviewErr(null)
     ports.artifactContent(artifactId)
-      .then((text) => { if (!cancelled) setContent(text) })
-      .catch((e) => { if (!cancelled) setPreviewErr(String((e as Error)?.message || e)) })
-    return () => { cancelled = true }
+      .then((text) => {
+        if (!cancelled) {
+          setContent(text)
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setPreviewErr(String((e as Error)?.message || e))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [artifactId, ports, srcKey])
 
   const download = useCallback(async (): Promise<void> => {
@@ -90,7 +108,9 @@ export function ResultStage({ ports, kind, result, t, srcKey }: ResultStageProps
 
   /** Send the generated artifact into the host EDA editor (HQ Edge only). */
   const place = useCallback(async (): Promise<void> => {
-    if (placing || !ports.place || !artifactUri) return
+    if (placing || !ports.place || !artifactUri) {
+      return
+    }
     setPlacing(true)
     setPlaceStatus(null)
     try {
