@@ -75,17 +75,28 @@ export function sizeCanvasFor(canvas: HTMLCanvasElement): void {
 
 /** Trigger a browser download of a text artifact. */
 export function triggerDownload(filename: string, text: string, mime = 'text/plain;charset=utf-8'): void {
+  let url: string | undefined
   try {
     const blob = new Blob([text], { type: mime })
-    const url = URL.createObjectURL(blob)
+    url = URL.createObjectURL(blob)
+    const objectUrl = url
     const a = document.createElement('a')
-    a.href = url
+    a.href = objectUrl
     a.download = filename
     document.body.appendChild(a)
     a.click()
     a.remove()
-    setTimeout(() => { try { URL.revokeObjectURL(url) } catch { /* ignore */ } }, 2000)
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(objectUrl)
+      } catch { /* ignore */ }
+    }, 2000)
   } catch (err) {
+    if (url) {
+      try {
+        URL.revokeObjectURL(url)
+      } catch { /* ignore */ }
+    }
     console.warn('[hq-cga] download failed', err)
   }
 }
