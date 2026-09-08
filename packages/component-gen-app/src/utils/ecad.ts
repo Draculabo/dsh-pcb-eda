@@ -66,7 +66,8 @@ export async function renderArtifactToCanvas(
 
 /** Size a canvas to its CSS box (device-pixel-ratio aware). */
 export function sizeCanvasFor(canvas: HTMLCanvasElement): void {
-  const dpr = window.devicePixelRatio || 1
+  const devicePixelRatio = window.devicePixelRatio
+  const dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1
   const cssW = canvas.clientWidth || 720
   const cssH = canvas.clientHeight || 320
   canvas.width = Math.max(100, Math.floor(cssW * dpr))
