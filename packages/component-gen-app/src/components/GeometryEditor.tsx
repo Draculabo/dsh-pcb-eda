@@ -110,7 +110,9 @@ function packageSilhouette(
       />,
     )
     const edges = type === 'son' ? (['L', 'R'] as const) : (['L', 'R', 'T', 'B'] as const)
-    for (const e of edges) nodes.push(...side(e))
+    for (const e of edges) {
+      nodes.push(...side(e))
+    }
   } else if (type === 'qfp' || type === 'plcc') {
     nodes.push(...side('L'), ...side('R'), ...side('T'), ...side('B'))
   } else {
@@ -132,7 +134,9 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
   const [values, setValues] = useState<DimensionValues>(() => normalized.values)
   const [fieldText, setFieldText] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {}
-    for (const k of normalized.numericKeys) m[k] = formatDimension(normalized.values[k])
+    for (const k of normalized.numericKeys) {
+      m[k] = formatDimension(normalized.values[k])
+    }
     return m
   })
   const [invalid, setInvalid] = useState<Record<string, boolean>>({})
@@ -169,7 +173,9 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
 
   function startDrag(mode: 'W' | 'H' | 'WH') {
     return (ev: React.PointerEvent<SVGElement>): void => {
-      if (disabled || !svgRef.current) return
+      if (disabled || !svgRef.current) {
+        return
+      }
       ev.preventDefault()
       const view = pointerToViewBox(svgRef.current, ev.clientX, ev.clientY, VIEW_W, VIEW_H)
       setDrag({
@@ -181,12 +187,17 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
         rectW: geom.w,
         rectH: geom.h,
       })
-      try { svgRef.current.setPointerCapture(ev.pointerId) } catch { /* ignore */ }
+      try {
+        svgRef.current.setPointerCapture(ev.pointerId)
+      } catch {
+      }
     }
   }
 
   function onPointerMove(ev: React.PointerEvent<SVGSVGElement>): void {
-    if (!drag || !svgRef.current) return
+    if (!drag || !svgRef.current) {
+      return
+    }
     const view = pointerToViewBox(svgRef.current, ev.clientX, ev.clientY, VIEW_W, VIEW_H)
     let next = values
     let nextEdited = edited
@@ -206,8 +217,12 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
         nextEdited = withKeyBool(nextEdited, heightKey, true)
       }
     }
-    if (next !== values) setValues(next)
-    if (nextEdited !== edited) setEdited(nextEdited)
+    if (next !== values) {
+      setValues(next)
+    }
+    if (nextEdited !== edited) {
+      setEdited(nextEdited)
+    }
   }
 
   function endDrag(): void {
@@ -234,7 +249,9 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
   }
 
   function focusField(key: string): void {
-    if (disabled || typeof document === 'undefined') return
+    if (disabled || typeof document === 'undefined') {
+      return
+    }
     const el = document.querySelector(`.hq-genhit__field-input[data-field="${key}"]`) as HTMLInputElement | null
     if (el && el.focus) {
       el.focus()
@@ -253,7 +270,9 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
   const arrow = (pts: string): ReactElement => <polygon className="hq-genhit__arrow" points={pts} />
   const tolText = (key: string | null): string => {
     const tol = toleranceOf(values, key)
-    if (!tol || tol.min == null || tol.max == null || tol.min === tol.max) return ''
+    if (!tol || tol.min == null || tol.max == null || tol.min === tol.max) {
+      return ''
+    }
     return `${formatDimension(tol.min)}\u2013${formatDimension(tol.max)} ${t('editor.unit')}`
   }
   const wTolText = tolText(widthKey)
@@ -261,10 +280,16 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
 
   const groups = classifyDimensions(normalized.numericKeys, widthKey, heightKey)
   const essentialKeys: string[] = []
-  if (widthKey) essentialKeys.push(widthKey)
-  if (heightKey) essentialKeys.push(heightKey)
+  if (widthKey) {
+    essentialKeys.push(widthKey)
+  }
+  if (heightKey) {
+    essentialKeys.push(heightKey)
+  }
   for (const ek of groups.essential) {
-    if (ek !== widthKey && ek !== heightKey) essentialKeys.push(ek)
+    if (ek !== widthKey && ek !== heightKey) {
+      essentialKeys.push(ek)
+    }
   }
   const advancedKeys = groups.advanced
 
@@ -306,7 +331,9 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
   const issues = validateDimensions(values)
   const seen = new Set<string>()
   const uniqueIssues = issues.filter((it) => {
-    if (seen.has(it.key)) return false
+    if (seen.has(it.key)) {
+      return false
+    }
     seen.add(it.key)
     return true
   })
