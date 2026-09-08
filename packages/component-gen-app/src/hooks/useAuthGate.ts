@@ -37,8 +37,11 @@ export function useAuthGate(ports: ComponentGenPorts): UseAuthGateResult {
     void refresh()
     const unsub = ports.auth.onAuthStateChanged((authenticated) => {
       setPhase(authenticated ? 'authenticated' : 'unauthenticated')
-      if (authenticated) void ports.auth.getUserInfo().then(setUser)
-      else setUser(null)
+      if (authenticated) {
+        void ports.auth.getUserInfo().then(setUser)
+      } else {
+        setUser(null)
+      }
     })
     return unsub
   }, [ports, refresh])
