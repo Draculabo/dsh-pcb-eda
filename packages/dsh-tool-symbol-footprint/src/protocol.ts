@@ -80,9 +80,9 @@ const FRAME = { STREAMING: 1, STREAMING_END: 2, AGENT: 6, TOKEN_EXPIRED: 12 } as
  *   at a host outside the whitelist.
  */
 export function resolveEndpoint(env?: Record<string, string | undefined>): string {
-  const source = env && typeof env.HQ_EDA_COMPONENT_WS_URL === 'string' && env.HQ_EDA_COMPONENT_WS_URL.length > 0
+  const source = (env && typeof env.HQ_EDA_COMPONENT_WS_URL === 'string' && env.HQ_EDA_COMPONENT_WS_URL.length > 0
     ? env.HQ_EDA_COMPONENT_WS_URL
-    : DEFAULT_WS_ENDPOINT
+    : DEFAULT_WS_ENDPOINT).trim()
   let parsed: URL
   try {
     parsed = new URL(source)
