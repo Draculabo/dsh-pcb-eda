@@ -69,7 +69,9 @@ export function canPlaceArtifact(
  * is expanded into schematics before the RPC).
  */
 export function parsePlaceableArtifactType(value: unknown): PlaceableArtifactType | null {
-  if (typeof value !== 'string') return null
+  if (typeof value !== 'string') {
+    return null
+  }
   return (PLACEABLE_ARTIFACT_TYPES as readonly string[]).includes(value)
     ? (value as PlaceableArtifactType)
     : null
@@ -125,7 +127,9 @@ export function placeSupportOf(
   getHqEdge: (() => HqEdgePlaceLike | undefined) | undefined,
   artifactType: PlaceableArtifactType,
 ): (() => PlaceSupport | null) | null {
-  if (typeof getHqEdge !== 'function') return null
+  if (typeof getHqEdge !== 'function') {
+    return null
+  }
   return () => {
     let hqEdge: HqEdgePlaceLike | undefined
     try {
@@ -133,14 +137,18 @@ export function placeSupportOf(
     } catch {
       return null
     }
-    if (!hqEdge || typeof hqEdge.placeArtifact !== 'function') return null
+    if (!hqEdge || typeof hqEdge.placeArtifact !== 'function') {
+      return null
+    }
     let editorType = ''
     try {
       editorType = hqEdge.context?.getEditorType?.() ?? hqEdge.context?.getCurrent?.()?.editorType ?? ''
     } catch {
       return null
     }
-    if (!editorType || !canPlaceArtifact(artifactType, editorType as EditorType)) return null
+    if (!editorType || !canPlaceArtifact(artifactType, editorType as EditorType)) {
+      return null
+    }
     return {
       editorType,
       place: (request) => hqEdge.placeArtifact!(request),
