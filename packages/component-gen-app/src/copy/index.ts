@@ -29,7 +29,7 @@ function lookup(pack: Record<string, unknown>, keys: FlatKey): string | undefine
 }
 
 export function translate(lang: string | undefined, key: string, params?: Record<string, unknown>): string {
-  const pack = lang?.toLowerCase().startsWith('en') ? (EN as unknown as Record<string, unknown>) : ZH as unknown as Record<string, unknown>
+  const pack = lang?.trim().toLowerCase().startsWith('en') ? (EN as unknown as Record<string, unknown>) : ZH as unknown as Record<string, unknown>
   let v = lookup(pack, key)
   if (v === undefined) v = lookup(ZH as unknown as Record<string, unknown>, key)
   if (v === undefined) v = key
