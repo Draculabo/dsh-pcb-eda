@@ -41,4 +41,8 @@ describe('translateFor', () => {
     expect(zh('card.submit')).toBeTruthy()
     expect(typeof en('card.submit')).toBe('string')
   })
+
+  it('ignores surrounding locale whitespace', () => {
+    expect(translateFor('  EN-us  ')('app.title')).toBe('Huaqiu Component Gen')
+  })
 })
