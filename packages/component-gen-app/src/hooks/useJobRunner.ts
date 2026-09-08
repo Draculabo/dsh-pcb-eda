@@ -7,7 +7,7 @@
  * job that finished before subscription still lands correctly.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ComponentGenPorts, HistoryEntry, JobEvent, JobKind, JobState, StartJobRequest } from '../ports.js'
+import type { ComponentGenPorts, HistoryEntry, JobEvent, StartJobRequest } from '../ports.js'
 
 export type GenPhase = 'idle' | 'running' | 'needs_confirmation' | 'completed' | 'failed' | 'cancelled'
 
