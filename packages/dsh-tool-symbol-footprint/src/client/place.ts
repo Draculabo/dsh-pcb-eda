@@ -1,14 +1,8 @@
 /**
- * Place-action seam for the symbol/footprint generation HIT card.
+ * Browser-safe placement seam for the symbol/footprint HIT card.
  *
- * Thin re-export of the shared, browser-safe placement module
- * (`@huaqiu/dsh-artifacts/placement`): the frontend compatibility matrix plus
- * the lazy `hqEdge` service accessor. Kept as a local module so the card's
- * import paths stay stable and the client bundle only ever pulls the pure
- * subpath — the package root exports the cordis plugin entry, which must not
- * be bundled into the browser.
- *
- * @module
+ * Re-export placement helpers from the browser-safe subpath instead of the
+ * package root, which also exports the Cordis plugin entry.
  */
 export {
   placeSupportOf,
