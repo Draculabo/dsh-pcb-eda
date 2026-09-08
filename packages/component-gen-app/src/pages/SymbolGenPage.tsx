@@ -39,19 +39,26 @@ export function SymbolGenPage({ ports, t, reopen = null }: SymbolGenPageProps): 
   // Reopen: load the generated artifact into the result stage and restore the
   // source image + instruction so the user can inspect / regenerate.
   useEffect(() => {
-    if (!reopen) return
+    if (!reopen) {
+      return
+    }
+
     const { entry } = reopen
     runnerRef.current.loadHistory(entry)
+
     if (entry.input?.imageId) {
       portsRef.current.inputImage(entry.input.imageId)
         .then((dataUrl) => setImageDataUrl(dataUrl))
-        .catch(() => { /* best effort */ })
+        .catch(() => {})
     }
-    if (entry.input?.instruction) setInstruction(entry.input.instruction)
+
+    if (entry.input?.instruction) {
+      setInstruction(entry.input.instruction)
+    }
   }, [reopen])
 
   useEffect(() => {
-    ports.config().then(setConfig).catch(() => { /* best effort */ })
+    ports.config().then(setConfig).catch(() => {})
   }, [ports])
 
   const maxBytes = config?.limits.imageBytes ?? 4 * 1024 * 1024
@@ -59,7 +66,10 @@ export function SymbolGenPage({ ports, t, reopen = null }: SymbolGenPageProps): 
   const canGenerate = authed && !!imageDataUrl && runner.phase !== 'running'
 
   const generate = (): void => {
-    if (!imageDataUrl) return
+    if (!imageDataUrl) {
+      return
+    }
+
     void runner.run({
       kind: 'symbol',
       input: { imageDataUrl, ...(instruction.trim() ? { instruction: instruction.trim() } : {}) },
@@ -88,7 +98,10 @@ export function SymbolGenPage({ ports, t, reopen = null }: SymbolGenPageProps): 
             disabled={!authed || runner.phase === 'running'}
             imageDataUrl={imageDataUrl}
             file={file}
-            onFile={(f, url) => { setFile(f); setImageDataUrl(url) }}
+            onFile={(f, url) => {
+              setFile(f)
+              setImageDataUrl(url)
+            }}
           />
 
           <div className="cga-field">
