@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentIds,
+  buildExportHeaders,
   buildHeaders,
   buildRunBody,
   DEFAULT_AGENT_LANGUAGE,
@@ -39,13 +40,27 @@ describe('resolveConfig', () => {
 })
 
 describe('buildHeaders', () => {
-  it('carries the account as x-user-id/x-user-token plus a fresh thread id', () => {
+  it('carries the account and thread id in the SSE request headers', () => {
     const config = resolveConfig({})
-    const h = buildHeaders(config, ACCOUNT, 'thr-1')
-    expect(h['x-user-id']).toBe('u1')
-    expect(h['x-user-token']).toBe('tok-1')
-    expect(h['x-thread-id']).toBe('thr-1')
-    expect(h.accept).toBe('text/event-stream')
+    expect(buildHeaders(config, ACCOUNT, 'thr-1')).toEqual({
+      accept: 'text/event-stream',
+      'content-type': 'application/json',
+      'x-user-id': 'u1',
+      'x-user-token': 'tok-1',
+      'x-thread-id': 'thr-1',
+      Referer: 'https://gen.eda.cn/',
+    })
+  })
+
+  it('carries configured cookies in export requests', () => {
+    const config = resolveConfig({ HQ_EDA_COOKIE: 'session=abc' })
+    expect(buildExportHeaders(config, ACCOUNT)).toEqual({
+      'content-type': 'application/json',
+      'x-user-id': 'u1',
+      'x-user-token': 'tok-1',
+      Referer: 'https://gen.eda.cn/',
+      cookie: 'session=abc',
+    })
   })
 })
 
