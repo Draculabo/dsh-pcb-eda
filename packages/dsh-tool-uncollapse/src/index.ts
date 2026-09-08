@@ -43,8 +43,10 @@ export function keepToolCardVisible(
     seat.removeAttribute('hidden')
   }
   let scheduled = false
+  let animationFrame: number | null = null
   const sweep = (): void => {
     scheduled = false
+    animationFrame = null
     for (const seat of root.querySelectorAll<HTMLElement>('[data-turn-process-hidden]')) {
       revealSeat(seat)
     }
@@ -52,7 +54,7 @@ export function keepToolCardVisible(
   const observer = new MutationObserver(() => {
     if (scheduled) return
     scheduled = true
-    requestAnimationFrame(sweep)
+    animationFrame = requestAnimationFrame(sweep)
   })
   observer.observe(root, {
     subtree: true,
@@ -63,6 +65,10 @@ export function keepToolCardVisible(
   sweep()
   return () => {
     observer.disconnect()
+    if (animationFrame !== null) {
+      cancelAnimationFrame(animationFrame)
+      animationFrame = null
+    }
     scheduled = false
   }
 }
