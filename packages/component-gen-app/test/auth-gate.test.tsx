@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useEffect } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { useAuthGate } from '../src/hooks/useAuthGate.js'
@@ -42,7 +42,6 @@ it('ignores user info that resolves after a newer auth state change', async () =
 
   function Harness() {
     const auth = useAuthGate(ports)
-    useEffect(() => {}, [auth])
     return <div data-phase={auth.phase}>{auth.user?.nickname ?? 'anonymous'}</div>
   }
 
