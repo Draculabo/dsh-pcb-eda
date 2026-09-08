@@ -31,7 +31,6 @@ export type {
   StartJobRequest,
 } from './ports.js'
 
-export { translateFor, translate, defaultT, type Translate } from './copy/index.js'
-export { ZH, EN } from './copy/index.js'
+export { translateFor, translate, defaultT, ZH, EN, type Translate } from './copy/index.js'
 
 export { injectAppStyles, removeAppStyles, APP_STYLE_ID } from './styles/inject.js'
