@@ -27,7 +27,10 @@ export function fileToDataUrl(file: File, maxBytes: number): Promise<string> {
     reader.onerror = () => reject(new Error('failed to read file'))
     reader.onload = () => {
       const src = String(reader.result)
-      if (src.length <= maxBytes) { resolve(src); return }
+      if (src.length <= maxBytes) {
+        resolve(src)
+        return
+      }
       // Too big as-is — downscale via canvas.
       const img = new Image()
       img.onload = () => {
@@ -36,12 +39,17 @@ export function fileToDataUrl(file: File, maxBytes: number): Promise<string> {
         canvas.width = Math.max(1, Math.round(img.width * scale))
         canvas.height = Math.max(1, Math.round(img.height * scale))
         const ctx = canvas.getContext('2d')
-        if (!ctx) { reject(new Error('canvas unavailable')); return }
+        if (!ctx) {
+          reject(new Error('canvas unavailable'))
+          return
+        }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
         let out = canvas.toDataURL('image/jpeg', 0.82)
         // Quality ladder until it fits (or we give up after several tries).
         for (const q of [0.7, 0.55, 0.4]) {
-          if (out.length <= maxBytes) break
+          if (out.length <= maxBytes) {
+            break
+          }
           out = canvas.toDataURL('image/jpeg', q)
         }
         resolve(out)
@@ -60,7 +68,9 @@ export function UploadInput(props: UploadInputProps): ReactElement {
   const [error, setError] = useState<string | null>(null)
 
   const accept = useCallback(async (f: File | null): Promise<void> => {
-    if (!f) return
+    if (!f) {
+      return
+    }
     if (f.size > maxBytes) {
       setError(t('upload.imageTooLarge'))
       return
@@ -77,13 +87,24 @@ export function UploadInput(props: UploadInputProps): ReactElement {
   return (
     <div
       className={`cga-upload${dragging ? ' cga-upload--dragging' : ''}`}
-      onClick={() => { if (!disabled) inputRef.current?.click() }}
-      onDragOver={(ev) => { ev.preventDefault(); if (!disabled) setDragging(true) }}
+      onClick={() => {
+        if (!disabled) {
+          inputRef.current?.click()
+        }
+      }}
+      onDragOver={(ev) => {
+        ev.preventDefault()
+        if (!disabled) {
+          setDragging(true)
+        }
+      }}
       onDragLeave={() => setDragging(false)}
       onDrop={(ev) => {
         ev.preventDefault()
         setDragging(false)
-        if (disabled) return
+        if (disabled) {
+          return
+        }
         void accept(ev.dataTransfer.files?.[0] ?? null)
       }}
       onPaste={(ev) => {
@@ -100,7 +121,10 @@ export function UploadInput(props: UploadInputProps): ReactElement {
         accept="image/*"
         style={{ display: 'none' }}
         disabled={disabled}
-        onChange={(ev) => { void accept(ev.target.files?.[0] ?? null); ev.target.value = '' }}
+        onChange={(ev) => {
+          void accept(ev.target.files?.[0] ?? null)
+          ev.target.value = ''
+        }}
       />
       {imageDataUrl
         ? (
