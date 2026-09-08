@@ -33,7 +33,7 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '
  *   dir: string,
  *   name: string,
  *   version: string,
- *   manifest: Record<string, any>,
+ *   manifest: Record<string, unknown>,
  * }} WorkspacePackage
  */
 
