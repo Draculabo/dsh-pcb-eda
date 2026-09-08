@@ -28,8 +28,12 @@ async function readJson<T>(res: Response): Promise<T> {
     let detail = `HTTP ${res.status}`
     try {
       const body = (await res.json()) as { error?: string; detail?: unknown }
-      if (body?.error) detail = body.error
-      if (body?.detail) detail = `${detail}: ${String(body.detail)}`
+      if (body?.error) {
+        detail = body.error
+      }
+      if (body?.detail) {
+        detail = `${detail}: ${String(body.detail)}`
+      }
     } catch {
       /* non-JSON error body — keep the status message */
     }
@@ -111,18 +115,24 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
           let buf = ''
           for (;;) {
             const { done, value } = await reader.read()
-            if (done) break
+            if (done) {
+              break
+            }
             buf += decoder.decode(value, { stream: true })
             let idx: number
             while ((idx = buf.indexOf('\n\n')) >= 0) {
               const frame = buf.slice(0, idx)
               buf = buf.slice(idx + 2)
               const event = parseEvent(frame)
-              if (event) onEvent(event)
+              if (event) {
+                onEvent(event)
+              }
             }
           }
         } catch (err) {
-          if ((err as Error)?.name === 'AbortError') return
+          if ((err as Error)?.name === 'AbortError') {
+            return
+          }
           onEvent({ type: 'failed', error: String((err as Error)?.message || err), at: new Date().toISOString() })
         }
       }
@@ -136,8 +146,12 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
 
     async history(query: HistoryQuery): Promise<HistoryPage> {
       const params = new URLSearchParams()
-      if (query.limit !== undefined) params.set('limit', String(query.limit))
-      if (query.cursor) params.set('cursor', query.cursor)
+      if (query.limit !== undefined) {
+        params.set('limit', String(query.limit))
+      }
+      if (query.cursor) {
+        params.set('cursor', query.cursor)
+      }
       const qs = params.toString()
       const res = await doFetch(url(`/history${qs ? `?${qs}` : ''}`), { headers: { accept: 'application/json' } })
       return readJson<HistoryPage>(res)
@@ -145,7 +159,9 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
 
     async historyEntry(id: string): Promise<HistoryEntry | null> {
       const res = await doFetch(url(`/history/${encodeURIComponent(id)}`), { headers: { accept: 'application/json' } })
-      if (res.status === 404) return null
+      if (res.status === 404) {
+        return null
+      }
       return readJson<HistoryEntry>(res)
     },
 
@@ -166,7 +182,9 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
       const res = await doFetch(artifactUrl(`/${encodeURIComponent(artifactId)}/content`), {
         headers: { accept: 'text/plain' },
       })
-      if (!res.ok) throw new Error(`artifact content HTTP ${res.status}`)
+      if (!res.ok) {
+        throw new Error(`artifact content HTTP ${res.status}`)
+      }
       return res.text()
     },
 
@@ -174,7 +192,9 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
       const res = await doFetch(url(`/history/${encodeURIComponent(imageId)}/image`), {
         headers: { accept: 'image/*' },
       })
-      if (!res.ok) throw new Error(`input image HTTP ${res.status}`)
+      if (!res.ok) {
+        throw new Error(`input image HTTP ${res.status}`)
+      }
       const blob = await res.blob()
       return new Promise((resolve, reject) => {
         const reader = new FileReader()
@@ -199,17 +219,30 @@ export function parseEvent(frame: string): JobEvent | null {
   let eventName = 'message'
   const dataLines: string[] = []
   for (const line of frame.split('\n')) {
-    if (line.startsWith('event:')) eventName = line.slice(6).trim()
-    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart())
+    }
   }
   const data = dataLines.join('\n')
-  if (!data) return null
+  if (!data) {
+    return null
+  }
   try {
     const raw = JSON.parse(data) as JobEvent
-    if (eventName === 'needs_confirmation' && 'dimensions' in raw) return raw as JobEvent
-    if (eventName === 'completed' && 'job' in raw) return raw as JobEvent
-    if (eventName === 'failed') return raw as JobEvent
-    if (eventName === 'cancelled') return raw as JobEvent
+    if (eventName === 'needs_confirmation' && 'dimensions' in raw) {
+      return raw as JobEvent
+    }
+    if (eventName === 'completed' && 'job' in raw) {
+      return raw as JobEvent
+    }
+    if (eventName === 'failed') {
+      return raw as JobEvent
+    }
+    if (eventName === 'cancelled') {
+      return raw as JobEvent
+    }
     return raw as JobEvent
   } catch {
     return null
@@ -219,10 +252,18 @@ export function parseEvent(frame: string): JobEvent | null {
 /** Default auth port: optimistic (used when the host supplies no auth). */
 function createPassthroughAuth(): ComponentGenAuthPort {
   return {
-    async isAuthenticated() { return true },
-    async getUserInfo() { return null },
-    async login() { /* no-op */ },
-    onAuthStateChanged() { return () => {} },
+    async isAuthenticated() {
+      return true
+    },
+    async getUserInfo() {
+      return null
+    },
+    async login() {
+      /* no-op */
+    },
+    onAuthStateChanged() {
+      return () => {}
+    },
   }
 }
 
