@@ -141,8 +141,12 @@ export async function createStandaloneServer(options: StandaloneServerOptions = 
     serveStatic(appDist, urlPath, res)
   })
 
-  await new Promise<void>((resolveListen) => {
-    server.listen(port, host, resolveListen)
+  await new Promise<void>((resolveListen, rejectListen) => {
+    server.once('error', rejectListen)
+    server.listen(port, host, () => {
+      server.off('error', rejectListen)
+      resolveListen()
+    })
   })
 
   return {
