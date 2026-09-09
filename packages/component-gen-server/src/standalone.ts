@@ -100,6 +100,10 @@ function serveStatic(root: string, urlPath: string, res: ServerResponse): void {
   res.end(readFileSync(target))
 }
 
+function matchesRoutePrefix(urlPath: string, prefix: string): boolean {
+  return urlPath === prefix || urlPath.startsWith(`${prefix}/`)
+}
+
 export async function createStandaloneServer(options: StandaloneServerOptions = {}): Promise<StandaloneServer> {
   const port = options.port ?? 8787
   const host = options.host ?? '127.0.0.1'
@@ -126,15 +130,15 @@ export async function createStandaloneServer(options: StandaloneServerOptions = 
 
   const server = createServer(async (req, res) => {
     const urlPath = req.url ?? '/'
-    if (urlPath.startsWith(AUTH_ROUTE_PREFIX)) {
+    if (matchesRoutePrefix(urlPath, AUTH_ROUTE_PREFIX)) {
       await createAuthHandler(auth)(req, res)
       return
     }
-    if (urlPath.startsWith(ARTIFACTS_ROUTE_PREFIX)) {
+    if (matchesRoutePrefix(urlPath, ARTIFACTS_ROUTE_PREFIX)) {
       await createArtifactsHandler(artifacts)(req, res)
       return
     }
-    if (urlPath.startsWith(COMPONENT_GEN_ROUTE_PREFIX)) {
+    if (matchesRoutePrefix(urlPath, COMPONENT_GEN_ROUTE_PREFIX)) {
       await componentGen(req, res)
       return
     }
