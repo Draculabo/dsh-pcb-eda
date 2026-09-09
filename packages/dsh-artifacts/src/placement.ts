@@ -136,7 +136,7 @@ export function placeSupportOf(
     if (!hqEdge || typeof hqEdge.placeArtifact !== 'function') return null
     let editorType = ''
     try {
-      editorType = hqEdge.context?.getEditorType?.() ?? hqEdge.context?.getCurrent?.()?.editorType ?? ''
+      editorType = hqEdge.context?.getEditorType?.() || hqEdge.context?.getCurrent?.()?.editorType || ''
     } catch {
       return null
     }
