@@ -103,10 +103,8 @@ describe('createPartSearchTools', () => {
     const { service } = createStubService()
     const tools = createPartSearchTools(service) as unknown as Tool[]
     const value = { page: 1, pageSize: 10, pages: 1, total: 0, items: [] }
-    const blocks = tools[0]!.output.render({ query: 'x' }, value) as Array<{ type: string; text: string }>
-    expect(blocks).toHaveLength(1)
-    expect(blocks[0]!.type).toBe('text')
-    expect(JSON.parse(blocks[0]!.text)).toEqual(value)
+    const blocks = tools[0]!.output.render({ query: 'x' }, value)
+    expect(blocks).toEqual([{ type: 'text', text: JSON.stringify(value) }])
   })
 
   it('strips undefined optional fields so the canonical value is lossless JSON', async () => {
