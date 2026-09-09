@@ -102,6 +102,9 @@ function serveStatic(root: string, urlPath: string, res: ServerResponse): void {
 
 export async function createStandaloneServer(options: StandaloneServerOptions = {}): Promise<StandaloneServer> {
   const port = options.port ?? 8787
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+    throw new RangeError('port must be an integer between 0 and 65535')
+  }
   const host = options.host ?? '127.0.0.1'
   const appDist = resolveAppDist(options.appDist)
   const history = new HistoryStore(options.historyDir ?? dshHomePath('component-gen'))
