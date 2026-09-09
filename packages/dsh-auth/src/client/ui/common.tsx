@@ -30,7 +30,9 @@ export function parseToolResult(block: ToolBlockLike | undefined): Record<string
   if (!text) return null
   try {
     const parsed = JSON.parse(text) as unknown
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null
   } catch {
     return null
   }
