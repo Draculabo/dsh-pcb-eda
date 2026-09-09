@@ -170,7 +170,7 @@ interface RawEnvelope {
 
 /** Coerce an id field (string or number, as auth.eda.cn sends) to a string. */
 function stringifyId(value: unknown): string | null {
-  if (typeof value === 'string' && value.length > 0) return value
+  if (typeof value === 'string' && value.trim().length > 0) return value
   if (typeof value === 'number' && Number.isFinite(value)) return String(value)
   return null
 }
@@ -195,7 +195,7 @@ export function parseAuthMessage(raw: unknown): ParsedAuthMessage | null {
       const d = data.data
       if (!d || typeof d !== 'object') return null
       const record = d as Record<string, unknown>
-      const token = typeof record.token === 'string' && record.token.length > 0 ? record.token : null
+      const token = typeof record.token === 'string' && record.token.trim().length > 0 ? record.token : null
       // auth.eda.cn sends userId/id as NUMBERS (e.g. 6215935) — coerce to string.
       const id = stringifyId(record.userId) ?? stringifyId(record.id)
       if (!token || !id) return null
