@@ -18,7 +18,7 @@ const DIM_BOUNDS: Record<string, { min: number; max: number }> = {
 }
 
 export function dimensionBounds(key: string): { min: number; max: number } {
-  return DIM_BOUNDS[key] ?? { min: 0.01, max: 1000 }
+  return Object.hasOwn(DIM_BOUNDS, key) ? DIM_BOUNDS[key]! : { min: 0.01, max: 1000 }
 }
 
 export function clampDimension(value: number, min: number, max: number): number {
@@ -258,7 +258,7 @@ export function summaryOf(
   const bodyW = widthKey && values[widthKey] != null ? formatDimension(values[widthKey]) : null
   const bodyH = heightKey && values[heightKey] != null ? formatDimension(values[heightKey]) : null
   if (bodyW != null && bodyH != null) {
-    parts.push(`${t('card.editor.body')} ${bodyW} \u00d7 ${bodyH} ${t('card.editor.unit')}`)
+    parts.push(`${t('card.editor.body')} ${bodyW} × ${bodyH} ${t('card.editor.unit')}`)
   }
   const pitch = numVal(values, ['pitch', 'pitch_d', 'pitch_e', 'lead_pitch', 'pitch_x', 'e'], -1)
   if (pitch >= 0) parts.push(`${t('card.editor.pitch')} ${formatDimension(pitch)} ${t('card.editor.unit')}`)
