@@ -22,8 +22,11 @@ type FlatKey = string
 function lookup(pack: Record<string, unknown>, keys: FlatKey): string | undefined {
   let node: unknown = pack
   for (const seg of keys.split('.')) {
-    if (node && typeof node === 'object') node = (node as Record<string, unknown>)[seg]
-    else return undefined
+    if (node && typeof node === 'object' && Object.hasOwn(node, seg)) {
+      node = (node as Record<string, unknown>)[seg]
+    } else {
+      return undefined
+    }
   }
   return typeof node === 'string' ? node : undefined
 }
