@@ -89,6 +89,11 @@ describe('parseDataUrl', () => {
     expect(parsed?.mime).toBe('image/png')
     expect(parsed?.bytes.toString()).toBe('hi')
   })
+
+  it('returns null for malformed base64 data', () => {
+    expect(parseDataUrl('data:image/png;base64,not!base64')).toBeNull()
+  })
+
   it('returns null for non-data URLs', () => {
     expect(parseDataUrl('https://example.com/a.png')).toBeNull()
   })
