@@ -22,6 +22,14 @@ export interface AuthTransport {
    * credential without ever opening the auth.eda.cn iframe.
    */
   fetchSession(): Promise<{ authenticated: boolean; user: HostSessionUser | null }>
+  /**
+   * Ask the node half to trigger the EDA login dialog through the host.
+   * Standalone (no host) must NOT call this — login is the browser iframe
+   * there. In host mode the node blocks until the dialog is completed (the
+   * host route waits for AuthStateChanged), then the caller re-fetches the
+   * session to pick up the fresh credential.
+   */
+  triggerLogin(): Promise<void>
 }
 
 /** Minimal session user shape returned by the node `/session` route. */
@@ -79,6 +87,13 @@ export function createWebServerAuthTransport(
       const body = await res.json() as { authenticated?: unknown; user?: unknown }
       const user = body.user && typeof body.user === 'object' ? body.user as HostSessionUser : null
       return { authenticated: body.authenticated === true, user }
+    },
+    async triggerLogin() {
+      const res = await doFetch(`${base}/login`, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+      })
+      if (!res.ok) throw new Error(`auth login trigger failed: HTTP ${res.status}`)
     },
   }
 }

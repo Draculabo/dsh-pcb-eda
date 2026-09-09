@@ -68,4 +68,55 @@ describe('InMemoryHuaqiuAuthService', () => {
     svc.setCredentials({ id: 'u1', token: 't' })
     expect(spy).not.toHaveBeenCalled()
   })
+
+  it('standalone login stays a no-op (login is a browser action)', async () => {
+    const svc = new InMemoryHuaqiuAuthService({}, { fetchImpl: authFetch() })
+    await expect(svc.auth.login()).resolves.toBeUndefined()
+    expect(await svc.auth.getAccessToken()).toBeNull()
+  })
+
+  it('host-mode login calls the host login endpoint and refreshes the session', async () => {
+    const calls: string[] = []
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      calls.push(url)
+      if (url.endsWith('/api/v1/auth/login')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, authenticated: true }) } as Response
+      }
+      if (url.includes('/api/token/validate')) {
+        return { ok: true, status: 200, json: async () => ({ result: true }) } as Response
+      }
+      return { ok: true, status: 200, json: async () => ({ token: 'host-tok', userId: 'host-u' }) } as Response
+    }) as unknown as typeof fetch
+
+    const svc = new InMemoryHuaqiuAuthService(
+      { hqEdgeBaseUrl: 'http://localhost:9999' },
+      { fetchImpl },
+    )
+    expect(svc.hostMode).toBe(true)
+    await svc.auth.login()
+    expect(calls.some((u) => u.endsWith('/api/v1/auth/login'))).toBe(true)
+    // After the dialog completed the cached host session is refreshed.
+    expect(await svc.auth.getAccessToken()).toBe('host-tok')
+    expect(await svc.auth.isAuthenticated()).toBe(true)
+  })
+
+  it('host-mode login propagates a not-completed dialog', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/api/v1/auth/login')) {
+        return { ok: false, status: 401, json: async () => ({ ok: false }) } as Response
+      }
+      if (url.includes('/api/token/validate')) {
+        return { ok: true, status: 200, json: async () => ({ result: true }) } as Response
+      }
+      return { ok: true, status: 200, json: async () => ({ token: 'host-tok', userId: 'host-u' }) } as Response
+    }) as unknown as typeof fetch
+
+    const svc = new InMemoryHuaqiuAuthService(
+      { hqEdgeBaseUrl: 'http://localhost:9999' },
+      { fetchImpl },
+    )
+    await expect(svc.auth.login()).rejects.toThrow('host login not completed')
+  })
 })

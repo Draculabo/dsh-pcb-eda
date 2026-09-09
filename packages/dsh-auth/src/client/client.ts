@@ -131,8 +131,18 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
       return hostSession ?? storage.get()
     },
     login: async (options?: LoginOptions): Promise<void> => {
-      // Host mode: hq-edge owns the session — never open the auth iframe.
-      if (hostMode) return
+      // Host mode: hq-edge owns the session — ask the host (EDA) to open its
+      // own login dialog instead of the auth.eda.cn iframe. The node route
+      // blocks until the dialog completes; then re-resolve and emit (only on
+      // a real change, so a redundant trigger never re-renders every card).
+      if (hostMode) {
+        const prevToken = hostSession?.token
+        await transport.triggerLogin()
+        hostSessionLoaded = false
+        await resolveHost()
+        if (hostSession?.token !== prevToken) emit(hostSession ?? storage.get())
+        return
+      }
       openIframe(options ?? {})
     },
     logout: async (): Promise<void> => {

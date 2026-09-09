@@ -93,6 +93,15 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
         return
       }
 
+      if (req.method === 'POST' && pathname === `${AUTH_ROUTE_PREFIX}/login`) {
+        // Host-mode login: forward to HQ Edge, which asks EDA (KiCad) to open
+        // its TriggerLoginDialog. Blocks until the dialog is completed.
+        await service.auth.login()
+        const user = await service.auth.getUserInfo()
+        sendJson(res, 200, { ok: true, authenticated: user !== null, user })
+        return
+      }
+
       sendJson(res, 404, { error: 'not found' })
     } catch (err) {
       sendJson(res, 500, { error: 'internal error', detail: String(err) })

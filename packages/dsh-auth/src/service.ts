@@ -146,6 +146,10 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
   private listeners = new Set<(info: HuaqiuUserInfo | null) => void>()
   private readonly host: HostSessionResolver
   private readonly validator: TokenValidator
+  private readonly doFetch: typeof fetch
+  private readonly hostLoginPath: string
+  /** Bound on the host login RPC (user must complete the EDA dialog). */
+  private readonly loginWaitMs: number
   /**
    * True once the current credential has been rejected (API 401) or explicitly
    * invalidated. Keeps the credential for recovery but makes `isAuthenticated()`
@@ -158,15 +162,18 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     opts?: { fetchImpl?: typeof fetch },
   ) {
     const resolved = resolveHostConfig(config)
+    this.doFetch = opts?.fetchImpl ?? globalThis.fetch.bind(globalThis)
     this.host = new HostSessionResolver(
       resolved.hqEdgeBaseUrl ?? '',
       resolved.hostAuthPath ?? '/api/v1/auth/token',
       (resolved.hostSessionTtlSeconds ?? 300) * 1000,
-      opts?.fetchImpl,
+      this.doFetch,
     )
+    this.hostLoginPath = resolved.hostLoginPath ?? '/api/v1/auth/login'
+    this.loginWaitMs = 5 * 60_000
     this.validator = new TokenValidator({
       ttlMs: (resolved.validationTtlSeconds ?? 60) * 1000,
-      fetchImpl: opts?.fetchImpl,
+      fetchImpl: this.doFetch,
     })
     this.hostMode = this.host.enabled
   }
@@ -182,7 +189,25 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     getAccessToken: async () => (await this.resolve())?.token ?? null,
     getUserInfo: async () => this.resolve(),
     login: async () => {
-      /* login is a browser action */
+      // Standalone: login is a browser action (auth.eda.cn iframe) — no-op.
+      if (!this.host.enabled) return
+      // Host mode: the browser-side iframe is suppressed, so clicking login
+      // must ask the host (hq-edge → EDA TriggerLoginDialog) to open the EDA
+      // login dialog. The host route blocks until AuthStateChanged flips the
+      // credential (bounded), then we drop the cached host session so the next
+      // resolve() re-fetches the fresh token.
+      const res = await this.doFetch(`${this.host.baseUrl}${this.hostLoginPath}`, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(this.loginWaitMs),
+      })
+      if (!res.ok) {
+        throw new Error(`host login not completed: HTTP ${res.status}`)
+      }
+      this.host.clear()
+      this.stale = false
+      this.validator.invalidate()
+      this.emit()
     },
     logout: async () => this.invalidate(),
     validate: () => this.validateInternal(),
