@@ -31,7 +31,11 @@ export function keepToolCardVisible(
   cardRootSelector: string,
   options?: KeepToolCardVisibleOptions,
 ): () => void {
-  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
+  if (
+    typeof document === 'undefined'
+    || typeof MutationObserver === 'undefined'
+    || typeof requestAnimationFrame === 'undefined'
+  ) {
     return () => {}
   }
   const skipSelector = options?.skipWhenContains
