@@ -51,11 +51,11 @@ export interface HttpPortsOptions {
 
 /** The shared fetch client. */
 export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
-  const base = options.base.replace(/\/+$/, '')
+  const base = options.base.trim().replace(/\/+$/, '')
   const doFetch = options.doFetch ?? globalThis.fetch.bind(globalThis)
   // Artifacts live under their own prefix on the same origin; derive it from
   // `base` unless the host overrides it.
-  const artifactsBase = (options.artifactsBase ?? defaultArtifactsBase(base)).replace(/\/+$/, '')
+  const artifactsBase = (options.artifactsBase ?? defaultArtifactsBase(base)).trim().replace(/\/+$/, '')
 
   const url = (p: string): string => `${base}${p}`
   const artifactUrl = (p: string): string => `${artifactsBase}${p}`
