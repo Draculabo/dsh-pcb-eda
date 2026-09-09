@@ -11,9 +11,10 @@ describe('parseToolResult / isNeedsAuthResult (toolview card logic)', () => {
     expect(isNeedsAuthResult(result)).toBe(true)
   })
 
-  it('returns null for empty / non-JSON content', () => {
+  it('returns null for empty / non-object / non-JSON content', () => {
     expect(parseToolResult(undefined)).toBeNull()
     expect(parseToolResult({ content: [] })).toBeNull()
+    expect(parseToolResult({ content: [{ type: 'text', text: '[]' }] })).toBeNull()
     expect(parseToolResult({ content: [{ type: 'text', text: 'not json' }] })).toBeNull()
   })
 
