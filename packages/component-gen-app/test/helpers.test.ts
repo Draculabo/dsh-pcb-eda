@@ -41,4 +41,9 @@ describe('translateFor', () => {
     expect(zh('card.submit')).toBeTruthy()
     expect(typeof en('card.submit')).toBe('string')
   })
+
+  it('falls back for keys inherited through the object prototype', () => {
+    const en = translateFor('en')
+    expect(en('__proto__.constructor.name')).toBe('__proto__.constructor.name')
+  })
 })
