@@ -96,7 +96,9 @@ export class TokenValidator {
    * by concurrent callers. Never treats a network failure as "invalid".
    */
   async validate(token: string, session?: { expiresAt?: number }): Promise<AuthValidationResult> {
-    if (!token) return { status: 'invalid', reason: 'invalid' }
+    if (token.trim().length === 0) {
+      return { status: 'invalid', reason: 'invalid' }
+    }
 
     // Local expiry first — no remote call (spec §6/§7).
     if (this.isLocallyExpired(session?.expiresAt)) {
