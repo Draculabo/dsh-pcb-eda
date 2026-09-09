@@ -32,7 +32,12 @@ export function parseDataUrl(dataUrl: string): { mime: string; bytes: Buffer } |
   const m = /^data:([^;,]+);base64,(.+)$/s.exec(dataUrl)
   if (!m) return null
   try {
-    return { mime: m[1]!, bytes: Buffer.from(m[2]!, 'base64') }
+    const encoded = m[2]!
+    const bytes = Buffer.from(encoded, 'base64')
+    const normalized = encoded.replace(/\s/g, '').replace(/=+$/, '')
+    const canonical = bytes.toString('base64').replace(/=+$/, '')
+    if (!normalized || canonical !== normalized) return null
+    return { mime: m[1]!, bytes }
   } catch {
     return null
   }
