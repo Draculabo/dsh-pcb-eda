@@ -63,9 +63,15 @@ function replayEventOf(state: JobState): JobEvent | null {
   if (state.status === 'needs_confirmation') {
     return { type: 'needs_confirmation', dimensions: state.dimensions ?? {}, pkgType: state.pkgType ?? null, fileName: state.fileName ?? null, at: state.updatedAt }
   }
-  if (state.status === 'completed') return { type: 'completed', job: state, at: state.updatedAt }
-  if (state.status === 'failed') return { type: 'failed', error: state.error ?? 'generation failed', result: state.result, at: state.updatedAt }
-  if (state.status === 'cancelled') return { type: 'cancelled', at: state.updatedAt }
+  if (state.status === 'completed') {
+    return { type: 'completed', job: state, at: state.updatedAt }
+  }
+  if (state.status === 'failed') {
+    return { type: 'failed', error: state.error ?? 'generation failed', result: state.result, at: state.updatedAt }
+  }
+  if (state.status === 'cancelled') {
+    return { type: 'cancelled', at: state.updatedAt }
+  }
   return null
 }
 
@@ -124,7 +130,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
       const jobGet = /^\/jobs\/([^/]+)$/.exec(path)
       if (method === 'GET' && jobGet) {
         const state = store.get(jobGet[1]!)
-        if (!state) { sendJson(res, 404, { error: 'job not found' }); return }
+        if (!state) {
+          sendJson(res, 404, { error: 'job not found' })
+          return
+        }
         sendJson(res, 200, state)
         return
       }
@@ -134,7 +143,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
       if (method === 'GET' && jobEvents) {
         const id = jobEvents[1]!
         const state = store.get(id)
-        if (!state) { sendJson(res, 404, { error: 'job not found' }); return }
+        if (!state) {
+          sendJson(res, 404, { error: 'job not found' })
+          return
+        }
         res.writeHead(200, {
           'content-type': 'text/event-stream; charset=utf-8',
           'cache-control': 'no-cache',
@@ -144,7 +156,9 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
 
         // Replay current state first (covers jobs that finished pre-subscribe).
         const replay = replayEventOf(state)
-        if (replay) sse(res, replay.type, replay)
+        if (replay) {
+          sse(res, replay.type, replay)
+        }
         if (isFinal(state.status)) {
           res.end()
           return
@@ -186,7 +200,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
       const histImage = /^\/history\/([^/]+)\/image$/.exec(path)
       if (method === 'GET' && histImage) {
         const img = await deps.history.readImage(histImage[1]!)
-        if (!img) { sendJson(res, 404, { error: 'image not found' }); return }
+        if (!img) {
+          sendJson(res, 404, { error: 'image not found' })
+          return
+        }
         res.writeHead(200, { 'content-type': img.mime, 'cache-control': 'public, max-age=3600' })
         res.end(Buffer.from(img.bytes))
         return
@@ -196,7 +213,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
       const histGet = /^\/history\/([^/]+)$/.exec(path)
       if (method === 'GET' && histGet) {
         const entry = await deps.history.get(histGet[1]!)
-        if (!entry) { sendJson(res, 404, { error: 'history not found' }); return }
+        if (!entry) {
+          sendJson(res, 404, { error: 'history not found' })
+          return
+        }
         sendJson(res, 200, entry)
         return
       }
@@ -206,7 +226,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
       if (method === 'PATCH' && histPatch) {
         const patch = jsonBodyOf<HistoryPatch>(await readBody(req))
         const entry = await deps.history.patch(histPatch[1]!, patch)
-        if (!entry) { sendJson(res, 404, { error: 'history not found' }); return }
+        if (!entry) {
+          sendJson(res, 404, { error: 'history not found' })
+          return
+        }
         sendJson(res, 200, entry)
         return
       }
