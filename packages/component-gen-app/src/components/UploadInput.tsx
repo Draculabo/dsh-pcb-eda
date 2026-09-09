@@ -87,6 +87,7 @@ export function UploadInput(props: UploadInputProps): ReactElement {
         void accept(ev.dataTransfer.files?.[0] ?? null)
       }}
       onPaste={(ev) => {
+        if (disabled) return
         const item = Array.from(ev.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'))
         if (item) {
           ev.preventDefault()
