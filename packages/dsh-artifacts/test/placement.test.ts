@@ -134,6 +134,18 @@ describe('placeSupportOf — the hqEdge place seam', () => {
     expect(placeSupportOf(() => hqEdge, 'symbol')!()).toBeNull()
   })
 
+  it('falls back to context.getCurrent() when getEditorType is empty', () => {
+    const hqEdge = {
+      context: {
+        getEditorType: () => '',
+        getCurrent: () => ({ targetHost: 'hq-eda', editorType: 'pcb' }),
+      },
+      placeArtifact: async () => ({ ok: true }),
+    }
+    const resolved = placeSupportOf(() => hqEdge, 'footprint')!()
+    expect(resolved?.editorType).toBe('pcb')
+  })
+
   it('treats an empty/unknown editor type as not placeable (fail closed)', () => {
     const hqEdge = { context: { getEditorType: () => '' }, placeArtifact: async () => ({}) }
     expect(placeSupportOf(() => hqEdge, 'symbol')!()).toBeNull()
