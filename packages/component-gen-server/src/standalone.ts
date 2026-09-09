@@ -79,7 +79,15 @@ function resolveAppDist(override?: string): string {
 
 /** Static file responder with traversal protection. */
 function serveStatic(root: string, urlPath: string, res: ServerResponse): void {
-  const decoded = decodeURIComponent(urlPath.split('?')[0] ?? '/')
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(urlPath.split('?')[0] ?? '/')
+  } catch {
+    res.writeHead(400)
+    res.end('bad request')
+    return
+  }
+
   let rel = decoded === '/' ? '/index.html' : decoded
   if (rel.startsWith('/')) rel = rel.slice(1)
   const target = resolve(root, rel)
