@@ -4,7 +4,7 @@
  * The component tree needs a DOM, so these target the DOM-free utilities only.
  */
 import { describe, expect, it } from 'vitest'
-import { defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
+import { createHttpPorts, defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
 import { humanizeKey } from '../src/utils/labels.js'
 import { translateFor } from '../src/copy/index.js'
 
@@ -12,6 +12,32 @@ describe('defaultArtifactsBase', () => {
   it('derives the artifacts base from the component-gen base', () => {
     expect(defaultArtifactsBase('/api/v1/huaqiu/component-gen')).toBe('/api/v1/huaqiu/artifacts')
     expect(defaultArtifactsBase('/api/v1/huaqiu/component-gen/')).toBe('/api/v1/huaqiu/artifacts')
+  })
+})
+
+describe('createHttpPorts', () => {
+  it('normalizes surrounding whitespace in API bases', async () => {
+    const requests: string[] = []
+    const ports = createHttpPorts({
+      base: '  /api/v1/huaqiu/component-gen/  ',
+      artifactsBase: '  /api/v1/huaqiu/artifacts/  ',
+      doFetch: async (input) => {
+        const request = String(input)
+        requests.push(request)
+        if (request.endsWith('/config')) {
+          return new Response('{}', { headers: { 'content-type': 'application/json' } })
+        }
+        return new Response('artifact')
+      },
+    })
+
+    await ports.config()
+    await ports.artifactContent('artifact-1')
+
+    expect(requests).toEqual([
+      '/api/v1/huaqiu/component-gen/config',
+      '/api/v1/huaqiu/artifacts/artifact-1/content',
+    ])
   })
 })
 
