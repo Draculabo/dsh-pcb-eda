@@ -45,6 +45,12 @@ describe('redact', () => {
     expect(out.headers![0]).not.toContain('abcdef123456')
   })
 
+  it('redacts every credential embedded in the same string', () => {
+    expect(redact('Bearer abcdef123456 then Basic ZYXWVUTS9876')).toBe(
+      'Bearer [redacted] then Basic [redacted]',
+    )
+  })
+
   it('redacts a bare opaque secret blob but keeps paths and URLs', () => {
     expect(redact('21ce59a4-2d69-5b0c-b1ea-6fe3c0d012a4-6a97bb81')).toBe(REDACTED)
     expect(redact('/Users/admin/code/hq-edge/dist/edge-headless')).toBe('/Users/admin/code/hq-edge/dist/edge-headless')
