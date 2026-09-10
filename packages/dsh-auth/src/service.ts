@@ -99,8 +99,8 @@ function readPersisted(): HuaqiuUserInfo | null {
     const file = join(PERSIST_DIR(), PERSIST_FILE)
     if (!existsSync(file)) return null
     const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
-    const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : null
-    const token = typeof raw.token === 'string' && raw.token.length > 0 ? raw.token : null
+    const id = typeof raw.id === 'string' && raw.id.trim().length > 0 ? raw.id : null
+    const token = typeof raw.token === 'string' && raw.token.trim().length > 0 ? raw.token : null
     if (!id || !token) return null
     const nickname = typeof raw.nickname === 'string' && raw.nickname.length > 0
       ? raw.nickname
