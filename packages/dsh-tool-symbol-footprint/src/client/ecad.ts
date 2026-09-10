@@ -26,16 +26,20 @@ export async function resolveArtifact(artifactId: string): Promise<ResolvedArtif
   const metaPath = `/api/v1/huaqiu/artifacts/${encodeURIComponent(artifactId)}`
   const metaRes = await fetch(metaPath)
   if (!metaRes.ok) throw new Error(`artifact metadata ${metaRes.status}`)
-  const meta = (await metaRes.json()) as { type?: string; filename?: string }
+  const meta: unknown = await metaRes.json()
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+    throw new Error('artifact metadata invalid response')
+  }
 
   const contentRes = await fetch(`${metaPath}/content`)
   if (!contentRes.ok) throw new Error(`artifact content ${contentRes.status}`)
   const content = await contentRes.text()
 
+  const metadata = meta as Record<string, unknown>
   return {
     id: artifactId,
-    type: typeof meta.type === 'string' ? meta.type : null,
-    filename: typeof meta.filename === 'string' ? meta.filename : null,
+    type: typeof metadata.type === 'string' ? metadata.type : null,
+    filename: typeof metadata.filename === 'string' ? metadata.filename : null,
     content,
   }
 }
