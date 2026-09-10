@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { InMemoryHuaqiuAuthService } from '../src/service.js'
 import { authFetch } from './helpers.js'
 
@@ -19,6 +19,17 @@ describe('InMemoryHuaqiuAuthService', () => {
     expect(svc.hostMode).toBe(false)
     expect(await svc.auth.isAuthenticated()).toBe(false)
     expect(await svc.auth.getAccessToken()).toBeNull()
+    expect(await svc.auth.getUserInfo()).toBeNull()
+  })
+
+  it.each([
+    { id: '   ', token: 'tok' },
+    { id: 'u1', token: '   ' },
+  ])('rejects blank persisted credentials: %j', async (credentials) => {
+    mkdirSync(TMP, { recursive: true })
+    writeFileSync(join(TMP, 'session.json'), JSON.stringify(credentials), 'utf8')
+
+    const svc = new InMemoryHuaqiuAuthService()
     expect(await svc.auth.getUserInfo()).toBeNull()
   })
 
