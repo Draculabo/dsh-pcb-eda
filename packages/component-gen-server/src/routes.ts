@@ -95,7 +95,16 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
 
       // POST /jobs
       if (method === 'POST' && path === '/jobs') {
-        const body = jsonBodyOf<StartJobRequest>(await readBody(req))
+        let body: StartJobRequest
+        try {
+          body = jsonBodyOf<StartJobRequest>(await readBody(req))
+        } catch (err) {
+          if (err instanceof SyntaxError) {
+            sendJson(res, 400, { error: 'invalid json body' })
+            return
+          }
+          throw err
+        }
         if (!body || (body.kind !== 'symbol' && body.kind !== 'extract-footprint' && body.kind !== 'generate-footprint')) {
           sendJson(res, 400, { error: 'invalid job kind (expected symbol | extract-footprint | generate-footprint)' })
           return
