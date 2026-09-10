@@ -41,6 +41,18 @@ export interface ProgressState {
 
 const IDLE: ProgressState = { phase: 'idle', doc: null, error: null }
 
+export function parseProgressDoc(value: unknown): ProgressDoc {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('progress route returned invalid response')
+  }
+
+  const doc = value as ProgressDoc
+  if (doc.status !== 'running' && doc.status !== 'completed' && doc.status !== 'failed') {
+    throw new Error('progress route returned invalid response')
+  }
+  return doc
+}
+
 /**
  * Poll one run's progress while `active`.
  *
@@ -95,7 +107,7 @@ export function useProgress(callId: string | undefined, active: boolean): Progre
         }
         if (!res.ok) throw new Error(`progress route returned HTTP ${res.status}`)
 
-        const doc = (await res.json()) as ProgressDoc
+        const doc = parseProgressDoc(await res.json())
         if (cancelled) return
         delay = POLL_INTERVAL_MS
         missingSince = null
