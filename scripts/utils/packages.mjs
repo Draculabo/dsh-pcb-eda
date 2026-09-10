@@ -13,10 +13,11 @@
  *   - `publishablePackages()` — everything under `packages/` that is meant for
  *     npm (has a name/version and is not marked `private: true`). The whole
  *     repo is released as one unit, so this is the release set.
- *   - `dshPlugins()` — packages that declare a `dsh` config (i.e. they are
- *     real DSH plugins and can be registered with `dsh plugin add`). The
- *     app/server/utility packages (`component-gen-*`, `dsh-tool-uncollapse`)
- *     ship to npm but are not plugins, so they are excluded here.
+ *   - `dshPlugins()` — packages that declare an object-shaped `dsh` config
+ *     (i.e. they are real DSH plugins and can be registered with
+ *     `dsh plugin add`). The app/server/utility packages (`component-gen-*`,
+ *     `dsh-tool-uncollapse`) ship to npm but are not plugins, so they are
+ *     excluded here.
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
@@ -79,9 +80,12 @@ export function publishablePackages() {
   return discoverPackages().filter((p) => p.manifest.private !== true)
 }
 
-/** Packages that are real DSH plugins (declare a `dsh` config). */
+/** Packages that are real DSH plugins (declare an object-shaped `dsh` config). */
 export function dshPlugins() {
-  return discoverPackages().filter((p) => p.manifest.dsh != null)
+  return discoverPackages().filter((p) => {
+    const config = p.manifest.dsh
+    return config !== null && typeof config === 'object' && !Array.isArray(config)
+  })
 }
 
 /** Absolute path to the root (private marker) package.json. */
