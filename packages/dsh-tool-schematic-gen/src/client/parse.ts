@@ -68,10 +68,10 @@ export type ProjectedPhase =
 export function resultTextOf(block: ToolBlockLike | undefined): string {
   const content = block?.content
   if (!Array.isArray(content)) return ''
-  for (const c of content) {
-    if (c && c.type === 'text' && typeof c.text === 'string') return c.text
-  }
-  return ''
+  return content
+    .filter((c): c is ContentBlockLike => !!c && c.type === 'text' && typeof c.text === 'string')
+    .map((c) => c.text as string)
+    .join('')
 }
 
 function firstLine(text: string): string {
