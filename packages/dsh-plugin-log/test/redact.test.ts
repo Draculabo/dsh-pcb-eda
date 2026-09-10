@@ -45,6 +45,15 @@ describe('redact', () => {
     expect(out.headers![0]).not.toContain('abcdef123456')
   })
 
+  it('redacts credentials embedded in URL query parameters', () => {
+    expect(redact('https://example.test/callback?next=/home&access_token=abcdef123456&mode=popup')).toBe(
+      `https://example.test/callback?next=/home&access_token=${REDACTED}&mode=popup`,
+    )
+    expect(redact('request failed: /api?api_key=secretvalue&retry=1')).toBe(
+      `request failed: /api?api_key=${REDACTED}&retry=1`,
+    )
+  })
+
   it('redacts a bare opaque secret blob but keeps paths and URLs', () => {
     expect(redact('21ce59a4-2d69-5b0c-b1ea-6fe3c0d012a4-6a97bb81')).toBe(REDACTED)
     expect(redact('/Users/admin/code/hq-edge/dist/edge-headless')).toBe('/Users/admin/code/hq-edge/dist/edge-headless')
