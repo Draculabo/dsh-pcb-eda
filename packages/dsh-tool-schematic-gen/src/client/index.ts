@@ -159,6 +159,7 @@ export function apply(ctx: ClientContext): () => void {
         sendPrompt,
         authState: useAuthState(),
         getHqEdge,
+        getAuth: () => authService,
       })
 
     for (const toolName of TOOLVIEW_KEYS) {

@@ -26,7 +26,7 @@ import { resolveArtifact, renderArtifactToCanvas, sizeCanvasFor, triggerDownload
 import { placeSupportOf, type HqEdgePlaceLike } from './place.js'
 import { useLocale, useTheme } from './theme.js'
 import { buildLoginUrl, loginIframeBackground } from './login-url.js'
-import type { AuthStateLike, PromptSender } from './index.js'
+import type { AuthClientLike, AuthStateLike, PromptSender } from './index.js'
 
 const TOOL_SYMBOL = 'generate_symbol_from_image'
 const TOOL_FOOTPRINT_IMAGE = 'generate_footprint_from_image'
@@ -39,6 +39,12 @@ export interface GenHitProps {
   inspect?: () => void
   authState?: AuthStateLike
   sendPrompt?: PromptSender
+  /**
+   * Lazy accessor for the `huaqiuAuth` client service (auth plugin browser
+   * half). Absent/undefined in a broken install — the needs_auth card then
+   * falls back to the embedded auth.eda.cn iframe.
+   */
+  getAuth?: () => AuthClientLike | undefined
   /**
    * Lazy accessor for the host's `hqEdge` service (edge-bridge browser half).
    * Absent/undefined in standalone DSH — the Place button is then hidden.
@@ -600,11 +606,18 @@ interface LoginCardProps {
   toolName: string
   authState?: AuthStateLike
   t: Translate
+  getAuth?: () => AuthClientLike | undefined
 }
 
-function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
+function LoginCard({ toolName, authState, t, getAuth }: LoginCardProps): ReactElement {
   const dark = useTheme()
   const locale = useLocale()
+  const authClient = getAuth?.()?.auth
+  // HQ Edge host mode: EDA owns the credential — login must ask EDA to open
+  // its own TriggerLoginDialog (hq-edge POST /api/v1/auth/login), not the
+  // auth.eda.cn iframe (a browser-pushed token is ignored by the STRICT host
+  // resolver). Standalone DSH keeps the inline iframe.
+
   // FILL mode (`fill=full`): this card IS the surface, so let the embed paint
   // it edge-to-edge with its own `bg-background`. Without it the embed's
   // `grid-rows-[20px_1fr_20px]` wrapper leaves two transparent strips above
@@ -618,6 +631,41 @@ function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
   // its URL params once on mount), silently ignoring the new `fill`/`theme`.
   const remountKey = `${locale}|${dark ? 'd' : 'l'}`
 
+  const statusLine = (
+    <p className="hq-genhit__login-status" style={{ color: authState?.authenticated ? '#1677ff' : '#d4380d' }}>
+      {authState?.authenticated
+        ? t('card.auth.loggedIn', {
+            nickname: authState.nickname ? t('card.nicknameSep', { nickname: authState.nickname }) : '',
+          })
+        : t('card.auth.loggedOut')}
+    </p>
+  )
+
+  if (authClient?.isHostMode?.()) {
+    return (
+      <div className="hq-genhit">
+        <div className="hq-genhit__header">
+          <span className="hq-genhit__icon">⛁</span>
+          <span className="hq-genhit__title">{t('card.auth.title')}</span>
+        </div>
+        <div className="hq-genhit__login">
+          <p className="hq-genhit__login-desc">{t('card.auth.descHost', { tool: toolName })}</p>
+          {statusLine}
+          <button
+            type="button"
+            className="hq-genhit__login-btn"
+            onClick={() => {
+              void authClient?.login?.({ lang: locale, theme: dark ? 'dark' : 'light' })
+                .catch(() => { /* login cancelled / dialog failed — card keeps showing the button */ })
+            }}
+          >
+            {t('card.auth.loginBtn')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="hq-genhit">
       <div className="hq-genhit__header">
@@ -626,13 +674,7 @@ function LoginCard({ toolName, authState, t }: LoginCardProps): ReactElement {
       </div>
       <div className="hq-genhit__login">
         <p className="hq-genhit__login-desc">{t('card.auth.desc', { tool: toolName })}</p>
-        <p className="hq-genhit__login-status" style={{ color: authState?.authenticated ? '#1677ff' : '#d4380d' }}>
-          {authState?.authenticated
-            ? t('card.auth.loggedIn', {
-                nickname: authState.nickname ? t('card.nicknameSep', { nickname: authState.nickname }) : '',
-              })
-            : t('card.auth.loggedOut')}
-        </p>
+        {statusLine}
         <iframe
           key={remountKey}
           src={src}
@@ -786,7 +828,7 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
 
   // ── needs_auth: inline login card ─────────────────────────────────────────
   if (state.phase === 'needs_auth') {
-    return <LoginCard toolName={props.toolName} authState={props.authState} t={t} />
+    return <LoginCard toolName={props.toolName} authState={props.authState} t={t} getAuth={props.getAuth} />
   }
 
   // ── generating / cancelled ────────────────────────────────────────────────

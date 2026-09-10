@@ -68,6 +68,8 @@ const ZH = {
     'card.auth.desc': '工具「{tool}」需要登录华秋 EDA 账号才能继续。请在下方的登录框完成登录（或点击左侧「华秋EDA登录」按钮）；登录完成后，回复助手「已登录，请重试」，助手会自动重新调用该工具。',
     'card.auth.loggedIn': '✓ 已登录{nickname}—— 现在可以回复助手「已登录，请重试」，助手会重新调用工具。',
     'card.auth.loggedOut': '未登录 —— 请在上方登录华秋 EDA（eda.cn）账号，或点击左侧「华秋EDA登录」按钮；登录完成后让助手重试。',
+    'card.auth.descHost': '工具「{tool}」需要登录华秋 EDA 账号才能继续。点击下方按钮后，EDA（KiCad）将弹出登录窗口，请在弹出的窗口中完成登录；登录完成后回复助手「已登录，请重试」，助手会自动重新调用该工具。',
+    'card.auth.loginBtn': '登录华秋 EDA',
     // Rendered inside `{nickname}` by `card.auth.loggedIn`. The separator is
     // locale-specific punctuation: zh uses a full-width colon, en a half-width
     // one followed by a space. Hardcoding '：' made en read "：John".
@@ -164,6 +166,8 @@ const EN: Record<CopyKey, string> = {
     'card.auth.desc': 'Tool "{tool}" requires a Huaqiu EDA login. Complete the login below (or use the 华秋EDA AI login button in the sidebar); then reply "I have logged in, please retry" so the assistant can retry the tool.',
     'card.auth.loggedIn': '✓ Logged in{nickname} — reply "I have logged in, please retry" and the assistant will retry.',
     'card.auth.loggedOut': 'Not logged in — complete the login above, or use the 华秋EDA AI sidebar button.',
+    'card.auth.descHost': 'Tool "{tool}" requires a Huaqiu EDA account. Click the button below — EDA (KiCad) will open its login dialog. Complete the login there, then reply "I have logged in, please retry" so the assistant can retry the tool.',
+    'card.auth.loginBtn': 'Sign in to Huaqiu EDA',
     'card.nicknameSep': ': {nickname}',
     'field.maxOf': '{field} (max)',
     'field.minOf': '{field} (min)',

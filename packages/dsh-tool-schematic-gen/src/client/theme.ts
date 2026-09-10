@@ -181,6 +181,8 @@ const CSS = `
 .hq-sch__login-desc { margin: 0 0 10px; font: var(--dsw-font-xxs-12, 12px/1.4 system-ui, sans-serif); color: var(--dsw-alias-label-secondary, currentColor); line-height: 1.5; }
 .hq-sch__login-status { margin: 0 0 10px; font: var(--dsw-font-xxs-12, 12px/1.4 system-ui, sans-serif); line-height: 1.5; }
 .hq-sch__login-iframe { width: 100%; height: ${LOGIN_IFRAME_HEIGHT}px; border: 0; border-radius: 8px; display: block; }
+.hq-sch__login-btn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--dsw-alias-border-l1, currentColor); border-radius: 6px; padding: 6px 16px; background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,0.08)); color: var(--dsw-alias-label-primary, currentColor); font: var(--dsw-font-xxs-12, 12px/1.4 system-ui, sans-serif); cursor: pointer; }
+.hq-sch__login-btn:hover { filter: brightness(1.08); }
 
 /* ── live call stack (long-running generations) ───────────────────────────── */
 .hq-sch__progress { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; font: var(--dsw-font-xxs-12, 12px/1.4 system-ui, sans-serif); color: var(--dsw-alias-label-secondary, currentColor); }

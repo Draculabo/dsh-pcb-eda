@@ -27,6 +27,8 @@ export interface AuthClientDeps {
 export interface AuthClient {
   auth: {
     isAuthenticated(): boolean
+    /** HQ Edge host mode: EDA owns the credential; login triggers the EDA dialog. */
+    isHostMode(): boolean
     getAccessToken(): Promise<string | null>
     getUserInfo(): Promise<AuthTokenPayload | null>
     login(options?: LoginOptions): Promise<void>
@@ -121,14 +123,22 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   }
 
   const auth = {
-    isAuthenticated: (): boolean => hostSession !== null || storage.get() !== null,
+    // Host mode is STRICT (mirrors the node half): hq-edge is the single
+    // source of truth, so a pushed/persisted credential left behind by an
+    // earlier standalone login must never report the operator as logged in
+    // while the host has no session — that mismatch is exactly how the HIT
+    // card reads "logged in" while the tool still gates on needs_auth.
+    isAuthenticated: (): boolean => (hostMode ? hostSession !== null : storage.get() !== null),
+    isHostMode: (): boolean => hostMode,
     getAccessToken: async (): Promise<string | null> => {
       if (hostMode && !hostSessionLoaded) await resolveHost()
-      return hostSession?.token ?? storage.get()?.token ?? null
+      return hostMode
+        ? (hostSession?.token ?? null)
+        : (hostSession?.token ?? storage.get()?.token ?? null)
     },
     getUserInfo: async (): Promise<AuthTokenPayload | null> => {
       if (hostMode && !hostSessionLoaded) await resolveHost()
-      return hostSession ?? storage.get()
+      return hostMode ? hostSession : (hostSession ?? storage.get())
     },
     login: async (options?: LoginOptions): Promise<void> => {
       // Host mode: hq-edge owns the session — ask the host (EDA) to open its
@@ -140,7 +150,7 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
         await transport.triggerLogin()
         hostSessionLoaded = false
         await resolveHost()
-        if (hostSession?.token !== prevToken) emit(hostSession ?? storage.get())
+        if (hostSession?.token !== prevToken) emit(hostSession)
         return
       }
       openIframe(options ?? {})

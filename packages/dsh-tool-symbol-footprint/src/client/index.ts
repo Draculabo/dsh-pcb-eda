@@ -67,8 +67,26 @@ export interface AuthStateLike {
 export interface HuaqiuAuthClientService {
   auth?: {
     isAuthenticated(): boolean
+    isHostMode?(): boolean
     getUserInfo(): Promise<{ nickname?: string } | null>
-    login?(): Promise<void>
+    login?(options?: { lang?: string; theme?: string }): Promise<void>
+    onAuthStateChanged(listener: (info: { nickname?: string } | null) => void): () => void
+  }
+}
+
+/**
+ * Structural view of the same `huaqiuAuth` CLIENT service for the HIT card
+ * (declared structurally, never imported — each package must remain
+ * independently installable). `login()` in HQ Edge host mode triggers the EDA
+ * login dialog through hq-edge (`POST /api/v1/auth/login` → EDA
+ * `TriggerLoginDialog`) instead of the auth.eda.cn iframe; `isHostMode()`
+ * tells the card which surface to show.
+ */
+export interface AuthClientLike {
+  auth?: {
+    isAuthenticated(): boolean
+    isHostMode?(): boolean
+    login?(options?: { lang?: string; theme?: string }): Promise<void>
     onAuthStateChanged(listener: (info: { nickname?: string } | null) => void): () => void
   }
 }
@@ -168,6 +186,7 @@ export function apply(ctx: ClientContext): () => void {
         sessionId: props.sessionId,
         sendPrompt,
         authState: useAuthState(),
+        getAuth: () => authService,
         getHqEdge,
       })
 
