@@ -19,13 +19,15 @@ injectAppStyles()
 const AUTH_BASE = '/api/v1/huaqiu/auth'
 
 /** Read auth state from the dsh-auth session route (standalone server). */
-function createStandaloneAuth(): ComponentGenAuthPort {
+export function createStandaloneAuth(): ComponentGenAuthPort {
   let pollTimer: ReturnType<typeof setInterval> | null = null
   const listeners = new Set<(authenticated: boolean) => void>()
   const readState = async (): Promise<{ authenticated: boolean; user: { nickname?: string } | null }> => {
     try {
       const res = await fetch(`${AUTH_BASE}/session`, { headers: { accept: 'application/json' } })
-      if (!res.ok) return { authenticated: false, user: null }
+      if (!res.ok) {
+        return { authenticated: false, user: null }
+      }
       const body = (await res.json()) as { authenticated?: boolean; user?: { nickname?: string } | null }
       return { authenticated: body.authenticated === true, user: body.user ?? null }
     } catch {
@@ -33,22 +35,47 @@ function createStandaloneAuth(): ComponentGenAuthPort {
     }
   }
   const startPolling = (): void => {
-    if (pollTimer) return
+    if (pollTimer) {
+      return
+    }
     let last = false
-    void readState().then((s) => { last = s.authenticated })
-    pollTimer = setInterval(() => {
-      void readState().then((s) => {
-        if (s.authenticated !== last) {
-          last = s.authenticated
-          for (const cb of [...listeners]) cb(s.authenticated)
+    let initialized = false
+    let polling = false
+    const poll = async (): Promise<void> => {
+      if (polling) {
+        return
+      }
+      polling = true
+      try {
+        const state = await readState()
+        if (!initialized) {
+          last = state.authenticated
+          initialized = true
+          return
         }
-      })
+        if (state.authenticated !== last) {
+          last = state.authenticated
+          for (const cb of [...listeners]) {
+            cb(state.authenticated)
+          }
+        }
+      } finally {
+        polling = false
+      }
+    }
+    void poll()
+    pollTimer = setInterval(() => {
+      void poll()
     }, 2000)
   }
   startPolling()
   return {
-    async isAuthenticated() { return (await readState()).authenticated },
-    async getUserInfo() { return (await readState()).user },
+    async isAuthenticated() {
+      return (await readState()).authenticated
+    },
+    async getUserInfo() {
+      return (await readState()).user
+    },
     async login() {
       // Official login page in a new tab; the dsh-auth session route is the
       // source of truth the poller watches.
@@ -56,7 +83,9 @@ function createStandaloneAuth(): ComponentGenAuthPort {
     },
     onAuthStateChanged(cb) {
       listeners.add(cb)
-      return () => { listeners.delete(cb) }
+      return () => {
+        listeners.delete(cb)
+      }
     },
   }
 }
@@ -67,7 +96,9 @@ function params(): URLSearchParams {
 
 function mount(): void {
   const rootEl = document.getElementById('root')
-  if (!rootEl) return
+  if (!rootEl) {
+    return
+  }
   const page: ComponentGenPage = params().get('page') === 'symbol' ? 'symbol' : 'footprint'
   const lang = params().get('lang') ?? undefined
   const ports: ComponentGenPorts = createHttpPorts({
