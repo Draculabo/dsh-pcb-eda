@@ -114,7 +114,7 @@ export class JobStore {
 }
 
 function isAbortError(err: unknown): boolean {
-  return err instanceof Error && (err.name === 'AbortError' || /abort/i.test(err.message))
+  return err instanceof Error && err.name === 'AbortError'
 }
 
 /** Map the tool-body `needs_auth` outcome to a job failure with the marker. */
