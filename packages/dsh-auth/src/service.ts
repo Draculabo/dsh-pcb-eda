@@ -23,7 +23,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
-import { createLogger, type Logger } from '@hqedge/logging'
+import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
 import {
   HostSessionResolver,
   resolveHostConfig,
@@ -159,9 +159,9 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
   private stale = false
   /** Last host credential version seen; see `observeHostVersion`. */
   private lastHostVersion: number | null = null
-  private _log: Logger | null = null
-  private get log(): Logger {
-    if (this._log === null) this._log = createLogger({ component: 'dsh-auth' })
+  private _log: PluginLogger | null = null
+  private get log(): PluginLogger {
+    if (this._log === null) this._log = getLogger('dsh-auth')
     return this._log
   }
 
@@ -184,7 +184,11 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
       fetchImpl: this.doFetch,
     })
     this.hostMode = this.host.enabled
-    this.log.info({ hostMode: this.hostMode, hostAuthPath: resolved.hostAuthPath, hostSessionTtlSeconds: resolved.hostSessionTtlSeconds }, 'auth service started')
+    this.log.info('auth service started', {
+      hostMode: this.hostMode,
+      hostAuthPath: resolved.hostAuthPath,
+      hostSessionTtlSeconds: resolved.hostSessionTtlSeconds,
+    })
   }
 
   /** Host mode is active iff a host base URL was configured (see HostSessionResolver.enabled). */
@@ -254,7 +258,10 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     if (this.host.enabled) {
       const host = await this.host.resolve()
       if (!host || !host.authenticated) {
-        this.log.debug({ hostReachable: host !== null, hostAuthenticated: host?.authenticated ?? null }, 'host session unusable')
+        this.log.debug('host session unusable', {
+          hostReachable: host !== null,
+          hostAuthenticated: host?.authenticated ?? null,
+        })
         return null
       }
       this.observeHostVersion(host.version)
@@ -278,7 +285,7 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     if (this.lastHostVersion !== null && version !== this.lastHostVersion) {
       this.stale = false
       this.validator.invalidate()
-      this.log.info({ version }, 'host credential replaced — re-arming session')
+      this.log.info('host credential replaced — re-arming session', { version })
     }
     this.lastHostVersion = version
   }

@@ -36,8 +36,8 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.0",
-    "@hqedge/logging": "^0.2.7",
-    "@huaqiu/component-gen-server": "workspace:*"
+    "@huaqiu/component-gen-server": "workspace:*",
+    "@huaqiu/dsh-plugin-log": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.0",

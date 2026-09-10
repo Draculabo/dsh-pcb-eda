@@ -89,18 +89,18 @@ describe('@huaqiu/dsh-tool-symbol-footprint plugin', () => {
     expect(registered.length).toBe(3)
   })
 
-  it('has no @hqedge dependency other than @hqedge/logging (import or manifest)', async () => {
+  it('has no @hqedge dependency (import or manifest)', async () => {
     const fs = await import('node:fs/promises')
     const [source, manifest] = await Promise.all([
       fs.readFile(new URL('../src/index.ts', import.meta.url), 'utf8'),
       fs.readFile(new URL('../package.json', import.meta.url), 'utf8'),
     ])
-    expect(source).not.toMatch(/from\s+['"]@hqedge\/(?!logging)/)
+    expect(source).not.toMatch(/from\s+['"]@hqedge/)
     const deps = {
       ...JSON.parse(manifest).dependencies,
       ...JSON.parse(manifest).peerDependencies,
       ...JSON.parse(manifest).devDependencies,
     }
-    expect(Object.keys(deps).some((k) => k.startsWith('@hqedge') && k !== '@hqedge/logging')).toBe(false)
+    expect(Object.keys(deps).some((k) => k.startsWith('@hqedge'))).toBe(false)
   })
 })

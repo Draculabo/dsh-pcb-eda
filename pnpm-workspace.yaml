@@ -4,5 +4,3 @@ minimumReleaseAgeExclude:
   - '@huaqiu/dsh-artifacts@0.3.3'
   - '@huaqiu/dsh-auth@0.3.3'
   - '@hqedge/paths@0.1.2'
-  - '@hqedge/logging@0.2.7'
-  - '@hqedge/paths@0.1.5'

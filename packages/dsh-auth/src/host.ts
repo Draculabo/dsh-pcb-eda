@@ -20,15 +20,15 @@
  *   4. null           → tools return needs_auth
  */
 
-import { createLogger, type Logger } from '@hqedge/logging'
+import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
 
 // Lazy so test suites that `vi.mock('@deepseek-ai/dsh-home-paths', …)` before
 // the test's TMP constant is initialised don't trigger `dshHomePath('logs')` at
 // module-load time. Every site goes through `log()` instead of holding a module
 // reference to the logger.
-let _log: Logger | null = null
-function log(): Logger {
-  if (_log === null) _log = createLogger({ component: 'dsh-auth' })
+let _log: PluginLogger | null = null
+function log(): PluginLogger {
+  if (_log === null) _log = getLogger('dsh-auth')
   return _log
 }
 
@@ -170,20 +170,31 @@ export class HostSessionResolver {
       }
     } catch (err) {
       // Network error: nothing usable right now.
-      log().warn({ url, error: String(err) }, 'host session fetch failed')
+      log().warn('host session fetch failed', { url, error: String(err) })
       info = null
     }
     if (info !== null && info.authenticated) {
       this.cache = { info, fetchedAt: now }
       // Never log the credential itself — id/version are enough to correlate
       // this plugin with the HQ Edge log line that served it.
-      log().debug({ url, status, userId: info.id, version: info.version ?? null, authenticated: info.authenticated }, 'host session resolved')
+      log().debug('host session resolved', {
+        url,
+        status,
+        userId: info.id,
+        version: info.version ?? null,
+        authenticated: info.authenticated,
+      })
       return info
     }
     // Unusable (unreachable, unparseable, or the host says it has no
     // credential). Drop the cache so the very next call re-asks the host.
     this.cache = null
-    log().info({ url, status, parsed: info !== null, hostAuthenticated: info?.authenticated ?? null }, 'no usable host session')
+    log().info('no usable host session', {
+      url,
+      status,
+      parsed: info !== null,
+      hostAuthenticated: info?.authenticated ?? null,
+    })
     return null
   }
 
