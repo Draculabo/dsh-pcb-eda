@@ -35,21 +35,23 @@ describe('@huaqiu/dsh-tool-part-search plugin', () => {
     expect(() => apply({} as never)).toThrow(/requires the DSH/)
   })
 
-  it('has no @hqedge dependency (import or manifest), only docstring mentions', async () => {
+  it('has no @hqedge dependency other than the published @hqedge/logging', async () => {
     const fs = await import('node:fs/promises')
     const [source, manifest] = await Promise.all([
       fs.readFile(new URL('../src/index.ts', import.meta.url), 'utf8'),
       fs.readFile(new URL('../package.json', import.meta.url), 'utf8'),
     ])
-    // No import from @hqedge anywhere in the plugin source.
-    expect(source).not.toMatch(/from\s+['"]@hqedge/)
-    expect(source).not.toMatch(/import\s*\(['"]@hqedge/)
-    // No @hqedge package in any dependency section of the manifest.
+    // No import from @hqedge anywhere in the plugin source, except the
+    // published @hqedge/logging (all other hq-edge internals must stay out).
+    expect(source).not.toMatch(/from\s+['"]@hqedge\/(?!logging)/)
+    expect(source).not.toMatch(/import\s*\(['"]@hqedge\/(?!logging)/)
+    // No @hqedge package in any dependency section of the manifest, except
+    // @hqedge/logging itself.
     const deps = {
       ...JSON.parse(manifest).dependencies,
       ...JSON.parse(manifest).peerDependencies,
       ...JSON.parse(manifest).devDependencies,
     }
-    expect(Object.keys(deps).some((k) => k.startsWith('@hqedge'))).toBe(false)
+    expect(Object.keys(deps).some((k) => k.startsWith('@hqedge') && k !== '@hqedge/logging')).toBe(false)
   })
 })

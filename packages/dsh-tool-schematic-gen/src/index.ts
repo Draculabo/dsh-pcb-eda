@@ -26,7 +26,7 @@ import { resolveConfig } from './config.js'
 import { HTTP_TIMEOUT_MS } from './sse.js'
 import { ProgressStore } from './progress.js'
 import { createProgressHandler, PROGRESS_ROUTE_PREFIX } from './routes.js'
-import { getLogger } from '@huaqiu/dsh-plugin-log'
+import { createLogger } from '@hqedge/logging'
 
 /** Plugin id — matches package.json. */
 export const name = '@huaqiu/dsh-tool-schematic-gen'
@@ -42,7 +42,7 @@ export const inject = ['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer'] as
 
 /** Shared component name for the unified DSH-plugin log. */
 const COMPONENT = 'dsh-schematic-gen'
-const log = getLogger(COMPONENT)
+const log = createLogger({ component: COMPONENT })
 
 export interface SchematicGenPluginConfig {
   /** Endpoint overrides, env-backed. */
@@ -107,12 +107,7 @@ export function apply(ctx: Context, config: SchematicGenPluginConfig = {}): () =
 
   const disposers = createSchematicGenTools(env).map((tool) => ctx.tools.register(tool))
 
-  log.info('registered agent tools', {
-    tools: disposers.length,
-    copilotkitUrl: finalConfig.copilotkitUrl,
-    exportZipUrl: finalConfig.exportZipUrl,
-    auth: 'huaqiuAuth',
-  })
+  log.info({ tools: disposers.length, copilotkitUrl: finalConfig.copilotkitUrl, exportZipUrl: finalConfig.exportZipUrl, auth: 'huaqiuAuth' }, 'registered agent tools')
 
   return function dispose() {
     for (const disposeTool of disposers) {

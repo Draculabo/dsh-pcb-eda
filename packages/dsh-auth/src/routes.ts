@@ -15,15 +15,15 @@
  * the documented channel).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
+import { createLogger, type Logger } from '@hqedge/logging'
 import type { HuaqiuAuthService, HuaqiuUserInfo } from './service.js'
 
 // Lazy so test suites that `vi.mock('@deepseek-ai/dsh-home-paths', …)` before
 // their TMP constant is initialised don't trigger `dshHomePath('logs')` at
 // module-load time.
-let _log: PluginLogger | null = null
-function log(): PluginLogger {
-  if (_log === null) _log = getLogger('dsh-auth')
+let _log: Logger | null = null
+function log(): Logger {
+  if (_log === null) _log = createLogger({ component: 'dsh-auth' })
   return _log
 }
 

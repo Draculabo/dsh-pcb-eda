@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.0",
-    "@huaqiu/dsh-plugin-log": "workspace:*"
+    "@hqedge/logging": "^0.2.7"
   },
   "files": [
     "lib",

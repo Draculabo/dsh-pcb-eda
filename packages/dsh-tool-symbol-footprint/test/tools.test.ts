@@ -221,6 +221,6 @@ describe('tool schema/execute shape', () => {
     const source = await fs.readFile(new URL('../src/tools.ts', import.meta.url), 'utf8')
     expect(source).toMatch(/defineTool/)
     expect(source).toMatch(/\{ type: 'json' \}/)
-    expect(source).not.toMatch(/from\s+['"]@hqedge/)
+    expect(source).not.toMatch(/from\s+['"]@hqedge\/(?!logging)/)
   })
 })

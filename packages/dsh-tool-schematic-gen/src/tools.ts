@@ -23,7 +23,7 @@ import { join } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { HuaqiuAuthService } from '@huaqiu/dsh-auth'
 import type { CreateArtifactResult, HuaqiuArtifacts } from '@huaqiu/dsh-artifacts'
-import { getLogger } from '@huaqiu/dsh-plugin-log'
+import { createLogger } from '@hqedge/logging'
 import {
   agentIds,
   buildHeaders,
@@ -47,7 +47,7 @@ function asJson<T>(value: T): Json {
 
 /** Shared component name for the unified DSH-plugin log. */
 const COMPONENT = 'dsh-schematic-gen'
-const log = getLogger(COMPONENT)
+const log = createLogger({ component: COMPONENT })
 
 /** Agent-facing timeout hints. */
 export const TOOL_TIMEOUT_MS = {
@@ -98,7 +98,7 @@ async function resolveAccount(auth: HuaqiuAuthService['auth']): Promise<EdaAccou
     }
     return null
   } catch (err) {
-    log.warn('could not resolve the eda.cn account', { error: String((err as Error)?.message || err) })
+    log.warn({ error: String((err as Error)?.message || err) }, 'could not resolve the eda.cn account')
     return null
   }
 }
@@ -180,7 +180,7 @@ async function artifactUriOf(env: SchematicGenEnv, id: string): Promise<string |
     if (!env.artifacts || typeof env.artifacts.getDownloadUri !== 'function') return null
     return await env.artifacts.getDownloadUri(id)
   } catch (err) {
-    log.warn('getDownloadUri failed', { id, error: String((err as Error)?.message || err) })
+    log.warn({ id, error: String((err as Error)?.message || err) }, 'getDownloadUri failed')
     return null
   }
 }

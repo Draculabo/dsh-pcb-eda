@@ -58,6 +58,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@huaqiu/dsh-plugin-log": "workspace:*"
+    "@hqedge/logging": "^0.2.7"
   }
 }

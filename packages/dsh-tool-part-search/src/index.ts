@@ -24,7 +24,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
+import { createLogger, type Logger } from '@hqedge/logging'
 import { createPartSearch } from './service.js'
 import { createPartSearchTools } from './tools.js'
 
@@ -35,15 +35,16 @@ export const name = '@huaqiu/dsh-tool-part-search'
 export const inject = ['tools'] as const
 
 /**
- * Lazy: a module-level `const log = getLogger(...)` would call `getLogger()` at
+ * Lazy: a module-level `const log = createLogger(...)` would create the file
+ * stream at import time (before DSH home is mockable in tests).
  * import time, which on bootstrap touches `dshHomePath('logs')` (transitively
  * via the unified-sink directory resolution). Tests that
  * `vi.mock('@deepseek-ai/dsh-home-paths', …)` get their TMP constant in scope
  * only after the mock factory, so defer the call until `apply()` runs.
  */
-let _log: PluginLogger | null = null
-function log(): PluginLogger {
-  if (_log === null) _log = getLogger('dsh-part-search')
+let _log: Logger | null = null
+function log(): Logger {
+  if (_log === null) _log = createLogger({ component: 'dsh-part-search' })
   return _log
 }
 
@@ -65,7 +66,7 @@ export function apply(ctx: Context): () => void {
   const service = createPartSearch()
   const disposers = createPartSearchTools(service).map((tool) => ctx.tools.register(tool))
 
-  log().info('registered agent tools', { tools: disposers.length })
+  log().info({ tools: disposers.length }, 'registered agent tools')
 
   return function dispose() {
     for (const disposeTool of disposers) {

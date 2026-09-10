@@ -32,7 +32,7 @@ describe('client bundle purity', () => {
         `missing ${bundlePath} — run "npx tsdown" before the test suite (the purity gate inspects the built bundle)`,
       )
     }
-    const requires = [...source.matchAll(/require\("([^"]+)"\)/g)].map((m) => m[1])
+    const requires = [...source.matchAll(/require\("([^"]+)"\)/g)].map((m) => m[1]!)
     expect(requires.length).toBeGreaterThan(0)
     const offenders = [...new Set(requires)].filter((spec) => !PLATFORM_SEEDS.has(spec))
     expect(
