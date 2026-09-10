@@ -26,7 +26,10 @@ export function levelRank(level: LogLevel): number {
  * normally", never to "crash the plugin host".
  */
 export function parseLevel(value: unknown, fallback: LogLevel): LogLevel {
-  if (typeof value !== 'string') return fallback
+  if (typeof value !== 'string') {
+    return fallback
+  }
+
   const normalized = value.trim().toLowerCase()
   return (LOG_LEVELS as readonly string[]).includes(normalized)
     ? (normalized as LogLevel)
