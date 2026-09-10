@@ -100,6 +100,10 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
           sendJson(res, 400, { error: 'invalid job kind (expected symbol | extract-footprint | generate-footprint)' })
           return
         }
+        if (body.input !== undefined && (!body.input || typeof body.input !== 'object' || Array.isArray(body.input))) {
+          sendJson(res, 400, { error: 'invalid job input (expected object)' })
+          return
+        }
         const input = body.input ?? {}
         if (input.imageDataUrl && input.imageDataUrl.length > MAX_IMAGE_BYTES) {
           sendJson(res, 413, { error: 'image too large', detail: `max ${MAX_IMAGE_BYTES} bytes` })
