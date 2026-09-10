@@ -64,8 +64,12 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
       const pathname = (q >= 0 ? url.slice(0, q) : url).replace(/\/+$/, '')
 
       if (req.method === 'POST' && pathname === `${AUTH_ROUTE_PREFIX}/session`) {
-        const body = JSON.parse(await readBody(req) || '{}') as Record<string, unknown>
-        const info = normalizeUserInfo(body)
+        const body = JSON.parse(await readBody(req) || '{}') as unknown
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+          sendJson(res, 400, { error: 'invalid session body' })
+          return
+        }
+        const info = normalizeUserInfo(body as Record<string, unknown>)
         if (!info) {
           sendJson(res, 400, { error: 'token and userId are required' })
           return
