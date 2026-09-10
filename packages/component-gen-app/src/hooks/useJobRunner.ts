@@ -83,7 +83,17 @@ export function useJobRunner(ports: ComponentGenPorts): UseJobRunnerResult {
     setFileName(null)
     setResult({})
     setError('')
-    const job = await ports.startJob(req)
+
+    let job: JobState
+    try {
+      job = await ports.startJob(req)
+    } catch (err) {
+      setPhase('failed')
+      setError(err instanceof Error ? err.message : String(err))
+      setJobId(null)
+      return
+    }
+
     setJobId(job.id)
     unsubRef.current = ports.jobEvents(job.id, onEvent)
   }, [ports, cleanup, onEvent])
