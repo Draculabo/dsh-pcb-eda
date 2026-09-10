@@ -81,7 +81,7 @@ function firstLine(text: string): string {
 }
 
 function artOf(a: unknown): ArtifactRef | null {
-  if (!a || typeof a !== 'object') return null
+  if (!a || typeof a !== 'object' || Array.isArray(a)) return null
   const o = a as Record<string, unknown>
   const id = typeof o.id === 'string' ? o.id : null
   if (!id) return null
