@@ -6,9 +6,12 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import { getLogger } from '@huaqiu/dsh-plugin-log'
 import { InMemoryHuaqiuAuthService, type HuaqiuAuthService } from './service.js'
 import { AUTH_ROUTE_PREFIX, createAuthHandler } from './routes.js'
 import type { HuaqiuAuthConfig } from './host.js'
+
+const log = getLogger('dsh-auth')
 
 export type { HuaqiuAuthApi, HuaqiuAuthService, HuaqiuUserInfo } from './service.js'
 export { InMemoryHuaqiuAuthService } from './service.js'
@@ -33,6 +36,16 @@ declare module '@deepseek-ai/cordis' {
  *   without a supervisor (spec §6.4).
  */
 export function apply(ctx: Context, config?: Partial<HuaqiuAuthConfig>): void {
+  // The single most useful line when a harness upgrade "loses" the credential:
+  // it proves whether the overlay `config` still reached `apply(ctx, config)`.
+  // When `hostMode` is false under HQ Edge, the endpoint was not delivered and
+  // every tool will report `needs_auth` no matter what the browser does.
+  log.info('applying dsh-auth node half', {
+    hasConfig: config != null,
+    configKeys: config != null ? Object.keys(config) : [],
+    hqEdgeBaseUrl: config?.hqEdgeBaseUrl ?? null,
+  })
+
   const service = new InMemoryHuaqiuAuthService(config)
   ctx.effect(() => ctx.provide('huaqiuAuth', service))
 
@@ -41,4 +54,6 @@ export function apply(ctx: Context, config?: Partial<HuaqiuAuthConfig>): void {
     path: AUTH_ROUTE_PREFIX,
     handler: createAuthHandler(service),
   }))
+
+  log.info('dsh-auth node half ready', { routes: AUTH_ROUTE_PREFIX, hostMode: service.hostMode })
 }

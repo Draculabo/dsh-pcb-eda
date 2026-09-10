@@ -20,6 +20,18 @@
  *   4. null           → tools return needs_auth
  */
 
+import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
+
+// Lazy so test suites that `vi.mock('@deepseek-ai/dsh-home-paths', …)` before
+// the test's TMP constant is initialised don't trigger `dshHomePath('logs')` at
+// module-load time. Every site goes through `log()` instead of holding a module
+// reference to the logger.
+let _log: PluginLogger | null = null
+function log(): PluginLogger {
+  if (_log === null) _log = getLogger('dsh-auth')
+  return _log
+}
+
 export interface HuaqiuAuthConfig {
   /** HQ Edge base URL, e.g. "http://localhost:18080". Absent → standalone. */
   hqEdgeBaseUrl?: string
@@ -90,11 +102,37 @@ export interface ResolvedHostUser {
   id: string
   token: string
   nickname?: string
+  /**
+   * The HOST's own verdict on the credential.
+   *
+   * HQ Edge receives its credential from EDA (`AuthStateChanged`) and reports
+   * `authenticated` alongside the token; that verdict is authoritative for host
+   * mode. This plugin must not substitute its own guess: the token class EDA
+   * hands to HQ Edge is not necessarily known to the public `www.eda.cn`
+   * token-validation endpoint, so a remote probe there can answer "not valid"
+   * for a credential the operator's own editor considers live.
+   */
+  authenticated: boolean
+  /**
+   * Host-side state version (HQ Edge bumps it on every credential replace and
+   * clear). A change means "this is a different credential than the one you
+   * looked at", which is how a 401-driven invalidation gets undone.
+   */
+  version?: number
+  /** Unix seconds, when the host knows the expiry. */
+  expiresAt?: number
 }
 
 /**
- * Fetches and caches the host (HQ Edge) session. The cache is memory-only with a
- * TTL; the loopback GET is cheap and the token is static, so we never persist it.
+ * Fetches and caches the host (HQ Edge) session. The cache is memory-only with
+ * a TTL; the loopback GET is cheap, so we never persist the credential.
+ *
+ * Caching rule — **only a usable session is cached**. A host that is up but has
+ * no credential yet (EDA not logged in, or the login dialog still open) must
+ * NOT be cached: the operator may complete the login a second later, and a
+ * cached negative would pin every tool to `needs_auth` for the whole TTL. The
+ * old code cached whatever it got, so a DSH that booted before EDA
+ * authenticated stayed "logged out" for up to `hostSessionTtlSeconds` (300s).
  */
 export class HostSessionResolver {
   private cache: HostSession | null = null
@@ -117,21 +155,47 @@ export class HostSessionResolver {
     if (this.cache !== null && now - this.cache.fetchedAt < this.ttlMs) {
       return this.cache.info
     }
+    const url = `${this.baseUrl}${this.path}`
+    let info: ResolvedHostUser | null = null
+    let status: number | null = null
     try {
-      const res = await this.doFetch(`${this.baseUrl}${this.path}`, {
+      const res = await this.doFetch(url, {
         method: 'GET',
         headers: { accept: 'application/json' },
       })
-      if (!res.ok) return this.cache?.info ?? null
-      const data = await res.json() as Record<string, unknown>
-      const info = normalizeHostUser(data)
-      if (!info) return this.cache?.info ?? null
-      this.cache = { info, fetchedAt: now }
-      return info
-    } catch {
-      // Network error: fall back to a previously cached value if we have one.
-      return this.cache?.info ?? null
+      status = res.status
+      if (res.ok) {
+        const data = await res.json() as Record<string, unknown>
+        info = normalizeHostUser(data)
+      }
+    } catch (err) {
+      // Network error: nothing usable right now.
+      log().warn('host session fetch failed', { url, error: String(err) })
+      info = null
     }
+    if (info !== null && info.authenticated) {
+      this.cache = { info, fetchedAt: now }
+      // Never log the credential itself — id/version are enough to correlate
+      // this plugin with the HQ Edge log line that served it.
+      log().debug('host session resolved', {
+        url,
+        status,
+        userId: info.id,
+        version: info.version ?? null,
+        authenticated: info.authenticated,
+      })
+      return info
+    }
+    // Unusable (unreachable, unparseable, or the host says it has no
+    // credential). Drop the cache so the very next call re-asks the host.
+    this.cache = null
+    log().info('no usable host session', {
+      url,
+      status,
+      parsed: info !== null,
+      hostAuthenticated: info?.authenticated ?? null,
+    })
+    return null
   }
 
   /** Drop the cached value so the next `resolve()` re-fetches (reactive invalidation). */
@@ -146,7 +210,15 @@ function asId(raw: unknown): string | null {
   return null
 }
 
-/** Parse the host route payload into a credential, tolerating key-name drift. */
+/**
+ * Parse the host route payload into a credential, tolerating key-name drift.
+ *
+ * HQ Edge answers `GET /api/v1/auth/token` with
+ * `{ authenticated, token, userId, version }`. The `authenticated` flag is the
+ * host's own verdict and is carried through verbatim; hosts that predate it
+ * (or a minimal `{ token, userId }` stub) omit the key, in which case the
+ * presence of a usable token+id is taken as the old contract was: authenticated.
+ */
 export function normalizeHostUser(data: Record<string, unknown>): ResolvedHostUser | null {
   const token = typeof data.token === 'string' && data.token.length > 0
     ? data.token
@@ -158,5 +230,19 @@ export function normalizeHostUser(data: Record<string, unknown>): ResolvedHostUs
   const nickname = typeof data.nickname === 'string' && data.nickname.length > 0
     ? data.nickname
     : undefined
-  return { id, token, ...(nickname ? { nickname } : {}) }
+  const authenticated = data.authenticated === undefined ? true : data.authenticated === true
+  const version = typeof data.version === 'number' && Number.isFinite(data.version)
+    ? data.version
+    : undefined
+  const expiresAt = typeof data.expiresAt === 'number' && Number.isFinite(data.expiresAt)
+    ? data.expiresAt
+    : undefined
+  return {
+    id,
+    token,
+    authenticated,
+    ...(nickname ? { nickname } : {}),
+    ...(version !== undefined ? { version } : {}),
+    ...(expiresAt !== undefined ? { expiresAt } : {}),
+  }
 }

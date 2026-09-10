@@ -24,6 +24,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
 import { createPartSearch } from './service.js'
 import { createPartSearchTools } from './tools.js'
 
@@ -33,8 +34,18 @@ export const name = '@huaqiu/dsh-tool-part-search'
 /** Cordis services this half depends on: the DSH node tool registry. */
 export const inject = ['tools'] as const
 
-/** Console tag for filtering in logs. */
-const LOG_TAG = '[dsh-part-search]'
+/**
+ * Lazy: a module-level `const log = getLogger(...)` would call `getLogger()` at
+ * import time, which on bootstrap touches `dshHomePath('logs')` (transitively
+ * via the unified-sink directory resolution). Tests that
+ * `vi.mock('@deepseek-ai/dsh-home-paths', …)` get their TMP constant in scope
+ * only after the mock factory, so defer the call until `apply()` runs.
+ */
+let _log: PluginLogger | null = null
+function log(): PluginLogger {
+  if (_log === null) _log = getLogger('dsh-part-search')
+  return _log
+}
 
 /**
  * Host plugin body — register the four agent-visible part-search tools.
@@ -54,8 +65,7 @@ export function apply(ctx: Context): () => void {
   const service = createPartSearch()
   const disposers = createPartSearchTools(service).map((tool) => ctx.tools.register(tool))
 
-  // eslint-disable-next-line no-console
-  console.log(LOG_TAG, 'registered agent tools', { tools: disposers.length })
+  log().info('registered agent tools', { tools: disposers.length })
 
   return function dispose() {
     for (const disposeTool of disposers) {

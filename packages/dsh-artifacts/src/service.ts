@@ -22,6 +22,7 @@ import * as path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -122,13 +123,24 @@ function toBytes(content: string | Uint8Array, encoding: 'utf8' | 'base64' | und
   return content instanceof Uint8Array ? content : new Uint8Array(content)
 }
 
+/** Unified DSH-plugin logger for the artifacts plugin (see dsh-plugin-log).
+ *  Lazy — see dsh-auth/src/host.ts for the rationale (mocked DSH-home tests). */
+let pluginLog: PluginLogger | null = null
+function getPluginLog(): PluginLogger {
+  if (pluginLog === null) pluginLog = getLogger('dsh-artifacts')
+  return pluginLog
+}
+
+/**
+ * Minimal, dependency-free facade every internal call site uses. Delegates to
+ * the unified `@huaqiu/dsh-plugin-log` so all plugin diagnostics land in one
+ * file (`<DSH_HOME>/logs/dsh-plugins.log`) — preserved verbatim across deps
+ * for the (test) callers that construct mock services around it.
+ */
 export function log(level: 'debug' | 'warn', msg: string, extra?: Record<string, unknown>): void {
-  // Minimal, dependency-free logger. DSH plugins should not pull a logger lib.
-  if (level === 'warn' || process.env.DSH_ARTIFACTS_DEBUG) {
-    const line = `[dsh-artifacts] ${msg}${extra ? ' ' + JSON.stringify(extra) : ''}`
-    if (level === 'warn') console.warn(line)
-    else console.debug(line)
-  }
+  const l = getPluginLog()
+  if (level === 'warn') l.warn(msg, extra)
+  else l.debug(msg, extra)
 }
 
 // ── Service ─────────────────────────────────────────────────────────────────

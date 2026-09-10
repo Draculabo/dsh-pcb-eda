@@ -23,6 +23,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+import { getLogger, type PluginLogger } from '@huaqiu/dsh-plugin-log'
 import {
   HostSessionResolver,
   resolveHostConfig,
@@ -156,6 +157,13 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
    * short-circuit to false and forces a fresh remote validation next time.
    */
   private stale = false
+  /** Last host credential version seen; see `observeHostVersion`. */
+  private lastHostVersion: number | null = null
+  private _log: PluginLogger | null = null
+  private get log(): PluginLogger {
+    if (this._log === null) this._log = getLogger('dsh-auth')
+    return this._log
+  }
 
   constructor(
     config?: Partial<HuaqiuAuthConfig> | null,
@@ -176,6 +184,11 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
       fetchImpl: this.doFetch,
     })
     this.hostMode = this.host.enabled
+    this.log.info('auth service started', {
+      hostMode: this.hostMode,
+      hostAuthPath: resolved.hostAuthPath,
+      hostSessionTtlSeconds: resolved.hostSessionTtlSeconds,
+    })
   }
 
   /** Host mode is active iff a host base URL was configured (see HostSessionResolver.enabled). */
@@ -183,6 +196,15 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
 
   readonly auth: HuaqiuAuthApi = {
     isAuthenticated: async () => {
+      // `stale` is "an upstream 401 was reported against a previous credential".
+      // Run resolve() *first* so the host's version comparator can run — HQ Edge
+      // bumps its credential version when the operator re-authes, and a newer
+      // version means the previous 401 no longer applies. Only after that
+      // observation do we honour the stale latch (if the credential is
+      // unchanged). Without this ordering, a 401-driven invalidation would
+      // keep the operator logged out even after HQ Edge swapped credentials.
+      const info = await this.resolve()
+      if (info === null) return false
       if (this.stale) return false
       return (await this.validateInternal()).status === 'valid'
     },
@@ -224,23 +246,77 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
    * standalone (auth.eda.cn) login. Otherwise a stale `~/.dsh/auth/session.json`
    * would let the DSH plugins keep calling the backend while hq-edge itself has
    * no auth info. The standalone fallbacks only apply when no host is configured.
+   *
+   * A host credential the host itself reports as `authenticated: false` counts
+   * as "no credential" — otherwise `/session` would hand the browser half a user
+   * object its own `authenticated` flag contradicts, and the browser half (which
+   * adopts the session only when `authenticated` is true) would silently drop
+   * it. That mismatch is exactly how "the token reached HQ Edge but never
+   * reached the plugin" presents.
    */
   private async resolve(): Promise<HuaqiuUserInfo | null> {
     if (this.host.enabled) {
       const host = await this.host.resolve()
-      if (host) return toUserInfo(host)
-      return null
+      if (!host || !host.authenticated) {
+        this.log.debug('host session unusable', {
+          hostReachable: host !== null,
+          hostAuthenticated: host?.authenticated ?? null,
+        })
+        return null
+      }
+      this.observeHostVersion(host.version)
+      return toUserInfo(host)
     }
     if (this.current) return this.current
     return readPersisted()
   }
 
-  /** Spec §7: resolve → local expiry → remote validation → update state. */
+  /**
+   * Track the host's credential version so a replaced credential re-arms the
+   * session after a 401.
+   *
+   * `invalidate()` (called when a backend answers 401) must keep the session
+   * down — but only for *that* credential. HQ Edge bumps `version` whenever EDA
+   * replaces or clears its credential, so a new version means the operator has
+   * a new token and the previous rejection no longer applies.
+   */
+  private observeHostVersion(version?: number): void {
+    if (typeof version !== 'number' || !Number.isFinite(version)) return
+    if (this.lastHostVersion !== null && version !== this.lastHostVersion) {
+      this.stale = false
+      this.validator.invalidate()
+      this.log.info('host credential replaced — re-arming session', { version })
+    }
+    this.lastHostVersion = version
+  }
+
+  /**
+   * Spec §7: resolve → local expiry → remote validation → update state.
+   *
+   * In HOST mode there is no remote validation: the host is the authority. It
+   * received the credential from EDA and publishes its own `authenticated`
+   * verdict, so probing `www.eda.cn/api/token/validate` here is not just
+   * redundant — it is wrong. That endpoint does not know the credential class
+   * EDA hands to HQ Edge (it answers `result: false`) and is unreachable in
+   * offline deployments, so gating on it made every host-mode session read as
+   * unauthenticated even while hq-edge reported `authenticated: true`.
+   */
   private async validateInternal(): Promise<AuthValidationResult> {
     const info = await this.resolve()
     if (!info) {
-      this.stale = true
+      // Host mode deliberately does NOT latch `stale` here: an unreachable or
+      // not-yet-logged-in host is a transient condition, and latching would
+      // freeze the session even after the host recovers.
+      if (!this.host.enabled) this.stale = true
       return { status: 'invalid', reason: 'invalid' }
+    }
+    if (this.host.enabled) {
+      if (this.validator.isLocallyExpired(info.expiresAt)) {
+        this.validator.invalidate(info.token)
+        this.stale = true
+        return { status: 'invalid', reason: 'expired' }
+      }
+      return { status: 'valid', userId: info.id, ...(info.expiresAt !== undefined ? { expiresAt: info.expiresAt } : {}) }
     }
     // Local expiry is an optimization; remote validation stays authoritative.
     if (this.validator.isLocallyExpired(info.expiresAt)) {
@@ -256,10 +332,18 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
     return result
   }
 
-  /** Validation-scoped invalidation: keep the credential, drop cached validity. */
+  /** Validation-scoped invalidation: keep the credential, drop cached validity.
+   *
+   *  In host mode the host cache *is* the cached validity — the validator only
+   *  confirmed what the host already said — so the next call must re-fetch:
+   *  otherwise a 401-driven `auth.invalidate()` would keep stale=true latched
+   *  for the full `hostSessionTtlSeconds` (default 300 s), and an HQ-Edge
+   *  credential replace in between would be invisible until the cache expired.
+   */
   private markStale(): void {
     this.stale = true
     this.validator.invalidate()
+    if (this.host.enabled) this.host.clear()
   }
 
   setCredentials(info: HuaqiuUserInfo): void {
@@ -300,5 +384,6 @@ function toUserInfo(host: ResolvedHostUser): HuaqiuUserInfo {
     id: host.id,
     token: host.token,
     ...(host.nickname !== undefined ? { nickname: host.nickname } : {}),
+    ...(host.expiresAt !== undefined ? { expiresAt: host.expiresAt } : {}),
   }
 }

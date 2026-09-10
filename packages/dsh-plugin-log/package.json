@@ -1,5 +1,5 @@
 {
-  "name": "@huaqiu/dsh-tool-part-search",
+  "name": "@huaqiu/dsh-plugin-log",
   "version": "0.3.10",
   "type": "module",
   "main": "./lib/index.mjs",
@@ -9,26 +9,15 @@
       "types": "./lib/index.d.mts",
       "default": "./lib/index.mjs"
     },
-    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./client": {
+      "types": "./lib/client.d.ts",
+      "default": "./lib/client.js"
+    },
     "./package.json": "./package.json"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.0"
-  },
-  "dependencies": {
-    "@huaqiu/dsh-plugin-log": "workspace:*",
-    "@huaqiu/part-search": "^0.2.0"
   },
   "files": [
     "lib",
-    "src",
-    "cordis.patch.yml"
+    "src"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -38,5 +27,11 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
   }
 }

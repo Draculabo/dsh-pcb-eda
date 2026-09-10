@@ -33,6 +33,7 @@ import type { ComponentGenBackend } from '@huaqiu/component-gen-server'
 import { createComponentGenRoutes } from '@huaqiu/component-gen-server'
 import { HistoryStore } from '@huaqiu/component-gen-server'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
+import { getLogger } from '@huaqiu/dsh-plugin-log'
 import {
   createSymbolFootprintTools, runGenerateSymbol, runGenerateFootprintFromImage,
   runGenerateFootprintFromDimensions, type SymbolFootprintEnv,
@@ -50,8 +51,9 @@ export const name = '@huaqiu/dsh-tool-symbol-footprint'
  *  drives. */
 export const inject = ['tools', 'huaqiuAuth', 'huaqiuArtifacts', 'webServer'] as const
 
-/** Console tag for filtering in logs. */
-const LOG_TAG = '[dsh-symbol-footprint]'
+/** Shared component name for the unified DSH-plugin log. */
+const COMPONENT = 'dsh-symbol-footprint'
+const log = getLogger(COMPONENT)
 
 export interface SymbolFootprintConfig {
   /** Endpoint override, env-backed (`HQ_EDA_COMPONENT_WS_URL`); still
@@ -137,12 +139,10 @@ export function apply(ctx: Context, config: SymbolFootprintConfig = {}): () => v
       hostMode: auth.hostMode,
     })))
   } else {
-    // eslint-disable-next-line no-console
-    console.warn(LOG_TAG, 'webServer unavailable — component-gen workspace API disabled')
+    log.warn('webServer unavailable — component-gen workspace API disabled')
   }
 
-  // eslint-disable-next-line no-console
-  console.log(LOG_TAG, 'registered agent tools', {
+  log.info('registered agent tools', {
     tools: disposers.length,
     endpoint,
     packageTypes: packageTypes.length,

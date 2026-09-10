@@ -56,5 +56,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@huaqiu/dsh-plugin-log": "workspace:*"
   }
 }

@@ -77,8 +77,12 @@ describe('HostSessionResolver', () => {
   it('fetches, caches within TTL, and re-fetches after TTL', async () => {
     const fetchImpl = fakeFetchOnce({ token: 'tok', userId: 'u' })
     const r = new HostSessionResolver('http://hq', '/api/v1/auth/token', 300_000, fetchImpl)
-    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok' })
-    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok' })
+    // Hosts without an explicit `authenticated` field are taken as the old
+    // contract was: a usable token+id means authenticated. The resolver must
+    // carry that verdict through so downstream `validate()` does not
+    // re-probe a public endpoint that does not know this token class.
+    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', authenticated: true })
+    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', authenticated: true })
     // second call served from cache → fetch called exactly once
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })

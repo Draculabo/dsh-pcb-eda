@@ -97,6 +97,9 @@ importers:
       '@deepseek-ai/dsh-host-webserver':
         specifier: ^0.1.0-rc.0
         version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
+      '@huaqiu/dsh-plugin-log':
+        specifier: workspace:*
+        version: link:../dsh-plugin-log
 
   packages/dsh-auth:
     dependencies:
@@ -109,6 +112,9 @@ importers:
       '@deepseek-ai/dsh-host-webserver':
         specifier: ^0.1.0-rc.0
         version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
+      '@huaqiu/dsh-plugin-log':
+        specifier: workspace:*
+        version: link:../dsh-plugin-log
     devDependencies:
       '@types/react':
         specifier: ~18.3.1
@@ -123,6 +129,16 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
 
+  packages/dsh-plugin-log:
+    dependencies:
+      '@deepseek-ai/dsh-home-paths':
+        specifier: ^0.1.0-rc.0
+        version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+
   packages/dsh-tool-part-search:
     dependencies:
       '@deepseek-ai/cordis':
@@ -131,6 +147,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: ^0.1.0-rc.0
         version: 0.1.0-rc.8(ac9081d1e007de8a90a707560a8ae1c3)
+      '@huaqiu/dsh-plugin-log':
+        specifier: workspace:*
+        version: link:../dsh-plugin-log
       '@huaqiu/part-search':
         specifier: ^0.2.0
         version: 0.2.6
@@ -146,6 +165,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: ^0.1.0-rc.0
         version: 0.1.0-rc.8(ac9081d1e007de8a90a707560a8ae1c3)
+      '@huaqiu/dsh-plugin-log':
+        specifier: workspace:*
+        version: link:../dsh-plugin-log
     devDependencies:
       '@huaqiu/dsh-artifacts':
         specifier: workspace:*
@@ -183,6 +205,9 @@ importers:
       '@huaqiu/component-gen-server':
         specifier: workspace:*
         version: link:../component-gen-server
+      '@huaqiu/dsh-plugin-log':
+        specifier: workspace:*
+        version: link:../dsh-plugin-log
     devDependencies:
       '@deepseek-ai/dsh-host-webserver':
         specifier: ^0.1.0-rc.0
