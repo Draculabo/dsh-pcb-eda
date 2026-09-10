@@ -45,6 +45,17 @@ describe('redact', () => {
     expect(out.headers![0]).not.toContain('abcdef123456')
   })
 
+  it('redacts bearer credentials copied into error stacks', () => {
+    const error = new Error('request failed')
+    error.stack = 'Error: request failed\nAuthorization: Bearer abcdef123456\n    at request (client.ts:1:1)'
+
+    expect(redact(error)).toEqual({
+      name: 'Error',
+      message: 'request failed',
+      stack: 'Error: request failed\nAuthorization: Bearer [redacted]\n    at request (client.ts:1:1)',
+    })
+  })
+
   it('redacts a bare opaque secret blob but keeps paths and URLs', () => {
     expect(redact('21ce59a4-2d69-5b0c-b1ea-6fe3c0d012a4-6a97bb81')).toBe(REDACTED)
     expect(redact('/Users/admin/code/hq-edge/dist/edge-headless')).toBe('/Users/admin/code/hq-edge/dist/edge-headless')
