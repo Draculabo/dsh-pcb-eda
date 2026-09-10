@@ -35,6 +35,22 @@ describe('HistoryStore', () => {
     }
   })
 
+  it('returns an empty page for an unknown cursor', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
+    try {
+      const store = new HistoryStore(dir)
+      await store.append(makeEntry({ id: 'hst_first', createdAt: '2026-01-01T00:00:00.000Z' }))
+      await store.append(makeEntry({ id: 'hst_second', createdAt: '2026-01-02T00:00:00.000Z' }))
+
+      await expect(store.list({ cursor: 'hst_missing' })).resolves.toEqual({
+        entries: [],
+        nextCursor: null,
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('round-trips image input into inputs/ and back', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
     try {
