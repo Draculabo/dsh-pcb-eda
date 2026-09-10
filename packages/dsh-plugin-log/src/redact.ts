@@ -26,6 +26,9 @@ const SENSITIVE_KEY = /(token|secret|password|passwd|pwd|authorization|cookie|ap
 /** `Bearer <opaque>` / `Basic <opaque>` inside a free-form string. */
 const BEARER_IN_STRING = /\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/i
 
+/** Sensitive query parameters embedded in URLs or URL-like strings. */
+const SENSITIVE_QUERY_PARAM = /([?&](?:token|access[-_]?token|refresh[-_]?token|secret|password|passwd|pwd|authorization|cookie|api[-_]?key|access[-_]?key|credential)=)[^&#\s]*/gi
+
 /** Strings at least this long that look like a single opaque credential blob. */
 const OPAQUE_SECRET = /^[A-Za-z0-9_-]{32,}$/
 
@@ -87,9 +90,10 @@ function redactInner(value: unknown, depth: number, seen: WeakSet<object>): unkn
 
 /** Redact credentials embedded in an otherwise ordinary string. */
 function redactString(value: string): string {
-  if (BEARER_IN_STRING.test(value)) return value.replace(BEARER_IN_STRING, '$1 ' + REDACTED)
+  const queryRedacted = value.replace(SENSITIVE_QUERY_PARAM, `$1${REDACTED}`)
+  if (BEARER_IN_STRING.test(queryRedacted)) return queryRedacted.replace(BEARER_IN_STRING, '$1 ' + REDACTED)
   // A bare 32+ char opaque blob is almost always a credential. Project paths,
   // URLs and sentences all contain separators, so they survive this filter.
-  if (OPAQUE_SECRET.test(value)) return REDACTED
-  return value
+  if (OPAQUE_SECRET.test(queryRedacted)) return REDACTED
+  return queryRedacted
 }
