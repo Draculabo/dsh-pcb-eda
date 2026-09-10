@@ -97,6 +97,18 @@ describe('auth webServer routes (browser→node transport)', () => {
     expect(await svc.auth.isAuthenticated()).toBe(false)
   })
 
+  it('rejects non-object session payloads without changing auth state', async () => {
+    await expect(post(`${AUTH_ROUTE_PREFIX}/session`, null)).resolves.toEqual({
+      status: 400,
+      text: '{"error":"invalid session body"}',
+    })
+    await expect(post(`${AUTH_ROUTE_PREFIX}/session`, [])).resolves.toEqual({
+      status: 400,
+      text: '{"error":"invalid session body"}',
+    })
+    expect(await svc.auth.isAuthenticated()).toBe(false)
+  })
+
   it('404s unknown paths', async () => {
     expect((await get(`${AUTH_ROUTE_PREFIX}/nope`)).status).toBe(404)
     expect((await post(`${AUTH_ROUTE_PREFIX}/nope`, {})).status).toBe(404)
