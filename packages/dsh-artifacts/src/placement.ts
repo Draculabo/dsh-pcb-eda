@@ -101,6 +101,19 @@ export interface HqEdgePlaceLike {
     getEditorType?(): string
   }
   placeArtifact?(request: PlaceArtifactRequest): Promise<unknown>
+  /**
+   * Same-origin request proxy to HQ Edge (`/hq-edge` bridge). The bridge
+   * serializes object bodies to JSON, so multipart is not supported — binary
+   * payloads travel base64-encoded in JSON.
+   */
+  api?: {
+    request(request: {
+      method: string
+      path: string
+      body?: unknown
+      headers?: Record<string, string>
+    }): Promise<unknown>
+  }
 }
 
 /** Everything a card needs to render + fire the Place action, or null. */

@@ -95,33 +95,46 @@ describe('runGenerateSchematic', () => {
     expect(String(result.hint)).toMatch(/login/)
   })
 
-  it('generates and stores each sheet as a preview artifact', async () => {
+  it('stores the project zip (sheets + footprints) as a preview artifact', async () => {
     const { artifacts, created } = stubArtifacts()
+    const zipBytes = new TextEncoder().encode('PK\x03\x04 fake zip')
     const env = makeEnv({
       artifacts,
       deps: {
-        fetchImpl: async () => sseResponse([
-          { type: 'STATE_SNAPSHOT', snapshot: {
-            outProject: 'PSU',
-            schFiles: [{ filename: 'PSU.kicad_sch', content: '(kicad (version 20231118))' }],
-          } },
-          { type: 'RUN_FINISHED' },
-        ]),
+        fetchImpl: async (url: string | URL | Request, init?: RequestInit) => {
+          const href = String(url)
+          // The copilotkit SSE stream (design agent) vs the zip download from
+          // `project_achieve_url` (the source-of-truth project zip).
+          if (href.includes('copilotkit')) {
+            return sseResponse([
+              { type: 'STATE_SNAPSHOT', snapshot: {
+                outProject: 'PSU',
+                project_achieve_url: 'https://datastream.eda.cn/uploaded/PSU.zip',
+                schFiles: [{ filename: 'PSU.kicad_sch', content: '(kicad (version 20231118))' }],
+              } },
+              { type: 'RUN_FINISHED' },
+            ])
+          }
+          return zipResponse(zipBytes)
+        },
       },
     })
     const result = await runGenerateSchematic({ description: '5V supply' }, undefined, env)
     expect(result.status).toBe('generated')
     expect(result.kind).toBe('schematic')
     expect(result.design_name).toBe('PSU')
-    expect((result.schFiles as Array<{ filename: string }>)[0]!.filename).toBe('PSU.kicad_sch')
-    expect((result.schArtifacts as Array<{ id: string; type: string }>)[0]).toMatchObject({ type: 'schematic' })
-    // The Place channel: each stored artifact carries a resolvable file:// URI.
-    expect((result.schArtifacts as Array<{ uri?: string }>)[0]!.uri).toMatch(/^file:\/\//)
+    // Single source of truth: one `zip` artifact, no per-sheet artifacts.
+    expect((result.zipArtifact as { type: string; filename: string } | undefined)?.type).toBe('zip')
+    expect((result.zipArtifact as { filename: string }).filename).toBe('PSU.zip')
+    expect(result.zip_bytes).toBe(zipBytes.length)
+    expect(result.schArtifacts).toBeUndefined()
+    // The Place channel: the stored zip carries a resolvable file:// URI.
+    expect((result.zipArtifact as { uri?: string }).uri).toMatch(/^file:\/\//)
     expect(created).toHaveLength(1)
   })
 
-  it('keeps sheets inline when artifact storage fails', async () => {
-    const { artifacts } = stubArtifacts(false)
+  it('falls back to inline sheets when no project zip URL is provided', async () => {
+    const { artifacts, created } = stubArtifacts()
     const env = makeEnv({
       artifacts,
       deps: {
@@ -136,12 +149,70 @@ describe('runGenerateSchematic', () => {
     })
     const result = await runGenerateSchematic({ description: 'x' }, undefined, env)
     expect(result.status).toBe('generated')
-    expect((result.schFiles as Array<{ filename: string; content?: string }>)[0]!.content).toBe('(kicad)')
-    // Degraded state is split by audience: the human gets the status line, the
-    // agent gets the "source is still inline / in the zip" explanation on
-    // `agentNote`, which the card never renders.
-    expect(result.note).toMatch(/storage partially or fully unavailable/)
-    expect(result.agentNote).toMatch(/inline/)
+    expect(result.zipArtifact).toBeUndefined()
+    // Legacy fallback: each sheet is stored and rendered individually.
+    expect((result.schFiles as Array<{ filename: string }>)[0]!.filename).toBe('PSU.kicad_sch')
+    expect((result.schArtifacts as Array<{ type: string }>)[0]!.type).toBe('schematic')
+    expect(created).toHaveLength(1)
+  })
+
+  it('refuses to download a zip from a non-eda.cn host (SSRF guard)', async () => {
+    const { artifacts } = stubArtifacts()
+    let zipFetched = false
+    const env = makeEnv({
+      artifacts,
+      deps: {
+        fetchImpl: async (url: string | URL | Request) => {
+          const href = String(url)
+          if (href.includes('copilotkit')) {
+            return sseResponse([
+              { type: 'STATE_SNAPSHOT', snapshot: {
+                outProject: 'PSU',
+                project_achieve_url: 'https://evil.example.com/steal.zip',
+                schFiles: [{ filename: 'PSU.kicad_sch', content: '(kicad)' }],
+              } },
+              { type: 'RUN_FINISHED' },
+            ])
+          }
+          zipFetched = true
+          return new Response('nope', { status: 200 })
+        },
+      },
+    })
+    const result = await runGenerateSchematic({ description: 'x' }, undefined, env)
+    expect(result.status).toBe('generated')
+    expect(result.zipArtifact).toBeUndefined()
+    expect(zipFetched).toBe(false)
+    expect((result.schFiles as Array<{ filename: string }>)[0]!.filename).toBe('PSU.kicad_sch')
+  })
+
+  it('falls back to inline sheets when the zip download fails', async () => {
+    const { artifacts } = stubArtifacts()
+    const env = makeEnv({
+      artifacts,
+      deps: {
+        fetchImpl: async (url: string | URL | Request) => {
+          const href = String(url)
+          if (href.includes('copilotkit')) {
+            return sseResponse([
+              { type: 'STATE_SNAPSHOT', snapshot: {
+                outProject: 'PSU',
+                project_achieve_url: 'https://datastream.eda.cn/gone.zip',
+                schFiles: [{ filename: 'PSU.kicad_sch', content: '(kicad)' }],
+              } },
+              { type: 'RUN_FINISHED' },
+            ])
+          }
+          return new Response('nope', { status: 404 })
+        },
+      },
+    })
+    const result = await runGenerateSchematic({ description: 'x' }, undefined, env)
+    expect(result.status).toBe('generated')
+    expect(result.zipArtifact).toBeUndefined()
+    expect((result.schFiles as Array<{ filename: string }>)[0]!.filename).toBe('PSU.kicad_sch')
+    // Degraded state is split by audience: the card still renders the sheet.
+    expect((result.schArtifacts as Array<{ type: string }>)[0]!.type).toBe('schematic')
   })
 
   it('throws when the agent produced no files', async () => {

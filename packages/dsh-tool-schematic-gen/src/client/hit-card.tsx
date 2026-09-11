@@ -26,6 +26,7 @@ import { placeSupportOf, type HqEdgePlaceLike } from './place.js'
 import { useLocale, useTheme } from './theme.js'
 import { buildLoginUrl, loginIframeBackground } from './login-url.js'
 import { LiveProgress } from './stack-frame.jsx'
+import { bytesToBase64 } from './b64.js'
 
 /** Login-state view used by the needs_auth card (from the auth plugin's shared localStorage). */
 export interface AuthStateLike {
@@ -170,7 +171,8 @@ function PreviewStage({ payload, t }: { payload: PreviewPayload; t: Translate })
         })
         if (cancelled || canvas !== canvasRef.current) return
         sizeCanvasFor(canvas)
-        if (payload.kind === 'system' && payload.bytes) {
+        if (payload.bytes) {
+          // A bytes payload is the full project zip — render its root sheet.
           disposeViewer = await renderProjectZipToCanvas(payload.bytes, canvas)
         } else if (payload.source) {
           disposeViewer = await renderSheetToCanvas(payload.source, canvas)
@@ -312,8 +314,11 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
     setPayload({ phase: 'loading', source: null, bytes: null, filename: null, error: null })
     ;(async () => {
       try {
-        const kind = result.kind ?? 'schematic'
-        if (kind === 'system') {
+        // The artifact type decides the payload: a `zip` artifact is the full
+        // KiCad project (sheets + footprints) → bytes for project rendering /
+        // download; a `schematic` artifact is a single inline sheet → text.
+        const artType = result?.artifact?.type ?? (result?.kind === 'system' ? 'zip' : 'schematic')
+        if (artType === 'zip') {
           const art = await resolveArtifactBytes(artifactKey)
           if (cancelled) return
           setPayload({ phase: 'ready', source: null, bytes: art.bytes, filename: art.filename, error: null })
@@ -337,6 +342,8 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
   // Outcome of the last Place attempt: 'ok' | 'error:<detail>'. Rendered as a
   // one-line status under the actions so the user knows the placement landed.
   const [placeStatus, setPlaceStatus] = useState<string | null>(null)
+  // Outcome of the last "Open in EDA" attempt (host mode import via hq-edge).
+  const [importStatus, setImportStatus] = useState<string | null>(null)
 
   function onDownload(): void {
     if (busy || payload.phase !== 'ready') return
@@ -344,11 +351,48 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
     const filename = downloadFilenameFor(kind, result?.artifact ?? null, result?.designName ?? null)
     setBusy('download')
     try {
-      if (kind === 'system' && payload.bytes) {
+      // A bytes payload is the full project zip — download it as-is. A text
+      // payload is a legacy inline sheet (no zip was stored) — download it as
+      // plain text.
+      if (payload.bytes) {
         downloadBytes(filename, payload.bytes)
       } else if (payload.source != null) {
         downloadText(filename, payload.source)
       }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * Open the generated project in the EDA editor. Host mode only: the browser
+   * half posts the project zip (base64 in JSON — the edge-bridge proxy cannot
+   * carry multipart) to hq-edge `POST /api/v1/import/kicad-b64`, which runs
+   * the ImportDesign pipeline (extract → gRPC → EDA opens the design).
+   */
+  async function onOpenInEda(): Promise<void> {
+    if (busy || payload.phase !== 'ready' || !payload.bytes) return
+    const api = props.getHqEdge?.()?.api
+    if (!api || typeof api.request !== 'function') return
+    setBusy('open-in-eda')
+    setImportStatus(null)
+    try {
+      const res = await api.request({
+        method: 'POST',
+        path: '/api/v1/import/kicad-b64',
+        body: {
+          zip_b64: bytesToBase64(payload.bytes),
+          filename: payload.filename ?? 'design.zip',
+          project_name: result?.designName ?? 'schematic',
+          source_vendor: 'circuit_agent',
+          source_format: 'kicad',
+        },
+      })
+      const body = (res ?? {}) as { design_id?: string; status?: string }
+      setImportStatus(t('card.import.done', { id: body.design_id ?? body.status ?? 'ok' }))
+    } catch (e) {
+      console.warn('[hq-schematic-gen] open-in-eda failed', e)
+      setImportStatus(t('card.import.failed', { detail: String((e as Error)?.message || e) }))
     } finally {
       setBusy(null)
     }
@@ -484,6 +528,11 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
   const placeSupport = placeSupportOf(props.getHqEdge, 'schematic')
   const placeableCount = result.artifacts.filter((a) => a.uri).length
   const canPlace = !!placeSupport?.() && placeableCount > 0
+  // Open in EDA (host mode): available when the edge-bridge proxy exists and a
+  // project zip is present in the card (both system and schematic results
+  // store the zip as the single source of truth).
+  const canOpenInEda = payload.phase === 'ready' && payload.bytes != null &&
+    !!props.getHqEdge?.()?.api?.request
 
   return (
     <div className="hq-sch">
@@ -495,6 +544,13 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
         <button type="button" className="hq-sch__act" onClick={onDownload} disabled={!canDownload || busy === 'download'}>
           ⭳ {busy === 'download' ? t('card.action.downloading') : t('card.action.download')}
         </button>
+        {canOpenInEda
+          ? (
+            <button type="button" className="hq-sch__act" onClick={onOpenInEda} disabled={busy === 'open-in-eda'}>
+              ⇱ {busy === 'open-in-eda' ? t('card.action.openingInEda') : t('card.action.openInEda')}
+            </button>
+          )
+          : null}
         {canPlace
           ? (
             <button type="button" className="hq-sch__act" onClick={onPlace} disabled={busy === 'place'}>
@@ -509,6 +565,7 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
           ? <button type="button" className="hq-sch__act" onClick={() => props.inspect?.()}>{t('card.action.inspect')}</button>
           : null}
       </div>
+      {importStatus ? <div className="hq-sch__note">{importStatus}</div> : null}
       {placeStatus ? <div className="hq-sch__note">{placeStatus}</div> : null}
     </div>
   )

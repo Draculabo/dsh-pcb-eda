@@ -323,8 +323,68 @@ export function needsAuth(kind: 'schematic' | 'system'): Record<string, unknown>
 }
 
 /**
- * `generate_schematic_from_description` body — stream `schemagen`, extract the
- * inline `.kicad_sch` files, then store each sheet as a preview artifact.
+ * Host whitelist for the project-zip download — mirrors the web app's
+ * `/api/sch_sub_gen/download_zip` proxy (`apps/web/.../download_zip/route.ts`):
+ * only https/http URLs on `eda.cn` / `*.eda.cn` are allowed. The URL comes
+ * from the design agent's STATE_SNAPSHOT, but a node-side guard keeps a
+ * compromised/misbehaving agent from turning the plugin into an SSRF proxy.
+ */
+function isAllowedZipHost(url: URL): boolean {
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
+  return url.hostname === 'eda.cn' || url.hostname.endsWith('.eda.cn')
+}
+
+/**
+ * Download the project zip from the agent-uploaded URL.
+ *
+ * `project_achieve_url` is the source of truth — the same eda.cn datastream
+ * URL the web app streams for export/download. It carries the full KiCad
+ * project (sheets AND the footprints that keep sch↔pcb in sync). A plain GET
+ * suffices (the web app proxies it only because of browser CORS; node has no
+ * such restriction). Returns null when the URL is absent, not on the eda.cn
+ * whitelist, or the download fails — the caller then falls back to inline
+ * sheets.
+ */
+async function fetchSchematicProjectZip(env: SchematicGenEnv, url: string): Promise<Buffer | null> {
+  if (!url) return null
+  let target: URL
+  try {
+    target = new URL(url)
+  } catch {
+    log.warn('schematic zip download skipped — malformed url', { url })
+    return null
+  }
+  if (!isAllowedZipHost(target)) {
+    log.warn('schematic zip download skipped — host not allowed', { host: target.hostname, url })
+    return null
+  }
+  const fetchImpl = env.deps?.fetchImpl ?? fetch
+  const controller = new AbortController()
+  const timer = setTimeout(
+    () => controller.abort(new Error('schematic-gen: zip download did not respond within ' + HTTP_TIMEOUT_MS + 'ms')),
+    HTTP_TIMEOUT_MS,
+  )
+  try {
+    const res = await fetchImpl(url, { signal: controller.signal, headers: { accept: 'application/zip' } })
+    if (!res || !res.ok) {
+      log.warn('schematic zip download failed', { status: res && res.status, url })
+      return null
+    }
+    const ab = await res.arrayBuffer()
+    return Buffer.from(ab)
+  } catch (err) {
+    log.warn('schematic zip download failed', { error: String((err as Error)?.message || err), url })
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * `generate_schematic_from_description` body — stream `schemagen`, then store
+ * the agent-uploaded project ZIP as a `zip` preview artifact (single source of
+ * truth: it carries the sheets AND the footprints that keep sch↔pcb in sync).
+ * Sheets are kept inline only as a fallback when the zip is unavailable.
  */
 export async function runGenerateSchematic(
   args: Record<string, unknown>,
@@ -373,18 +433,46 @@ export async function runGenerateSchematic(
     prog.failed(message)
     throw new Error(message)
   }
-  const materialized = await materializeSchematicArtifacts(env, extracted.schFiles)
+
   const result: Record<string, unknown> = {
     status: 'generated',
     kind: 'schematic',
     design_name: extracted.outProject || '',
-    schFiles: materialized.schFiles,
-    schArtifacts: materialized.schArtifacts,
     kicadPro: extracted.kicadPro,
     project_achieve_url: extracted.project_achieve_url,
   }
-  if (materialized.note) result.note = materialized.note
-  if (materialized.agentNote) result.agentNote = materialized.agentNote
+
+  // The project ZIP is the single source of truth (sheets + footprints for
+  // sch↔pcb sync). Store it as a `zip` preview artifact — the card renders the
+  // zip's root sheet and downloads the zip itself.
+  const zipBuf = await fetchSchematicProjectZip(env, extracted.project_achieve_url)
+  if (zipBuf && zipBuf.length > 0) {
+    result.zip_bytes = zipBuf.length
+    try {
+      const safeName = sanitizeZipBaseName(extracted.outProject || 'schematic')
+      const created = await createPreviewArtifact(env, 'zip', safeName + '.zip', zipBuf.toString('base64'), 'base64')
+      result.zipArtifact = await toArtifactEntry(env, created)
+    } catch (storeErr) {
+      result.note = 'Could not store the project zip as an artifact (' +
+        String((storeErr as Error)?.message || storeErr) + ').'
+      result.agentNote =
+        'The project zip (sheets + footprints) is still available at project_achieve_url; ' +
+        'the card falls back to rendering the inline sheets below.'
+    }
+  }
+
+  if (!result.zipArtifact) {
+    // Fallback (older agent without an uploaded zip, or zip fetch/store
+    // failure): store each sheet as a preview artifact — the card can still
+    // render and download the individual sheet.
+    const materialized = await materializeSchematicArtifacts(env, extracted.schFiles)
+    result.schFiles = materialized.schFiles
+    if (materialized.schArtifacts) result.schArtifacts = materialized.schArtifacts
+    if (materialized.note) {
+      result.note = (result.note ? result.note + ' ' : '') + materialized.note
+    }
+    if (materialized.agentNote) result.agentNote = materialized.agentNote
+  }
   prog.done()
   return result
 }
@@ -542,15 +630,16 @@ function createSchematicTool(env: SchematicGenEnv) {
       'description of a circuit or sub-circuit — e.g. "design a 5V LM7805 linear ' +
       'regulator power supply with input and output filter capacitors". Calls the ' +
       'online HQ-EDA schematic generation agent and returns ' +
-      'schFiles (filename references), schArtifacts (preview artifact references ' +
-      'with id/type/filename/size plus a uri when the cross-process placement ' +
-      'channel is available), kicadPro and project_achieve_url. ' +
+      'zipArtifact (the project zip — the single source of truth: it contains ' +
+      'the .kicad_sch sheets AND the footprints that keep sch↔pcb in sync), ' +
+      'plus kicadPro and project_achieve_url. ' +
       'Use this when the user asks to draw, generate or create a circuit ' +
       'schematic from a description (not from an image — for that use the ' +
       'symbol/footprint tools). ' +
       'IMPORTANT: The generated schematic renders automatically as a result card ' +
-      'in the web client — an interactive canvas preview per sheet (multi-sheet ' +
-      'results get a sheet tab bar) and a download button for the current sheet. ' +
+      'in the web client — an interactive canvas preview of the project (root ' +
+      'sheet of the zip) and a download button that downloads the full project ' +
+      'zip. ' +
       'Do NOT paste the schematic source, file URLs, or any fenced code block ' +
       'into your reply; just note in one line that the schematic was generated ' +
       'and how many sheets it has. ' + AUTH_GATE_NOTE,

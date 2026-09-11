@@ -115,12 +115,19 @@ export function parseSchResult(text: string): SchResult | null {
     artifact = artOf(o.zipArtifact)
     if (artifact) artifacts.push(artifact)
   } else {
+    // The project zip is the single source of truth (sheets + footprints); the
+    // per-sheet artifacts are a legacy fallback when no zip was stored.
+    const zipRef = artOf(o.zipArtifact)
+    if (zipRef) {
+      artifact = zipRef
+      artifacts.push(zipRef)
+    }
     const list = Array.isArray(o.schArtifacts) ? (o.schArtifacts as unknown[]) : []
     for (const entry of list) {
       const ref = artOf(entry)
       if (ref) artifacts.push(ref)
     }
-    artifact = artifacts.length > 0 ? artifacts[0]! : null
+    if (!artifact) artifact = artifacts.length > 0 ? artifacts[0]! : null
   }
 
   return {
