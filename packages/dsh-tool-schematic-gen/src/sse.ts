@@ -223,30 +223,32 @@ interface Accumulator {
 
 /** Parse one `data: …` SSE block into event(s) and route them through `handleEvent`. */
 function dispatchRaw(raw: string, state: Record<string, unknown>, acc: Accumulator): void {
-  const lines = raw.split(/\r?\n/)
-  for (const line of lines) {
+  const dataLines: string[] = []
+  for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('data:')) continue
-    const payload = trimmed.slice(5).trim()
-    if (!payload) continue
-    let evt: unknown
-    try {
-      evt = JSON.parse(payload)
-    } catch {
-      continue // keep-alives / comments are ignored
-    }
-    const r = handleEvent(evt, state, acc.tracker)
-    if (r.text) acc.text += r.text
-    if (r.finished) acc.finished = true
-    if (r.error) acc.error = r.error
-    if (r.trace && r.trace.length > 0) {
-      for (const ev of r.trace) acc.trace.push(ev)
-      acc.onTrace?.(r.trace)
-    }
-    if (r.todos && r.todos.length > 0) acc.onTodos?.(r.todos)
-    if (r.note) acc.onNote?.(r.note)
-    if (r.stateChanged) acc.onState?.(state)
+    dataLines.push(trimmed.slice(5).trimStart())
   }
+  const payload = dataLines.join('\n').trimEnd()
+  if (!payload) return
+
+  let evt: unknown
+  try {
+    evt = JSON.parse(payload)
+  } catch {
+    return // keep-alives / non-JSON data are ignored
+  }
+  const r = handleEvent(evt, state, acc.tracker)
+  if (r.text) acc.text += r.text
+  if (r.finished) acc.finished = true
+  if (r.error) acc.error = r.error
+  if (r.trace && r.trace.length > 0) {
+    for (const ev of r.trace) acc.trace.push(ev)
+    acc.onTrace?.(r.trace)
+  }
+  if (r.todos && r.todos.length > 0) acc.onTodos?.(r.todos)
+  if (r.note) acc.onNote?.(r.note)
+  if (r.stateChanged) acc.onState?.(state)
 }
 
 /** Decode a chunk, split on SSE boundaries, dispatch complete events, return
