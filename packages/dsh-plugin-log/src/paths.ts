@@ -49,7 +49,8 @@ export const APP_ID = 'hq-edge'
  */
 export function getHqEdgeHome(override?: string): string {
   if (override) return override
-  if (process.env.HQ_EDGE_HOME) return process.env.HQ_EDGE_HOME
+  const homeOverride = process.env.HQ_EDGE_HOME
+  if (homeOverride && homeOverride.trim().length > 0) return homeOverride
 
   const home = homedir()
   // macOS override: dotfile under $HOME, not the Library sandbox.
@@ -82,7 +83,8 @@ export function getHqEdgeHome(override?: string): string {
  */
 export function getLogBaseDir(override?: string): string {
   if (override) return override
-  if (process.env.HQ_EDGE_LOG_DIR) return process.env.HQ_EDGE_LOG_DIR
+  const logDirOverride = process.env.HQ_EDGE_LOG_DIR
+  if (logDirOverride && logDirOverride.trim().length > 0) return logDirOverride
   return join(getHqEdgeHome(), 'logs')
 }
 
