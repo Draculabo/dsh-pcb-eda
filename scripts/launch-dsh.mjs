@@ -79,7 +79,7 @@ function killPort(port) {
     } else {
       // macOS / Linux
       try {
-        const pids = execSync(`lsof -ti:${port}`, {
+        const pids = execSync(`lsof -tiTCP:${port} -sTCP:LISTEN`, {
           encoding: 'utf8',
           stdio: ['pipe', 'pipe', 'ignore'],
         })
