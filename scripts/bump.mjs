@@ -57,7 +57,7 @@ function main() {
   // Current versions — normally all manifests agree.
   const manifests = manifestPaths.map((path) => ({ path, data: readJson(path) }))
   const versions = new Set(manifests.map((m) => m.data.version).filter(Boolean))
-  const explicit = /^\d+\.\d+\.\d+/.test(target)
+  const explicit = /^\d+\.\d+\.\d+$/.test(target)
   let current
   if (versions.size === 1) {
     current = [...versions][0]
