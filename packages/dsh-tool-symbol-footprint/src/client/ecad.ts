@@ -100,17 +100,28 @@ export function sizeCanvasFor(canvas: HTMLCanvasElement): void {
 
 /** Trigger a browser download of a text artifact. */
 export function triggerDownload(filename: string, text: string, mime = 'text/plain;charset=utf-8'): void {
+  let url: string | null = null
+  let anchor: HTMLAnchorElement | null = null
   try {
     const blob = new Blob([text], { type: mime })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => { try { URL.revokeObjectURL(url) } catch { /* ignore */ } }, 2000)
+    url = URL.createObjectURL(blob)
+    anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
   } catch (err) {
     console.warn('[hq-genhit] download failed', err)
+  } finally {
+    anchor?.remove()
+    if (url) {
+      setTimeout(() => {
+        try {
+          URL.revokeObjectURL(url)
+        } catch {
+          // ignore
+        }
+      }, 2000)
+    }
   }
 }
