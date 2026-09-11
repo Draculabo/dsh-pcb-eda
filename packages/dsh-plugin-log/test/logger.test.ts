@@ -123,6 +123,20 @@ describe('getLogger', () => {
     expect(readFileSync(path, 'utf8')).toContain('after-rotation')
   })
 
+  it('replaces the current log when maxFiles keeps only one file', async () => {
+    const path = join(TMP, 'dsh-plugins.log')
+    writeFileSync(path, 'x'.repeat(1000))
+    setup({ maxBytes: 1000, maxFiles: 1 })
+
+    getLogger('dsh-auth').info('after-single-file-rotation')
+    await flushLogs()
+
+    const current = readFileSync(path, 'utf8')
+    expect(current).toContain('after-single-file-rotation')
+    expect(current).not.toContain('x'.repeat(100))
+    expect(existsSync(join(TMP, 'dsh-plugins.1.log'))).toBe(false)
+  })
+
   it('falls back to a writable directory when the DSH home is not usable', () => {
     const blocker = join(TMP, 'not-a-dir')
     writeFileSync(blocker, 'file')
