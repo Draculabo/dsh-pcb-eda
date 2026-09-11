@@ -27,6 +27,50 @@ function log(): PluginLogger {
   return _log
 }
 
+/**
+ * eda.cn user-profile endpoint, reached with the access token as `X-token`
+ * (the same endpoint hq-eda-ai's `/api/middleware/getUserInfo` proxies).
+ * Returns `{ code: 200000, result: { id, nickname, headimage, phone, username } }`.
+ */
+export const EDA_USER_INFO_URL = 'https://www.eda.cn/api/chiplet/u/base/get'
+
+export interface EdaUserProfile {
+  nickname?: string
+  headimage?: string
+  phone?: string
+  username?: string
+}
+
+/** Fetch the eda.cn profile for a token. Null on any failure (UI degrades). */
+export async function fetchEdaUserProfile(
+  token: string,
+  doFetch: typeof fetch = globalThis.fetch.bind(globalThis),
+): Promise<EdaUserProfile | null> {
+  try {
+    const res = await doFetch(EDA_USER_INFO_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'X-token': token,
+      },
+      body: '{}',
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as { code?: number; result?: Record<string, unknown> }
+    if (body.code !== 200000 || !body.result) return null
+    const r = body.result
+    return {
+      ...(typeof r.nickname === 'string' && r.nickname ? { nickname: r.nickname } : {}),
+      ...(typeof r.headimage === 'string' && r.headimage ? { headimage: r.headimage } : {}),
+      ...(typeof r.phone === 'string' && r.phone ? { phone: r.phone } : {}),
+      ...(typeof r.username === 'string' && r.username ? { username: r.username } : {}),
+    }
+  } catch (err) {
+    log().warn('fetchEdaUserProfile failed', { error: String((err as Error)?.message || err) })
+    return null
+  }
+}
+
 export const AUTH_ROUTE_PREFIX = '/api/v1/huaqiu/auth'
 
 export type AuthHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
@@ -100,6 +144,20 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
 
       if (req.method === 'GET' && pathname === `${AUTH_ROUTE_PREFIX}/config`) {
         sendJson(res, 200, { hostMode: service.hostMode })
+        return
+      }
+
+      if (req.method === 'GET' && pathname === `${AUTH_ROUTE_PREFIX}/user-info`) {
+        // Rich profile (nickname + headimage) for the sidebar when the host
+        // session carries only {token, userId} — e.g. host mode under kicad.
+        // The token is resolved by the node half (host → pushed → persisted).
+        const token = await service.auth.getAccessToken()
+        if (!token) {
+          sendJson(res, 200, { userInfo: null })
+          return
+        }
+        const userInfo = await fetchEdaUserProfile(token)
+        sendJson(res, 200, { userInfo })
         return
       }
 

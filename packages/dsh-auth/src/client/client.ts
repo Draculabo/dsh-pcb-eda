@@ -31,6 +31,13 @@ export interface AuthClient {
     isHostMode(): boolean
     getAccessToken(): Promise<string | null>
     getUserInfo(): Promise<AuthTokenPayload | null>
+    /**
+     * Rich eda.cn profile (nickname + headimage) for the current token. The
+     * node half resolves the token and calls eda.cn — used by the sidebar in
+     * host mode when the host session carries only {token, userId} (e.g.
+     * kicad). Null on failure; the UI degrades to the HQ icon.
+     */
+    getUserProfile(): Promise<{ nickname?: string; headimage?: string } | null>
     login(options?: LoginOptions): Promise<void>
     logout(): Promise<void>
     onAuthStateChanged(listener: (info: AuthTokenPayload | null) => void): () => void
@@ -139,6 +146,11 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     getUserInfo: async (): Promise<AuthTokenPayload | null> => {
       if (hostMode && !hostSessionLoaded) await resolveHost()
       return hostMode ? hostSession : (hostSession ?? storage.get())
+    },
+    getUserProfile: async (): Promise<{ nickname?: string; headimage?: string } | null> => {
+      if (hostMode && !hostSessionLoaded) await resolveHost()
+      if (!(await auth.getAccessToken())) return null
+      return transport.fetchUserInfo()
     },
     login: async (options?: LoginOptions): Promise<void> => {
       // Host mode: hq-edge owns the session — ask the host (EDA) to open its

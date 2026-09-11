@@ -48,6 +48,7 @@ function makeClient() {
     fetchSession: vi.fn(async (): Promise<{ authenticated: boolean; user: HostSessionUser | null }> =>
       ({ authenticated: false, user: null })),
     triggerLogin: vi.fn(async () => { pushes.push(['login']) }),
+    fetchUserInfo: vi.fn(async () => null),
   }
   const storage = createAuthStorage(localStorage)
   const listeners: Array<(e: MessageEvent) => void> = []

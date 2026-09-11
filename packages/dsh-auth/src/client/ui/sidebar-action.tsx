@@ -25,7 +25,7 @@
  */
 import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { getAuth, getAuthState, getHqEdge, subscribeAuth } from '../auth-state.js'
+import { getAuth, getAuthState, getHqEdge, setProfile, subscribeAuth } from '../auth-state.js'
 import { buildProfileUrl } from '../lib.js'
 import { useIsDark, useLocale } from '../ui-env.js'
 import { useT } from '../i18n.js'
@@ -222,7 +222,6 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
 
   const palette = dark ? DARK_PALETTE : LIGHT_PALETTE
   const authenticated = authState.authenticated
-  const avatar = authenticated && !avatarBroken ? authState.avatar : undefined
   const showLabel = wide !== false
 
   // Hide the trigger only when an HQ Edge host that ALREADY exposes its own
@@ -234,10 +233,36 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
   const targetHost = hostMode ? (getHqEdge()?.context?.getTargetHost?.() ?? '') : ''
   if (hostMode && targetHost === 'hq-eda') return null
 
+  // Host sessions (kicad/generic) carry only {token, userId} — no nickname,
+  // no avatar. Fetch the rich eda.cn profile (name + photo) so the trigger
+  // renders the real account instead of a bare HQ icon. Standalone DSH already
+  // has both from the auth.eda.cn payload, so this is host-only.
+  const profile = authState.profile
+  useEffect(() => {
+    if (!hostMode || targetHost === 'hq-eda') return
+    if (!authenticated) {
+      setProfile(null)
+      return
+    }
+    let cancelled = false
+    auth?.getUserProfile?.()
+      .then((info) => {
+        if (cancelled) return
+        setProfile(info)
+      })
+      .catch(() => { /* UI degrades to the HQ icon */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostMode, targetHost, authenticated])
+
+  const displayName = profile?.nickname ?? authState.nickname
+  const displayAvatar = profile?.headimage ?? authState.avatar
+  const avatar = authenticated && !avatarBroken ? displayAvatar : undefined
+
   // A new avatar URL is a fresh chance to render it.
   useEffect(() => {
     setAvatarBroken(false)
-  }, [authState.avatar])
+  }, [displayAvatar])
 
   // Logging out (from anywhere: menu, another tab surface, node invalidation)
   // must never leave an orphan menu pointing at a signed-out account.
@@ -309,7 +334,7 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
   }
 
   const label = authenticated
-    ? (authState.nickname ?? t('sidebar.account'))
+    ? (displayName ?? t('sidebar.account'))
     : t('sidebar.login')
 
   const title = authenticated ? t('sidebar.accountTitle') : t('sidebar.loginTitle')
@@ -376,8 +401,8 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
       {menuOpen && menuStyle
         ? createPortal(
             <div ref={menuRef} role="menu" style={menuStyle}>
-              {authState.nickname ? (
-                <div style={{ ...MENU_HEADER_BASE, color: palette.muted }} title={authState.nickname}>{authState.nickname}</div>
+              {displayName ? (
+                <div style={{ ...MENU_HEADER_BASE, color: palette.muted }} title={displayName}>{displayName}</div>
               ) : null}
               <MenuItem
                 label={t('menu.profile')}

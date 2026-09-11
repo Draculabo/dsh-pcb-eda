@@ -22,6 +22,11 @@ export interface AuthState {
   token?: string
   /** Bound mobile number, forwarded to the profile page as `phone=`. */
   phone?: string
+  /**
+   * Rich eda.cn profile fetched in host mode (host session carries only
+   * {token, userId}): nickname + headimage, merged above the host session.
+   */
+  profile?: { nickname?: string; headimage?: string }
 }
 
 /** Snapshot for one credential payload (`null` = logged out). */
@@ -74,6 +79,20 @@ export function getAuthState(): AuthState {
 export function subscribeAuth(callback: () => void): () => void {
   listeners.add(callback)
   return () => listeners.delete(callback)
+}
+
+/**
+ * Merge the rich eda.cn profile (nickname + headimage) into the store —
+ * sidebar components call this after `auth.getUserProfile()` in host mode.
+ * The trigger then renders the real name/photo instead of the bare HQ icon.
+ */
+export function setProfile(profile: { nickname?: string; headimage?: string } | null | undefined): void {
+  setState({ ...state, profile: profile ?? undefined })
+}
+
+/** Current profile (nickname + headimage) resolved from the host, if any. */
+export function getProfile(): { nickname?: string; headimage?: string } | undefined {
+  return state.profile
 }
 
 /** Register the node re-sync hook (wired in apply(); called by the login card on mount). */

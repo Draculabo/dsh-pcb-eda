@@ -18,12 +18,14 @@ interface StubInfo {
   phone?: string
 }
 
-function stubAuth(initial: StubInfo | null, hostMode = false) {
+function stubAuth(initial: StubInfo | null, hostMode = false, profile: { nickname?: string; headimage?: string } | null = null) {
   let current = initial
   const listeners = new Set<(info: StubInfo | null) => void>()
+  let profileOverride = profile
   return {
     isAuthenticated: () => current !== null,
     isHostMode: () => hostMode,
+    getUserProfile: vi.fn(async () => profileOverride),
     getAccessToken: async () => current?.token ?? null,
     getUserInfo: vi.fn(async () => current),
     login: vi.fn(async () => undefined),
@@ -372,6 +374,24 @@ describe('HuaqiuAuthSidebarAction (host mode visibility)', () => {
     registerHqEdgeGetter(() => undefined)
     const container = await renderSettled()
     expect(trigger(container)).toBeTruthy()
+  })
+
+  it('fetches and renders the rich profile (name + photo) under a kicad host', async () => {
+    registerHqEdgeGetter(() => ({ context: { getTargetHost: () => 'kicad' } }))
+    // Host session: token only. Profile comes from eda.cn via getUserProfile.
+    registerAuth(stubAuth({ id: 'u1', token: 'tok' }, true, { nickname: '老铁', headimage: 'https://file.eda.cn/avatar.png' }) as never)
+    const container = await renderSettled()
+    const img = container.querySelector('img') as HTMLImageElement | null
+    expect(img?.getAttribute('src')).toBe('https://file.eda.cn/avatar.png')
+    expect(container.textContent).toContain('老铁')
+  })
+
+  it('falls back to the HQ icon + generic label when the profile fetch fails', async () => {
+    registerHqEdgeGetter(() => ({ context: { getTargetHost: () => 'kicad' } }))
+    registerAuth(stubAuth({ id: 'u1', token: 'tok' }, true, null) as never)
+    const container = await renderSettled()
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 40 40')
   })
 })
 

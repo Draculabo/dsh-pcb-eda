@@ -30,6 +30,13 @@ export interface AuthTransport {
    * session to pick up the fresh credential.
    */
   triggerLogin(): Promise<void>
+  /**
+   * Fetch the rich eda.cn profile (nickname + headimage) for the current
+   * token. The node half resolves the token (host → pushed → persisted) and
+   * calls eda.cn; used by the sidebar in host mode when the host session
+   * carries only {token, userId} — e.g. host mode under kicad.
+   */
+  fetchUserInfo(): Promise<EdaUserProfile | null>
 }
 
 /** Minimal session user shape returned by the node `/session` route. */
@@ -38,6 +45,14 @@ export interface HostSessionUser {
   token?: string
   nickname?: string
   expiresAt?: number
+}
+
+/** Rich eda.cn profile served by the node `/user-info` route. */
+export interface EdaUserProfile {
+  nickname?: string
+  headimage?: string
+  phone?: string
+  username?: string
 }
 
 export function createWebServerAuthTransport(
@@ -94,6 +109,19 @@ export function createWebServerAuthTransport(
         headers: { accept: 'application/json' },
       })
       if (!res.ok) throw new Error(`auth login trigger failed: HTTP ${res.status}`)
+    },
+    async fetchUserInfo() {
+      try {
+        const res = await doFetch(`${base}/user-info`, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+        })
+        if (!res.ok) return null
+        const body = await res.json() as { userInfo?: EdaUserProfile | null }
+        return body.userInfo ?? null
+      } catch {
+        return null
+      }
     },
   }
 }

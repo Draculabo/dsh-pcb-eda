@@ -29,6 +29,7 @@ describe('auth webServer routes (browser→node transport)', () => {
   afterEach(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     rmSync(TMP, { recursive: true, force: true })
+    vi.unstubAllGlobals()
   })
 
   async function post(p: string, body?: unknown): Promise<{ status: number; text: string }> {
@@ -128,5 +129,40 @@ describe('auth webServer routes (browser→node transport)', () => {
     } finally {
       await new Promise<void>((resolve) => hostServer.close(() => resolve()))
     }
+  })
+
+  it('GET /user-info returns null when no credential is resolved', async () => {
+    const res = JSON.parse((await get(`${AUTH_ROUTE_PREFIX}/user-info`)).text)
+    expect(res).toEqual({ userInfo: null })
+  })
+
+  it('GET /user-info fetches the rich eda.cn profile (nickname + headimage)', async () => {
+    await post(`${AUTH_ROUTE_PREFIX}/session`, { token: 'tok-9', userId: 'u9' })
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/chiplet/u/base/get')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ code: 200000, result: { id: 9, nickname: '老铁', headimage: 'https://file.eda.cn/avatar.png' } }),
+        } as Response
+      }
+      throw new Error('unexpected fetch: ' + url)
+    }))
+    const res = JSON.parse((await get(`${AUTH_ROUTE_PREFIX}/user-info`)).text)
+    expect(res.userInfo).toMatchObject({ nickname: '老铁', headimage: 'https://file.eda.cn/avatar.png' })
+  })
+
+  it('GET /user-info degrades to null when eda.cn rejects the token', async () => {
+    await post(`${AUTH_ROUTE_PREFIX}/session`, { token: 'tok-bad', userId: 'u9' })
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/chiplet/u/base/get')) {
+        return { ok: true, status: 200, json: async () => ({ code: 400001 }) } as Response
+      }
+      throw new Error('unexpected fetch: ' + url)
+    }))
+    const res = JSON.parse((await get(`${AUTH_ROUTE_PREFIX}/user-info`)).text)
+    expect(res).toEqual({ userInfo: null })
   })
 })
