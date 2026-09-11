@@ -99,6 +99,7 @@ export function emptySchematicState(config: SchematicGenConfig, account: EdaAcco
   return {
     user_id: account.userId,
     token: account.userToken,
+    user_language: language,
     commits: [],
     requirement: '',
     architecture: null,
