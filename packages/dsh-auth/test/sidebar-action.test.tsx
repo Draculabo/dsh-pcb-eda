@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { HuaqiuAuthSidebarAction } from '../src/client/ui/sidebar-action.jsx'
-import { disposeAuth, getAuthState, registerAuth } from '../src/client/auth-state.js'
+import { disposeAuth, getAuthState, registerAuth, registerHqEdgeGetter } from '../src/client/auth-state.js'
 import { buildProfileUrl } from '../src/client/lib.js'
 import { DARK_ATTRIBUTE, disposeUiEnv, syncUiEnv } from '../src/client/ui-env.js'
 
@@ -18,11 +18,12 @@ interface StubInfo {
   phone?: string
 }
 
-function stubAuth(initial: StubInfo | null) {
+function stubAuth(initial: StubInfo | null, hostMode = false) {
   let current = initial
   const listeners = new Set<(info: StubInfo | null) => void>()
   return {
     isAuthenticated: () => current !== null,
+    isHostMode: () => hostMode,
     getAccessToken: async () => current?.token ?? null,
     getUserInfo: vi.fn(async () => current),
     login: vi.fn(async () => undefined),
@@ -341,6 +342,36 @@ describe('HuaqiuAuthSidebarAction (snapshot without a token)', () => {
     })
     expect(open).not.toHaveBeenCalled()
     expect(menu()).toBeNull()
+  })
+})
+
+describe('HuaqiuAuthSidebarAction (host mode visibility)', () => {
+  beforeEach(() => {
+    registerAuth(stubAuth(null, true) as never)
+  })
+
+  it('hides the trigger under an hq-eda host (native login surface exists)', async () => {
+    registerHqEdgeGetter(() => ({ context: { getTargetHost: () => 'hq-eda' } }))
+    const container = await renderSettled()
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it('keeps the trigger under a kicad host (no login entrypoint of its own)', async () => {
+    registerHqEdgeGetter(() => ({ context: { getTargetHost: () => 'kicad' } }))
+    const container = await renderSettled()
+    expect(trigger(container)).toBeTruthy()
+  })
+
+  it('keeps the trigger when the host identity is still generic/unknown', async () => {
+    registerHqEdgeGetter(() => ({ context: { getTargetHost: () => 'generic' } }))
+    const container = await renderSettled()
+    expect(trigger(container)).toBeTruthy()
+  })
+
+  it('keeps the trigger when no hqEdge service is resolvable', async () => {
+    registerHqEdgeGetter(() => undefined)
+    const container = await renderSettled()
+    expect(trigger(container)).toBeTruthy()
   })
 })
 

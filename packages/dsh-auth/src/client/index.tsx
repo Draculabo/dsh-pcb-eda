@@ -18,7 +18,7 @@
 import { createAuthStorage } from './storage.js'
 import { createWebServerAuthTransport } from './transport.js'
 import { createAuthClient, type AuthClient } from './client.js'
-import { disposeAuth, registerAuth, registerAuthSync } from './auth-state.js'
+import { disposeAuth, registerAuth, registerAuthSync, registerHqEdgeGetter } from './auth-state.js'
 import { HuaqiuToolView } from './ui/needs-auth-toolview.jsx'
 import { HuaqiuAuthSidebarAction } from './ui/sidebar-action.jsx'
 import { disposeUiEnv } from './ui-env.js'
@@ -50,6 +50,7 @@ export const AUTH_TOOL_NAMES: readonly string[] = []
 /** Minimal structural client context (dsh-client-runtime provides this). */
 export interface ClientContext {
   provide?(name: string, value: unknown): () => void
+  get?<T>(name: string): T | undefined
   slots?: {
     inject(key: string, callback: () => () => void): () => void
     register(spec: { name: string; key?: string; id?: string }, component: unknown): unknown
@@ -63,6 +64,11 @@ export function apply(ctx: ClientContext): () => void {
     windowLike: window,
     documentLike: document,
   })
+
+  // The sidebar needs the host identity (targetHost) to decide whether the
+  // host already has its own login surface (hq-eda hides the trigger; kicad /
+  // generic keep it). Lazy so edge-bridge load order never matters.
+  registerHqEdgeGetter(() => ctx.get?.('hqEdge'))
 
   const disposers: Array<() => void> = []
   let disposed = false
@@ -92,19 +98,18 @@ export function apply(ctx: ClientContext): () => void {
    * plugin — owns authentication for the session. `refreshHost()` resolves
    * that host mode and adopts the host-owned session as the browser
    * credential, so the auth gate / HIT cards read authenticated immediately.
-   * The auth plugin's own login UI (the `sidebar.footer.action` entrypoint and
-   * the login toolviews) is suppressed in host mode: it would be redundant and
-   * confusing next to the host-provided session. In standalone DSH (official
-   * integration) the sidebar entrypoint stays — it is the only login surface
-   * there.
    *
-   * The mode is read from the node half over the plugin-owned webServer route
-   * (async), so registration is deferred until it answers; the returned
-   * disposer still drains anything registered later.
+   * The sidebar entrypoint is registered UNCONDITIONALLY and decides its own
+   * visibility: it hides itself only when the host is hq-eda (which has a
+   * native login button + status badge). Standalone DSH and other hosts
+   * (kicad, generic — no login surface of their own) keep the trigger. The
+   * mode is read from the node half over the plugin-owned webServer route
+   * (async), so the component re-renders when the host session lands
+   * (auth-state emits on adopt).
    */
   const slots = ctx.slots
-  void client.refreshHost().then((hostMode) => {
-    if (disposed || hostMode) return
+  void client.refreshHost().catch(() => undefined).then(() => {
+    if (disposed) return
     if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
       for (const toolName of AUTH_TOOL_NAMES) {
         disposers.push(slots.inject('tool.call.toolview', () => slots.register({ name: 'tool.call.toolview', key: toolName }, HuaqiuToolView) as () => void))

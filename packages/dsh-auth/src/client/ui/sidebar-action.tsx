@@ -25,7 +25,7 @@
  */
 import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
-import { getAuth, getAuthState, subscribeAuth } from '../auth-state.js'
+import { getAuth, getAuthState, getHqEdge, subscribeAuth } from '../auth-state.js'
 import { buildProfileUrl } from '../lib.js'
 import { useIsDark, useLocale } from '../ui-env.js'
 import { useT } from '../i18n.js'
@@ -224,6 +224,15 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
   const authenticated = authState.authenticated
   const avatar = authenticated && !avatarBroken ? authState.avatar : undefined
   const showLabel = wide !== false
+
+  // Hide the trigger only when an HQ Edge host that ALREADY exposes its own
+  // login surface is present: hq-eda has a native login button + status badge,
+  // so this entrypoint would be redundant there. Every other configuration
+  // (standalone DSH, kicad/generic hosts) has no login entrypoint of its own,
+  // so the sidebar trigger is the only way in and must render.
+  const hostMode = auth?.isHostMode?.() ?? false
+  const targetHost = hostMode ? (getHqEdge()?.context?.getTargetHost?.() ?? '') : ''
+  if (hostMode && targetHost === 'hq-eda') return null
 
   // A new avatar URL is a fresh chance to render it.
   useEffect(() => {

@@ -81,6 +81,27 @@ export function registerAuthSync(fn: () => void): void {
   syncNow = fn
 }
 
+/**
+ * Lazy host-identity getter (edge-bridge browser half), registered by
+ * `apply()` via `ctx.get('hqEdge')`. The sidebar needs it to decide whether
+ * the host already exposes its own login surface: hq-eda does (native login
+ * button + status badge), so the sidebar trigger is hidden there; other hosts
+ * (kicad, generic) have no login entrypoint of their own, so the trigger
+ * stays. Registered lazily so plugin load order never matters.
+ */
+export interface HqEdgeContextLike {
+  context?: {
+    getTargetHost?(): string
+  }
+}
+let hqEdgeGetter: (() => HqEdgeContextLike | undefined) | null = null
+export function registerHqEdgeGetter(get: () => HqEdgeContextLike | undefined): void {
+  hqEdgeGetter = get
+}
+export function getHqEdge(): HqEdgeContextLike | undefined {
+  return hqEdgeGetter ? hqEdgeGetter() : undefined
+}
+
 /** Re-push the persisted credential to the node half, if one is available. */
 export function syncAuthNow(): void {
   syncNow?.()
@@ -91,6 +112,7 @@ export function disposeAuth(): void {
   unsubscribe = null
   auth = null
   syncNow = null
+  hqEdgeGetter = null
   listeners.clear()
   state = { authenticated: false }
 }
