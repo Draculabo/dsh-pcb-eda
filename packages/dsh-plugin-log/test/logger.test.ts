@@ -123,6 +123,22 @@ describe('getLogger', () => {
     expect(readFileSync(path, 'utf8')).toContain('after-rotation')
   })
 
+  it('does not rotate until the next record exceeds maxBytes', async () => {
+    const path = join(TMP, 'dsh-plugins.log')
+    setup()
+    getLogger('size-probe')
+    await flushLogs()
+    const bannerSize = Buffer.byteLength(readFileSync(path, 'utf8'), 'utf8')
+
+    writeFileSync(path, 'x'.repeat(1000))
+    setup({ maxBytes: 1000 + bannerSize, maxFiles: 2 })
+    getLogger('dsh-auth')
+    await flushLogs()
+
+    expect(existsSync(join(TMP, 'dsh-plugins.1.log'))).toBe(false)
+    expect(Buffer.byteLength(readFileSync(path, 'utf8'), 'utf8')).toBe(1000 + bannerSize)
+  })
+
   it('falls back to a writable directory when the DSH home is not usable', () => {
     const blocker = join(TMP, 'not-a-dir')
     writeFileSync(blocker, 'file')
