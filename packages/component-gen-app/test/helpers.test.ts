@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
+import { normalizeDimensions, validateDimensions } from '../src/utils/dims.js'
 import { humanizeKey } from '../src/utils/labels.js'
 import { translateFor } from '../src/copy/index.js'
 
@@ -24,6 +25,25 @@ describe('parseEvent', () => {
   })
   it('returns null for an empty frame', () => {
     expect(parseEvent('')).toBeNull()
+  })
+})
+
+describe('dimension helpers', () => {
+  it('normalizes numeric strings and keeps geometry picks consistent', () => {
+    expect(normalizeDimensions({ W: '6.2mm', L: 4.1, pitch: '0.5 mm', note: 'n/a' })).toEqual({
+      values: { W: 6.2, L: 4.1, pitch: 0.5 },
+      widthKey: 'W',
+      heightKey: 'L',
+      otherKeys: ['pitch'],
+      numericKeys: ['W', 'L', 'pitch'],
+    })
+  })
+
+  it('reports range and tolerance-order violations together', () => {
+    expect(validateDimensions({ W: 600, d_min: 2, d_max: 1 })).toEqual([
+      { key: 'W', code: 'out_of_range' },
+      { key: 'd_max', code: 'min_gt_max' },
+    ])
   })
 })
 
