@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { defaultArtifactsBase, parseEvent } from '../src/api/component-gen-client.js'
-import { humanizeKey } from '../src/utils/labels.js'
+import { fieldLabel, humanizeKey } from '../src/utils/labels.js'
 import { translateFor } from '../src/copy/index.js'
 
 describe('defaultArtifactsBase', () => {
@@ -31,6 +31,14 @@ describe('humanizeKey', () => {
   it('humanizes camelCase keys', () => {
     expect(humanizeKey('a1Min')).toBe('A1 Min')
     expect(humanizeKey('pitch_d')).toBe('Pitch d')
+  })
+})
+
+describe('fieldLabel', () => {
+  it('falls back for keys inherited from Object.prototype', () => {
+    const en = translateFor('en')
+    expect(fieldLabel('constructor', en)).toBe('Constructor')
+    expect(fieldLabel('toString', en)).toBe('To String')
   })
 })
 
