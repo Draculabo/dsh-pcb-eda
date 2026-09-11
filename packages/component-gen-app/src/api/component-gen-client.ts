@@ -108,15 +108,16 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
           }
           const reader = res.body.getReader()
           const decoder = new TextDecoder()
+          const frameBoundary = /\r?\n\r?\n/
           let buf = ''
           for (;;) {
             const { done, value } = await reader.read()
             if (done) break
             buf += decoder.decode(value, { stream: true })
-            let idx: number
-            while ((idx = buf.indexOf('\n\n')) >= 0) {
-              const frame = buf.slice(0, idx)
-              buf = buf.slice(idx + 2)
+            let boundary: RegExpExecArray | null
+            while ((boundary = frameBoundary.exec(buf))) {
+              const frame = buf.slice(0, boundary.index)
+              buf = buf.slice(boundary.index + boundary[0].length)
               const event = parseEvent(frame)
               if (event) onEvent(event)
             }
