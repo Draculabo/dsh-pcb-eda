@@ -71,6 +71,6 @@ export function fieldLabel(key: string, t: Translate): string {
     return t(bounds[2]!.toLowerCase() === 'max' ? 'field.maxOf' : 'field.minOf', { field: base })
   }
   const canonical = raw.toLowerCase().replace(/[\s_-]+/g, '')
-  const copyKey = FIELD_LABEL_KEY[canonical]
+  const copyKey = Object.hasOwn(FIELD_LABEL_KEY, canonical) ? FIELD_LABEL_KEY[canonical] : undefined
   return copyKey ? t(copyKey) : humanizeKey(raw)
 }
