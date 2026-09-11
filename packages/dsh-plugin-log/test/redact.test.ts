@@ -51,6 +51,16 @@ describe('redact', () => {
     expect(redact('http://localhost:3000/api/v1/auth/token')).toBe('http://localhost:3000/api/v1/auth/token')
   })
 
+  it('converts bigint fields to JSON-safe strings', () => {
+    const out = redact({ count: 9007199254740993n, nested: [1n, 2n] })
+
+    expect(out).toEqual({
+      count: '9007199254740993',
+      nested: ['1', '2'],
+    })
+    expect(() => JSON.stringify(out)).not.toThrow()
+  })
+
   it('is cycle-safe and depth-limited', () => {
     const cyclic: Record<string, unknown> = { name: 'x' }
     cyclic.self = cyclic
