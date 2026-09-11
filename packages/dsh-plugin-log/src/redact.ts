@@ -53,7 +53,8 @@ function redactInner(value: unknown, depth: number, seen: WeakSet<object>): unkn
   if (value === null || value === undefined) return value
 
   if (typeof value === 'string') return redactString(value)
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value === 'bigint') return value.toString()
   if (typeof value === 'function') return '[function]'
   if (typeof value === 'symbol') return value.toString()
 
