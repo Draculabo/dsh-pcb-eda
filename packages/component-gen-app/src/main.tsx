@@ -19,15 +19,31 @@ injectAppStyles()
 const AUTH_BASE = '/api/v1/huaqiu/auth'
 
 /** Read auth state from the dsh-auth session route (standalone server). */
-function createStandaloneAuth(): ComponentGenAuthPort {
+export function createStandaloneAuth(): ComponentGenAuthPort {
   let pollTimer: ReturnType<typeof setInterval> | null = null
   const listeners = new Set<(authenticated: boolean) => void>()
   const readState = async (): Promise<{ authenticated: boolean; user: { nickname?: string } | null }> => {
     try {
       const res = await fetch(`${AUTH_BASE}/session`, { headers: { accept: 'application/json' } })
       if (!res.ok) return { authenticated: false, user: null }
-      const body = (await res.json()) as { authenticated?: boolean; user?: { nickname?: string } | null }
-      return { authenticated: body.authenticated === true, user: body.user ?? null }
+      const body = await res.json() as unknown
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return { authenticated: false, user: null }
+      }
+
+      const { authenticated, user } = body as Record<string, unknown>
+      if (authenticated !== true) {
+        return { authenticated: false, user: null }
+      }
+      if (!user || typeof user !== 'object' || Array.isArray(user)) {
+        return { authenticated: true, user: null }
+      }
+
+      const nickname = (user as Record<string, unknown>).nickname
+      return {
+        authenticated: true,
+        user: typeof nickname === 'string' ? { nickname } : {},
+      }
     } catch {
       return { authenticated: false, user: null }
     }
