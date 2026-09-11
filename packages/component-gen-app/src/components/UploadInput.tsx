@@ -44,6 +44,10 @@ export function fileToDataUrl(file: File, maxBytes: number): Promise<string> {
           if (out.length <= maxBytes) break
           out = canvas.toDataURL('image/jpeg', q)
         }
+        if (out.length > maxBytes) {
+          reject(new Error('image remains too large after compression'))
+          return
+        }
         resolve(out)
       }
       img.onerror = () => reject(new Error('failed to decode image'))
