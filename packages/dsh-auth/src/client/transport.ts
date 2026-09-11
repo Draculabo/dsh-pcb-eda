@@ -117,8 +117,16 @@ export function createWebServerAuthTransport(
           headers: { accept: 'application/json' },
         })
         if (!res.ok) return null
-        const body = await res.json() as { userInfo?: EdaUserProfile | null }
-        return body.userInfo ?? null
+        const body = await res.json() as { userInfo?: unknown }
+        const userInfo = body.userInfo
+        if (!userInfo || typeof userInfo !== 'object' || Array.isArray(userInfo)) return null
+        const profile = userInfo as Record<string, unknown>
+        return {
+          ...(typeof profile.nickname === 'string' ? { nickname: profile.nickname } : {}),
+          ...(typeof profile.headimage === 'string' ? { headimage: profile.headimage } : {}),
+          ...(typeof profile.phone === 'string' ? { phone: profile.phone } : {}),
+          ...(typeof profile.username === 'string' ? { username: profile.username } : {}),
+        }
       } catch {
         return null
       }
