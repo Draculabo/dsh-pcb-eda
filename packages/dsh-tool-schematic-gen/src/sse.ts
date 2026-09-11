@@ -368,6 +368,7 @@ export async function consumeCopilotkit(
       if (done) break
       buf = feed(decoder.decode(value, { stream: true }), state, buf, acc)
     }
+    buf = feed(decoder.decode(), state, buf, acc)
     // Flush a final event not terminated by a blank line.
     if (buf.length > 0) dispatchRaw(buf, state, acc)
   } finally {
