@@ -56,9 +56,11 @@ export async function fetchEdaUserProfile(
       body: '{}',
     })
     if (!res.ok) return null
-    const body = (await res.json()) as { code?: number; result?: Record<string, unknown> }
-    if (body.code !== 200000 || !body.result) return null
-    const r = body.result
+    const body = await res.json() as unknown
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return null
+    const { code, result } = body as Record<string, unknown>
+    if (code !== 200000 || !result || typeof result !== 'object' || Array.isArray(result)) return null
+    const r = result as Record<string, unknown>
     return {
       ...(typeof r.nickname === 'string' && r.nickname ? { nickname: r.nickname } : {}),
       ...(typeof r.headimage === 'string' && r.headimage ? { headimage: r.headimage } : {}),
