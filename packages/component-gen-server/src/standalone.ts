@@ -144,10 +144,12 @@ export async function createStandaloneServer(options: StandaloneServerOptions = 
   await new Promise<void>((resolveListen) => {
     server.listen(port, host, resolveListen)
   })
+  const address = server.address()
+  const boundPort = typeof address === 'object' && address ? address.port : port
 
   return {
     server,
-    port,
+    port: boundPort,
     auth,
     history,
     close: async () => new Promise((resolveClose) => server.close(() => resolveClose())),
