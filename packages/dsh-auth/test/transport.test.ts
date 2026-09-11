@@ -59,4 +59,32 @@ describe('createWebServerAuthTransport', () => {
     const t = createWebServerAuthTransport('/api/v1/huaqiu/auth', doFetch)
     await expect(t.fetchSession()).resolves.toEqual({ authenticated: true, user: null })
   })
+
+  it('fetchUserInfo keeps only string profile fields', async () => {
+    const doFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        userInfo: {
+          nickname: { text: 'invalid' },
+          headimage: 'https://file.eda.cn/avatar.png',
+          phone: 13800000000,
+          username: 'u-1',
+        },
+      }),
+    })) as unknown as typeof fetch
+    const t = createWebServerAuthTransport('/api/v1/huaqiu/auth', doFetch)
+    await expect(t.fetchUserInfo()).resolves.toEqual({
+      headimage: 'https://file.eda.cn/avatar.png',
+      username: 'u-1',
+    })
+  })
+
+  it('fetchUserInfo rejects non-object profile payloads', async () => {
+    const doFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ userInfo: 'invalid-profile' }),
+    })) as unknown as typeof fetch
+    const t = createWebServerAuthTransport('/api/v1/huaqiu/auth', doFetch)
+    await expect(t.fetchUserInfo()).resolves.toBeNull()
+  })
 })
