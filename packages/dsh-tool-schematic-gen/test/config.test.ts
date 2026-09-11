@@ -61,6 +61,7 @@ describe('buildRunBody', () => {
     expect(inner.messages).toHaveLength(1)
     expect((inner.state as Record<string, unknown>).user_id).toBe('u1')
     expect((inner.state as Record<string, unknown>).token).toBe('tok-1')
+    expect((inner.state as Record<string, unknown>).user_language).toBe('English')
   })
 
   it('uses the system empty state for the modular_circuit agent', () => {
