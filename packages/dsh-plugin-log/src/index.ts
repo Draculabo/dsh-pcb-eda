@@ -310,11 +310,11 @@ class FileSink {
   /** Enqueue one already-serialized line. Never rejects. */
   write(line: string): void {
     const size = Buffer.byteLength(line, 'utf8')
-    this.bytes += size
     this.queue = this.queue
       .then(async () => {
         this.rotateIfNeeded(size)
         await appendFile(this.path, line, 'utf8')
+        this.bytes += size
       })
       .catch(() => {
         /* a full or locked disk must never surface as a plugin failure */
