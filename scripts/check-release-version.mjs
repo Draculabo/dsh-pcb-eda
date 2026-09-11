@@ -18,10 +18,12 @@ import { join } from 'node:path'
 import { publishablePackages, repoRoot, rootManifestPath } from './utils/packages.mjs'
 
 const argv = process.argv.slice(2)
-const requested = argv.find((a) => !a.startsWith('-'))
 const tagIndex = argv.indexOf('--tag')
 const tagArg = argv.find((a) => a.startsWith('--tag='))?.split('=')[1]
   ?? (tagIndex >= 0 ? argv[tagIndex + 1] : undefined)
+const requested = argv.find((a, index) => (
+  !a.startsWith('-') && (tagIndex < 0 || index !== tagIndex + 1)
+))
 
 if (!requested) {
   console.error('usage: node scripts/check-release-version.mjs <version> [--tag vX.Y.Z]')
