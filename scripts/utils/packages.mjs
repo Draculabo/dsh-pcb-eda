@@ -62,12 +62,13 @@ export function discoverPackages() {
       // Not a package (no parseable package.json) — skip.
       continue
     }
-    if (typeof manifest?.name !== 'string' || manifest.name.length === 0) continue
+    if (typeof manifest?.name !== 'string' || manifest.name.trim().length === 0) continue
+    if (typeof manifest.version !== 'string' || manifest.version.trim().length === 0) continue
     found.push({
       rel,
       dir,
       name: manifest.name,
-      version: String(manifest.version ?? ''),
+      version: manifest.version,
       manifest,
     })
   }
