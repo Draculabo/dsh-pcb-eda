@@ -285,6 +285,11 @@ class FileSink {
     if (this.maxBytes <= 0) return
     if (this.bytes + next <= this.maxBytes) return
     try {
+      if (this.maxFiles === 1) {
+        rmSync(this.path, { force: true })
+        this.bytes = 0
+        return
+      }
       // Shift: .2 -> .3, .1 -> .2, current -> .1 (oldest is dropped).
       for (let i = this.maxFiles - 1; i >= 1; i -= 1) {
         const from = i === 1 ? join(this.dir, this.fileName) : this.rotated(i - 1)
