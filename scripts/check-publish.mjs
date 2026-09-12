@@ -21,12 +21,17 @@ import { publishablePackages, repoRoot } from './utils/packages.mjs'
 const requireClean = process.argv.includes('--require-clean')
 
 let failures = 0
-const fail = (msg) => { console.error(`check-publish: FAIL: ${msg}`); failures += 1 }
+const fail = (msg) => {
+  console.error(`check-publish: FAIL: ${msg}`)
+  failures += 1
+}
 const ok = (msg) => console.log(`check-publish: ok: ${msg}`)
 
 function includedByFiles(manifest, target) {
   const normalized = String(target).replace(/^\.\//, '').replaceAll('\\', '/')
-  if (normalized === 'package.json') return true
+  if (normalized === 'package.json') {
+    return true
+  }
   return (manifest.files ?? []).some((entry) => {
     const e = String(entry).replace(/^\.\//, '').replaceAll('\\', '/').replace(/\/$/, '')
     return normalized === e || normalized.startsWith(`${e}/`)
@@ -37,8 +42,11 @@ function includedByFiles(manifest, target) {
 if (requireClean) {
   try {
     const status = execFileSync('git', ['status', '--porcelain'], { cwd: repoRoot, encoding: 'utf8' }).trim()
-    if (status.length > 0) fail(`git tree is not clean — release must be built from a tagged, committed state:\n${status}`)
-    else ok('git tree is clean')
+    if (status.length > 0) {
+      fail(`git tree is not clean — release must be built from a tagged, committed state:\n${status}`)
+    } else {
+      ok('git tree is clean')
+    }
   } catch (e) {
     fail(`could not read git status: ${String(e?.message || e)}`)
   }
@@ -69,8 +77,12 @@ for (const pkg of pkgs) {
     if (typeof patchRel !== 'string' || patchRel.length === 0) {
       fail(`${rel}: dsh.bundle.patch is missing`)
     } else {
-      if (!existsSync(join(dir, patchRel))) fail(`${rel}: dsh.bundle.patch file missing (${patchRel})`)
-      if (!includedByFiles(manifest, patchRel)) fail(`${rel}: ${patchRel} is not covered by files[] (it must ship in the tarball)`)
+      if (!existsSync(join(dir, patchRel))) {
+        fail(`${rel}: dsh.bundle.patch file missing (${patchRel})`)
+      }
+      if (!includedByFiles(manifest, patchRel)) {
+        fail(`${rel}: ${patchRel} is not covered by files[] (it must ship in the tarball)`)
+      }
     }
   } else {
     ok(`${rel}: not a dsh plugin — skipping Host patch checks`)
@@ -78,9 +90,13 @@ for (const pkg of pkgs) {
 
   // Built entry (node half).
   const mainRel = manifest.main || 'lib/index.mjs'
-  if (!existsSync(join(dir, mainRel))) fail(`${rel}: built entry missing (${mainRel}) — run pnpm -r build first`)
+  if (!existsSync(join(dir, mainRel))) {
+    fail(`${rel}: built entry missing (${mainRel}) — run pnpm -r build first`)
+  }
   const typesRel = manifest.types || 'lib/index.d.mts'
-  if (!existsSync(join(dir, typesRel))) fail(`${rel}: built types missing (${typesRel})`)
+  if (!existsSync(join(dir, typesRel))) {
+    fail(`${rel}: built types missing (${typesRel})`)
+  }
 
   // Client bundle (dual-face packages).
   if (manifest.dsh?.client && !existsSync(join(dir, 'lib/client.js'))) {
@@ -93,23 +109,37 @@ for (const pkg of pkgs) {
     const targets = []
     const collect = (o) => {
       for (const [cond, v] of Object.entries(o)) {
-        if (typeof v === 'string') { targets.push([cond, v]); continue }
-        if (v && typeof v === 'object') collect(v)
-        else fail(`${rel}: malformed exports.${cond}`)
+        if (typeof v === 'string') {
+          targets.push([cond, v])
+          continue
+        }
+        if (v && typeof v === 'object') {
+          collect(v)
+        } else {
+          fail(`${rel}: malformed exports.${cond}`)
+        }
       }
     }
     collect(manifest.exports)
     for (const [cond, target] of targets) {
-      if (seen.has(target)) continue
+      if (seen.has(target)) {
+        continue
+      }
       seen.add(target)
-      if (target === 'package.json') continue
-      if (!includedByFiles(manifest, target)) fail(`${rel}: exports.${cond} → ${target} is not covered by files[]`)
+      if (target === 'package.json') {
+        continue
+      }
+      if (!includedByFiles(manifest, target)) {
+        fail(`${rel}: exports.${cond} → ${target} is not covered by files[]`)
+      }
       // Glob subpath exports (e.g. `./dist/*`) resolve to any file under the
       // base dir — verify the base dir ships rather than the literal pattern.
       const globIdx = target.indexOf('*')
       if (globIdx >= 0) {
         const base = target.slice(0, globIdx).replace(/\/+$/, '')
-        if (!existsSync(join(dir, base))) fail(`${rel}: exports.${cond} → ${target}: base dir ${base} does not exist`)
+        if (!existsSync(join(dir, base))) {
+          fail(`${rel}: exports.${cond} → ${target}: base dir ${base} does not exist`)
+        }
       } else if (!existsSync(join(dir, target))) {
         fail(`${rel}: exports.${cond} → ${target} does not exist`)
       }
