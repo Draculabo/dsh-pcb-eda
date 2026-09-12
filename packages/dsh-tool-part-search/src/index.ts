@@ -43,7 +43,9 @@ export const inject = ['tools'] as const
  */
 let _log: PluginLogger | null = null
 function log(): PluginLogger {
-  if (_log === null) _log = getLogger('dsh-part-search')
+  if (_log === null) {
+    _log = getLogger('dsh-part-search')
+  }
   return _log
 }
 
