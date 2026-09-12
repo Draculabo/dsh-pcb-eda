@@ -134,7 +134,10 @@ function main() {
     accessSync(harnessPkg);
     // Make sure the official `dsh` script exists in the harness package.json.
     const pkg = JSON.parse(readFileSync(harnessPkg, 'utf8'));
-    if (typeof pkg?.scripts?.dsh !== 'string') throw new Error('no dsh script');
+    const dshScript = pkg?.scripts?.dsh;
+    if (typeof dshScript !== 'string' || dshScript.trim().length === 0) {
+      throw new Error('no dsh script');
+    }
   } catch {
     console.error(
       `Local DeepSeek Harness not found at:\n  ${HARNESS_DIR}\n` +
