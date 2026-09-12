@@ -28,7 +28,7 @@
  * not need to branch on platform for the macOS case.
  */
 import { homedir, platform } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 
 /**
  * Application identifier used for OS-native directories.
@@ -98,5 +98,13 @@ export function getLogBaseDir(override?: string): string {
  * intentionally share a tree so a single `tail -F` follows them across upgrades.
  */
 export function getLogDir(component: string, baseDirOverride?: string): string {
-  return join(getLogBaseDir(baseDirOverride), component)
+  const baseDir = resolve(getLogBaseDir(baseDirOverride))
+  const logDir = resolve(baseDir, component)
+  const relativePath = relative(baseDir, logDir)
+
+  if (relativePath === '' || relativePath === '..' || relativePath.startsWith(`..${join('a', 'b').slice(1, 2)}`) || isAbsolute(relativePath)) {
+    throw new Error(`Invalid log component path: ${component}`)
+  }
+
+  return logDir
 }
