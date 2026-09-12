@@ -39,9 +39,9 @@ const run = (cmd, args, opts = {}) => {
 
 /**
  * Order the discovered packages so that `dependencies` (in-workspace siblings)
- * are published before their consumers. Leaves-first topological sort; falls
- * back to alphabetical order when a dependency cycle exists among
- * `dependencies` (should not happen — peer/dev cycles are ignored by design).
+ * are published before their consumers. Leaves-first topological sort.
+ * Dependency cycles are invalid for this release strategy and abort before any
+ * package is published.
  */
 function topoOrder(pkgs) {
   const byName = new Map(pkgs.map((p) => [p.name, p]))
@@ -64,12 +64,7 @@ function topoOrder(pkgs) {
     order.push(name)
   }
   for (const name of names) {
-    try {
-      visit(name, [])
-    } catch (err) {
-      console.warn(`warn: ${err.message} — falling back to alphabetical order`)
-      return pkgs.slice().sort((a, b) => a.name.localeCompare(b.name))
-    }
+    visit(name, [])
   }
   return order.map((name) => byName.get(name))
 }
