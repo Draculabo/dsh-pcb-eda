@@ -31,6 +31,7 @@ const provenance = argv.includes('--provenance')
 const tagIndex = argv.indexOf('--tag')
 const tagArg = argv.find((a) => a.startsWith('--tag='))?.split('=')[1]
   ?? (tagIndex >= 0 ? argv[tagIndex + 1] : undefined)
+const registry = process.env.npm_config_registry?.trim() || process.env.NPM_CONFIG_REGISTRY?.trim()
 
 const run = (cmd, args, opts = {}) => {
   console.log(`\n$ ${cmd} ${args.join(' ')}`)
@@ -93,7 +94,7 @@ if (tagArg) {
 }
 console.log(`\nPublishing ${pkgs.map((p) => p.name).join(', ')} @${version} (${dryRun ? 'DRY-RUN' : 'LIVE'})`)
 
-// ── 2. Gate: build + integrity ───────────────────────────────────────────────
+// ── 2. Gate: build + integrity ────────────────────────────────────────────────
 run('pnpm', ['-r', 'build'])
 run('node', ['scripts/check-publish.mjs'])
 
@@ -105,7 +106,9 @@ for (const pkg of topoOrder(pkgs)) {
   // Skip if this exact version is already on the registry (idempotent).
   if (!dryRun) {
     try {
-      const existing = execFileSync('npm', ['view', `${pkg.name}@${version}`, 'version'], {
+      const viewArgs = ['view', `${pkg.name}@${version}`, 'version']
+      if (registry) viewArgs.push('--registry', registry)
+      const existing = execFileSync('npm', viewArgs, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim()
@@ -126,7 +129,6 @@ for (const pkg of topoOrder(pkgs)) {
 
   const args = ['--dir', dir, 'publish', '--no-git-checks', '--access', 'public']
   if (provenance) args.push('--provenance')
-  const registry = process.env.npm_config_registry || process.env.NPM_CONFIG_REGISTRY
   if (registry) args.push('--registry', registry)
   run('pnpm', args)
   console.log(`✓ published ${pkg.name}@${version}`)
