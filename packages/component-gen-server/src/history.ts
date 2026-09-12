@@ -6,7 +6,7 @@
  * runner on terminal states; input thumbnails are stored by the routes layer
  * at POST /jobs time. `imageId` in an entry's `input` points into `inputs/`.
  */
-import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { HistoryEntry, HistoryPage, HistoryPatch, HistoryQuery } from './types.js'
@@ -24,7 +24,15 @@ function readJsonFile<T>(path: string, fallback: T): T {
 
 function writeJsonFile(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify(value, null, 2), 'utf8')
+  const tempPath = `${path}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(tempPath, JSON.stringify(value, null, 2), 'utf8')
+    renameSync(tempPath, path)
+  } finally {
+    if (existsSync(tempPath)) {
+      unlinkSync(tempPath)
+    }
+  }
 }
 
 /** `data:image/...;base64,....` → { mime, bytes } | null. */
