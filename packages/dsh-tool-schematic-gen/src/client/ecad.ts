@@ -38,7 +38,7 @@ export async function resolveArtifactText(artifactId: string): Promise<ResolvedT
   if (!metaRes.ok) throw new Error(`artifact metadata ${metaRes.status}`)
   const meta = (await metaRes.json()) as { type?: string; filename?: string; encoding?: string }
   const contentRes = await fetch(`${metaPath}/content`)
-  if (!contentRes.ok) throw new Error(`artifact content ${metaRes.status}`)
+  if (!contentRes.ok) throw new Error(`artifact content ${contentRes.status}`)
   const text = await contentRes.text()
   return {
     id: artifactId,
