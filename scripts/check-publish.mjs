@@ -88,7 +88,7 @@ for (const pkg of pkgs) {
   }
 
   // Exports resolve to shipped files.
-  if (manifest.exports && typeof manifest.exports === 'object') {
+  if (manifest.exports) {
     const seen = new Set()
     const targets = []
     const collect = (o) => {
@@ -98,20 +98,27 @@ for (const pkg of pkgs) {
         else fail(`${rel}: malformed exports.${cond}`)
       }
     }
-    collect(manifest.exports)
+    if (typeof manifest.exports === 'string') {
+      targets.push([null, manifest.exports])
+    } else if (typeof manifest.exports === 'object') {
+      collect(manifest.exports)
+    } else {
+      fail(`${rel}: malformed exports`)
+    }
     for (const [cond, target] of targets) {
       if (seen.has(target)) continue
       seen.add(target)
       if (target === 'package.json') continue
-      if (!includedByFiles(manifest, target)) fail(`${rel}: exports.${cond} → ${target} is not covered by files[]`)
+      const exportLabel = cond === null ? 'exports' : `exports.${cond}`
+      if (!includedByFiles(manifest, target)) fail(`${rel}: ${exportLabel} → ${target} is not covered by files[]`)
       // Glob subpath exports (e.g. `./dist/*`) resolve to any file under the
       // base dir — verify the base dir ships rather than the literal pattern.
       const globIdx = target.indexOf('*')
       if (globIdx >= 0) {
         const base = target.slice(0, globIdx).replace(/\/+$/, '')
-        if (!existsSync(join(dir, base))) fail(`${rel}: exports.${cond} → ${target}: base dir ${base} does not exist`)
+        if (!existsSync(join(dir, base))) fail(`${rel}: ${exportLabel} → ${target}: base dir ${base} does not exist`)
       } else if (!existsSync(join(dir, target))) {
-        fail(`${rel}: exports.${cond} → ${target} does not exist`)
+        fail(`${rel}: ${exportLabel} → ${target} does not exist`)
       }
     }
   }
