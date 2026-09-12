@@ -66,7 +66,10 @@ const MIME: Record<string, string> = {
 }
 
 function resolveAppDist(override?: string): string {
-  if (override) return resolve(override)
+  if (override) {
+    return resolve(override)
+  }
+
   try {
     const pkgPath = require.resolve('@huaqiu/component-gen-app/package.json')
     return join(pkgPath.replace(/package\.json$/, ''), 'dist')
@@ -81,11 +84,17 @@ function resolveAppDist(override?: string): string {
 function serveStatic(root: string, urlPath: string, res: ServerResponse): void {
   const decoded = decodeURIComponent(urlPath.split('?')[0] ?? '/')
   let rel = decoded === '/' ? '/index.html' : decoded
-  if (rel.startsWith('/')) rel = rel.slice(1)
+  if (rel.startsWith('/')) {
+    rel = rel.slice(1)
+  }
+
   const target = resolve(root, rel)
   if (!target.startsWith(resolve(root)) || !target.startsWith(root)) {
-    res.writeHead(403); res.end('forbidden'); return
+    res.writeHead(403)
+    res.end('forbidden')
+    return
   }
+
   if (!existsSync(target) || !statSync(target).isFile()) {
     // SPA fallback: serve index.html for unknown non-asset paths.
     const idx = join(root, 'index.html')
@@ -94,8 +103,12 @@ function serveStatic(root: string, urlPath: string, res: ServerResponse): void {
       res.end(readFileSync(idx))
       return
     }
-    res.writeHead(404); res.end('not found'); return
+
+    res.writeHead(404)
+    res.end('not found')
+    return
   }
+
   res.writeHead(200, { 'content-type': MIME[extname(target).toLowerCase()] ?? 'application/octet-stream' })
   res.end(readFileSync(target))
 }
@@ -159,7 +172,9 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2)
   let port = 8787
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--port' && args[i + 1]) port = Number(args[i + 1])
+    if (args[i] === '--port' && args[i + 1]) {
+      port = Number(args[i + 1])
+    }
   }
   const app = await createStandaloneServer({ port })
   const urls = [`http://localhost:${app.port}/?page=footprint`, `http://localhost:${app.port}/?page=symbol`]
