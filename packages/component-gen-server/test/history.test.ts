@@ -1,7 +1,7 @@
 /**
  * `@huaqiu/component-gen-server` — history store tests.
  */
-import { mkdtempSync, existsSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, existsSync, rmSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -30,6 +30,22 @@ describe('HistoryStore', () => {
       const reloaded = new HistoryStore(dir)
       const page = await reloaded.list({})
       expect(page.entries.map((e) => e.id)).toEqual([entry.id])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('replaces history without leaving temporary files behind', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hq-cga-'))
+    try {
+      const store = new HistoryStore(dir)
+      await store.append(makeEntry({ id: 'first' }))
+      await store.append(makeEntry({ id: 'second' }))
+
+      expect(readdirSync(dir).sort()).toEqual(['history.json'])
+      const reloaded = new HistoryStore(dir)
+      const page = await reloaded.list({})
+      expect(page.entries.map((entry) => entry.id)).toEqual(['second', 'first'])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
