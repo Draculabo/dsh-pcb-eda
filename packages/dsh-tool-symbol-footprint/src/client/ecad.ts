@@ -25,11 +25,15 @@ export interface ResolvedArtifact {
 export async function resolveArtifact(artifactId: string): Promise<ResolvedArtifact> {
   const metaPath = `/api/v1/huaqiu/artifacts/${encodeURIComponent(artifactId)}`
   const metaRes = await fetch(metaPath)
-  if (!metaRes.ok) throw new Error(`artifact metadata ${metaRes.status}`)
+  if (!metaRes.ok) {
+    throw new Error(`artifact metadata ${metaRes.status}`)
+  }
   const meta = (await metaRes.json()) as { type?: string; filename?: string }
 
   const contentRes = await fetch(`${metaPath}/content`)
-  if (!contentRes.ok) throw new Error(`artifact content ${contentRes.status}`)
+  if (!contentRes.ok) {
+    throw new Error(`artifact content ${contentRes.status}`)
+  }
   const content = await contentRes.text()
 
   return {
@@ -50,13 +54,17 @@ function parseSymbol(source: string): schematicProto.I_LibSymbol {
     throw new Error('parseLibSymbols is not a method on SchematicParser')
   }
   const symbols = sp.parseLibSymbols(source)
-  if (!symbols || symbols.length === 0) throw new Error('no symbols found in .kicad_sym source')
+  if (!symbols || symbols.length === 0) {
+    throw new Error('no symbols found in .kicad_sym source')
+  }
   return symbols[0]!
 }
 
 function parseFootprint(source: string): boardProto.I_Footprint {
   const bp = new BoardParser()
-  if (typeof bp.parse !== 'function') throw new Error('parse is not a method on BoardParser')
+  if (typeof bp.parse !== 'function') {
+    throw new Error('parse is not a method on BoardParser')
+  }
   const toParse = /^\s*\(\s*kicad_pcb\b/.test(source) ? source : wrapFootprintInBoard(source)
   const board = bp.parse(toParse)
   if (!board || !Array.isArray(board.footprints) || board.footprints.length === 0) {
@@ -86,7 +94,12 @@ export async function renderArtifactToCanvas(
   } else {
     throw new Error(`unsupported preview kind: ${kind}`)
   }
-  return () => { try { dispose?.() } catch { /* ignore */ } }
+  return () => {
+    try {
+      dispose?.()
+    } catch {
+    }
+  }
 }
 
 /** Size a canvas to its CSS box (device-pixel-ratio aware). */
@@ -109,7 +122,12 @@ export function triggerDownload(filename: string, text: string, mime = 'text/pla
     document.body.appendChild(a)
     a.click()
     a.remove()
-    setTimeout(() => { try { URL.revokeObjectURL(url) } catch { /* ignore */ } }, 2000)
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+      }
+    }, 2000)
   } catch (err) {
     console.warn('[hq-genhit] download failed', err)
   }
