@@ -49,7 +49,8 @@ export const APP_ID = 'hq-edge'
  */
 export function getHqEdgeHome(override?: string): string {
   if (override) return override
-  if (process.env.HQ_EDGE_HOME) return process.env.HQ_EDGE_HOME
+  const envHome = process.env.HQ_EDGE_HOME?.trim()
+  if (envHome) return envHome
 
   const home = homedir()
   // macOS override: dotfile under $HOME, not the Library sandbox.
@@ -58,12 +59,12 @@ export function getHqEdgeHome(override?: string): string {
     return join(home, '.hq-edge')
   }
   if (platform() === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA
+    const localAppData = process.env.LOCALAPPDATA?.trim()
     if (localAppData) return join(localAppData, APP_ID)
     return join(home, 'AppData', 'Local', APP_ID)
   }
   // Linux / other POSIX — follows the XDG_DATA_HOME convention.
-  const xdgDataHome = process.env.XDG_DATA_HOME
+  const xdgDataHome = process.env.XDG_DATA_HOME?.trim()
   return xdgDataHome ? join(xdgDataHome, APP_ID) : join(home, '.local', 'share', APP_ID)
 }
 
@@ -82,7 +83,8 @@ export function getHqEdgeHome(override?: string): string {
  */
 export function getLogBaseDir(override?: string): string {
   if (override) return override
-  if (process.env.HQ_EDGE_LOG_DIR) return process.env.HQ_EDGE_LOG_DIR
+  const envLogDir = process.env.HQ_EDGE_LOG_DIR?.trim()
+  if (envLogDir) return envLogDir
   return join(getHqEdgeHome(), 'logs')
 }
 
