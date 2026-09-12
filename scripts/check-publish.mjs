@@ -27,7 +27,8 @@ const ok = (msg) => console.log(`check-publish: ok: ${msg}`)
 function includedByFiles(manifest, target) {
   const normalized = String(target).replace(/^\.\//, '').replaceAll('\\', '/')
   if (normalized === 'package.json') return true
-  return (manifest.files ?? []).some((entry) => {
+  if (!Array.isArray(manifest.files)) return false
+  return manifest.files.some((entry) => {
     const e = String(entry).replace(/^\.\//, '').replaceAll('\\', '/').replace(/\/$/, '')
     return normalized === e || normalized.startsWith(`${e}/`)
   })
@@ -60,6 +61,9 @@ for (const pkg of pkgs) {
   }
   if (typeof version !== 'string' || !/^\d+\.\d+\.\d+/.test(version)) {
     fail(`${rel}: invalid version ${version}`)
+  }
+  if (manifest.files !== undefined && !Array.isArray(manifest.files)) {
+    fail(`${rel}: files must be an array`)
   }
 
   // Host mount patch — only real DSH plugins declare dsh.bundle.patch.
