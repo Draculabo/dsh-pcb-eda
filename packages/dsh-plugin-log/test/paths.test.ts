@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
 import { getLogDir } from '../src/paths.js'
 
 describe('getLogDir', () => {
-  const baseDir = resolve('/tmp', 'dsh-plugin-log-paths')
+  const baseDir = join(tmpdir(), 'dsh-plugin-log-paths')
 
   it('resolves a component inside the log base', () => {
     expect(getLogDir('dsh-plugins', baseDir)).toBe(join(baseDir, 'dsh-plugins'))
