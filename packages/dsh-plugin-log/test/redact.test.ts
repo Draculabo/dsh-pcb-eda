@@ -51,6 +51,18 @@ describe('redact', () => {
     expect(redact('http://localhost:3000/api/v1/auth/token')).toBe('http://localhost:3000/api/v1/auth/token')
   })
 
+  it('redacts nested error causes', () => {
+    const error = new Error('request failed') as Error & { cause?: unknown }
+    error.stack = undefined
+    error.cause = { token: 'secret', code: 'E_AUTH' }
+
+    expect(redact(error)).toEqual({
+      name: 'Error',
+      message: 'request failed',
+      cause: { token: REDACTED, code: 'E_AUTH' },
+    })
+  })
+
   it('is cycle-safe and depth-limited', () => {
     const cyclic: Record<string, unknown> = { name: 'x' }
     cyclic.self = cyclic
