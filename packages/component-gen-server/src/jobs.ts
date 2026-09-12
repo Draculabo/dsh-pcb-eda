@@ -82,7 +82,9 @@ export class JobStore {
   /** Update job state (public — the runner writes progress/status). */
   update(id: string, patch: Partial<JobState>, event?: JobEvent): JobState {
     const rec = this.jobs.get(id)
-    if (!rec) return patch as JobState
+    if (!rec) {
+      throw new Error(`Job not found: ${id}`)
+    }
     rec.state = { ...rec.state, ...patch, updatedAt: new Date().toISOString() }
     if (event) this.emit(id, event)
     return rec.state
