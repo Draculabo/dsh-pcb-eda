@@ -28,7 +28,7 @@
  * not need to branch on platform for the macOS case.
  */
 import { homedir, platform } from 'node:os'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 /**
  * Application identifier used for OS-native directories.
@@ -102,7 +102,12 @@ export function getLogDir(component: string, baseDirOverride?: string): string {
   const logDir = resolve(baseDir, component)
   const relativePath = relative(baseDir, logDir)
 
-  if (relativePath === '' || relativePath === '..' || relativePath.startsWith(`..${join('a', 'b').slice(1, 2)}`) || isAbsolute(relativePath)) {
+  if (
+    relativePath === '' ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  ) {
     throw new Error(`Invalid log component path: ${component}`)
   }
 
