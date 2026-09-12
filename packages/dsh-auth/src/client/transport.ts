@@ -59,9 +59,11 @@ export function createWebServerAuthTransport(
   base: string = '/api/v1/huaqiu/auth',
   doFetch: typeof fetch = globalThis.fetch.bind(globalThis),
 ): AuthTransport {
+  const routeBase = base.replace(/\/+$/, '')
+
   return {
     async pushSession(info) {
-      const res = await doFetch(`${base}/session`, {
+      const res = await doFetch(`${routeBase}/session`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -74,12 +76,12 @@ export function createWebServerAuthTransport(
       if (!res.ok) throw new Error(`auth push failed: HTTP ${res.status}`)
     },
     async pushLogout() {
-      const res = await doFetch(`${base}/logout`, { method: 'POST' })
+      const res = await doFetch(`${routeBase}/logout`, { method: 'POST' })
       if (!res.ok) throw new Error(`auth logout push failed: HTTP ${res.status}`)
     },
     async fetchHostMode() {
       try {
-        const res = await doFetch(`${base}/config`, {
+        const res = await doFetch(`${routeBase}/config`, {
           method: 'GET',
           headers: { accept: 'application/json' },
         })
@@ -94,7 +96,7 @@ export function createWebServerAuthTransport(
       }
     },
     async fetchSession() {
-      const res = await doFetch(`${base}/session`, {
+      const res = await doFetch(`${routeBase}/session`, {
         method: 'GET',
         headers: { accept: 'application/json' },
       })
@@ -104,7 +106,7 @@ export function createWebServerAuthTransport(
       return { authenticated: body.authenticated === true, user }
     },
     async triggerLogin() {
-      const res = await doFetch(`${base}/login`, {
+      const res = await doFetch(`${routeBase}/login`, {
         method: 'POST',
         headers: { accept: 'application/json' },
       })
@@ -112,7 +114,7 @@ export function createWebServerAuthTransport(
     },
     async fetchUserInfo() {
       try {
-        const res = await doFetch(`${base}/user-info`, {
+        const res = await doFetch(`${routeBase}/user-info`, {
           method: 'GET',
           headers: { accept: 'application/json' },
         })
