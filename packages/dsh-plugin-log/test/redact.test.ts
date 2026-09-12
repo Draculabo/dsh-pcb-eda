@@ -68,6 +68,11 @@ describe('redact', () => {
     cyclic.self = cyclic
     expect((redact(cyclic) as Record<string, unknown>).self).toBe('[circular]')
 
+    const cyclicError = new Error('boom') as Error & { cause?: unknown }
+    cyclicError.stack = undefined
+    cyclicError.cause = cyclicError
+    expect(redact(cyclicError)).toEqual({ name: 'Error', message: 'boom', cause: '[circular]' })
+
     let deep: Record<string, unknown> = { leaf: 1 }
     for (let i = 0; i < 20; i += 1) deep = { child: deep }
     expect(redact(deep)).toEqual(expect.anything())
