@@ -13,6 +13,17 @@ describe('createWebServerAuthTransport', () => {
     expect(doFetch).toHaveBeenCalledWith('/api/v1/huaqiu/auth/config', expect.objectContaining({ method: 'GET' }))
   })
 
+  it('normalizes trailing slashes in the route base', async () => {
+    const doFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ hostMode: true }),
+    })) as unknown as typeof fetch
+    const t = createWebServerAuthTransport('/api/v1/huaqiu/auth///', doFetch)
+
+    expect(await t.fetchHostMode()).toBe(true)
+    expect(doFetch).toHaveBeenCalledWith('/api/v1/huaqiu/auth/config', expect.objectContaining({ method: 'GET' }))
+  })
+
   it('fetchHostMode returns false for standalone mode', async () => {
     const doFetch = vi.fn(async () => ({
       ok: true,
