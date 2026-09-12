@@ -42,16 +42,9 @@ export interface PartSearchServiceLike {
 /** Options for {@link createPartSearchService}. */
 export type PartSearchServiceOptions = PartSearchClientOptions
 
-/**
- * Create the Huaqiu part-search service used by all four tools.
- *
- * @param options - optional client options (language / timeout / fetch / logger).
- *   Omitted in production so the library defaults apply (global fetch, 15s
- *   timeout, zh). Tests pass a stub `fetch` or replace the returned instance.
- * @returns a ready-to-use service.
- */
-export function createPartSearch(options?: PartSearchServiceOptions): PartSearchServiceLike {
-  return createPartSearchService(options)
-}
+/** Create the Huaqiu part-search service used by all four tools. */
+export const createPartSearch: (
+  options?: PartSearchServiceOptions,
+) => PartSearchServiceLike = createPartSearchService
 
 export type { Part, PartIdentifier, PartSearchPage, SearchPartsOptions, SupplyOffer }
