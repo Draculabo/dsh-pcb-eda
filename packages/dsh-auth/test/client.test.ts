@@ -562,6 +562,42 @@ describe('host mode (hq-edge integration)', () => {
     await expect(client.auth.getAccessToken()).resolves.toBe('t7')
   })
 
+  it('refreshHost notifies only when the credential actually changed', async () => {
+    const { client, transport, storage } = makeClient()
+    // makeClient uses the real shared localStorage and earlier cases leave a
+    // credential behind; host mode must never fall back to it.
+    storage.clear()
+    transport.fetchHostMode.mockResolvedValue(true)
+    transport.fetchSession.mockResolvedValue({ authenticated: true, user: { id: 7, token: 't7' } })
+    const seen: unknown[] = []
+    client.auth.onAuthStateChanged((info) => seen.push(info))
+
+    await client.refreshHost()
+    expect(seen).toEqual([expect.objectContaining({ token: 't7' })])
+
+    // Re-polling an unchanged host must NOT re-notify: `refreshHost()` is run
+    // periodically to discover EDA-side login/logout, and re-emitting an
+    // identical payload would re-render every mounted card on every tick.
+    await client.refreshHost()
+    await client.refreshHost()
+    expect(seen).toHaveLength(1)
+
+    // The host really logs out → exactly one further notification, and the
+    // gate follows the HOST's verdict.
+    transport.fetchSession.mockResolvedValue({ authenticated: false, user: null })
+    await client.refreshHost()
+    expect(seen).toHaveLength(2)
+    expect(seen[1]).toBeNull()
+    expect(client.auth.isAuthenticated()).toBe(false)
+
+    // Logging back in inside EDA is picked up by the same poll.
+    transport.fetchSession.mockResolvedValue({ authenticated: true, user: { id: 8, token: 't8' } })
+    await client.refreshHost()
+    expect(seen).toHaveLength(3)
+    expect(client.auth.isAuthenticated()).toBe(true)
+    await expect(client.auth.getAccessToken()).resolves.toBe('t8')
+  })
+
   it('host session survives a reconnect until refreshHost resolves a later absence', async () => {
     const { client, transport } = makeClient()
     transport.fetchHostMode.mockResolvedValue(true)

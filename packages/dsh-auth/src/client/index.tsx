@@ -47,6 +47,16 @@ export const inject: string[] = ['slots']
  */
 export const AUTH_TOOL_NAMES: readonly string[] = []
 
+/**
+ * How often the browser re-pulls the host-owned session in host mode.
+ *
+ * KiCad's HQ auth token watcher polls the credential file every 3s and
+ * publishes an `auth_state_changed` event on change, so 5s bounds the
+ * end-to-end lag of an EDA-side login/logout reaching this UI at well under
+ * ten seconds while staying negligible against two loopback requests.
+ */
+const HOST_RESYNC_INTERVAL_MS = 5000
+
 /** Minimal structural client context (dsh-client-runtime provides this). */
 export interface ClientContext {
   provide?(name: string, value: unknown): () => void
@@ -83,8 +93,13 @@ export function apply(ctx: ClientContext): () => void {
   // Healing: the node half keeps auth in memory, so a server restart drops it
   // while the browser still holds the token. Re-sync whenever the tab regains
   // focus/visibility so the tool gate flips back to authenticated without a
-  // reload.
-  const sync = (): void => { void client.syncNow() }
+  // reload. In host mode there is nothing stored locally to push, so instead
+  // re-pull the host-owned session — an EDA-side login/logout performed while
+  // this tab was hidden can only be discovered by asking.
+  const sync = (): void => {
+    void client.syncNow()
+    if (client.auth.isHostMode()) void client.refreshHost().catch(() => undefined)
+  }
   window.addEventListener('focus', sync)
   document.addEventListener('visibilitychange', sync)
   disposers.push(() => {
@@ -110,6 +125,31 @@ export function apply(ctx: ClientContext): () => void {
   const slots = ctx.slots
   void client.refreshHost().catch(() => undefined).then(() => {
     if (disposed) return
+
+    // Host-mode credential watch.
+    //
+    // In host mode the credential is owned by EDA (KiCad), not by this plugin:
+    // the operator can log in or out from EDA's own dialog, from another
+    // webview (online library), or through hq-edge — none of which can reach
+    // into this webview, because the DSH panel is deliberately not part of the
+    // copilot WEBVIEW_CONTROLLER broadcast set (it has no JS bridge at all).
+    // So the host session must be re-pulled to notice changes; otherwise the
+    // UI stays stale until KiCad is restarted and the page re-loads.
+    //
+    // `refreshHost()` only emits when the token actually changed, so this poll
+    // costs two loopback requests per tick and no re-render when nothing moved.
+    if (client.auth.isHostMode()) {
+      let polling = false
+      const timer = window.setInterval(() => {
+        if (polling) return
+        polling = true
+        void client.refreshHost()
+          .catch(() => undefined)
+          .finally(() => { polling = false })
+      }, HOST_RESYNC_INTERVAL_MS)
+      disposers.push(() => { window.clearInterval(timer) })
+    }
+
     if (slots && typeof slots.inject === 'function' && typeof slots.register === 'function') {
       for (const toolName of AUTH_TOOL_NAMES) {
         disposers.push(slots.inject('tool.call.toolview', () => slots.register({ name: 'tool.call.toolview', key: toolName }, HuaqiuToolView) as () => void))

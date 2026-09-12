@@ -250,6 +250,11 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
      * late host handover still flips the gate.
      */
     async refreshHost(): Promise<boolean> {
+      // Remember what callers currently believe, so we only notify on a real
+      // change. This routine is re-run periodically in host mode (there is no
+      // push channel into the webview), and re-emitting an identical payload
+      // would re-render every mounted card and HIT for nothing.
+      const prevToken = hostSession?.token ?? storage.get()?.token ?? null
       let mode = false
       try {
         mode = await transport.fetchHostMode()
@@ -259,7 +264,8 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
       hostMode = mode
       hostSessionLoaded = false
       await resolveHost()
-      emit(hostSession ?? storage.get())
+      const next = hostSession ?? storage.get()
+      if (next?.token !== prevToken) emit(next)
       return hostMode
     },
     /**
