@@ -530,18 +530,39 @@ describe('host mode (hq-edge integration)', () => {
     expect(client.auth.isAuthenticated()).toBe(true)
   })
 
-  it('logout in host mode clears local caches without pushing to the node', async () => {
+  it('logout in host mode REQUESTS host logout and adopts the host verdict', async () => {
     const { client, transport } = makeClient()
     transport.fetchHostMode.mockResolvedValue(true)
     transport.fetchSession.mockResolvedValue({ authenticated: true, user: { id: 7, token: 't7' } })
     await client.refreshHost()
     expect(client.auth.isAuthenticated()).toBe(true)
+
+    // The host performs the logout and now reports no session.
+    transport.fetchSession.mockResolvedValue({ authenticated: false, user: null })
     await client.auth.logout()
+
+    // The request was forwarded (node half → hq-edge → EDA TriggerLogout),
+    // and the emitted state is the HOST's verdict, not a local guess.
+    expect(transport.pushLogout).toHaveBeenCalled()
     expect(client.auth.isAuthenticated()).toBe(false)
-    expect(transport.pushLogout).not.toHaveBeenCalled()
   })
 
-  it('host session survives until refreshHost resolves a later absence', async () => {
+  it('logout in host mode keeps the authenticated state when the host rejects it', async () => {
+    const { client, transport } = makeClient()
+    transport.fetchHostMode.mockResolvedValue(true)
+    transport.fetchSession.mockResolvedValue({ authenticated: true, user: { id: 7, token: 't7' } })
+    await client.refreshHost()
+
+    transport.pushLogout.mockRejectedValueOnce(new Error('host logout failed: HTTP 502'))
+
+    await expect(client.auth.logout()).rejects.toThrow('host logout failed')
+    // Never fake the result: the host still reports a session, so we stay
+    // authenticated.
+    expect(client.auth.isAuthenticated()).toBe(true)
+    await expect(client.auth.getAccessToken()).resolves.toBe('t7')
+  })
+
+  it('host session survives a reconnect until refreshHost resolves a later absence', async () => {
     const { client, transport } = makeClient()
     transport.fetchHostMode.mockResolvedValue(true)
     transport.fetchSession.mockResolvedValue({ authenticated: true, user: { id: 'h1', token: 'h1-tok' } })

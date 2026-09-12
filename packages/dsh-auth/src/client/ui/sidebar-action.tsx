@@ -417,7 +417,11 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
                 palette={palette}
                 onSelect={() => {
                   setMenuOpen(false)
-                  void auth.logout()
+                  // Host mode: a rejected logout request must leave the UI
+                  // authenticated — `auth.logout()` only REQUESTS the logout,
+                  // the state comes from the host. Swallow the rejection so it
+                  // never becomes an unhandled promise error.
+                  void auth.logout().catch(() => { /* host refused — stay authenticated */ })
                 }}
               />
             </div>,

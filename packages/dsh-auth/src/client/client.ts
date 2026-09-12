@@ -39,6 +39,12 @@ export interface AuthClient {
      */
     getUserProfile(): Promise<{ nickname?: string; headimage?: string } | null>
     login(options?: LoginOptions): Promise<void>
+    /**
+     * Request logout. In host mode this asks the EDA host (through the node
+     * half → hq-edge → TriggerLogout) to log out; it never declares the
+     * operator logged out locally. Throws when the request is rejected, so
+     * the UI keeps showing the authenticated state.
+     */
     logout(): Promise<void>
     onAuthStateChanged(listener: (info: AuthTokenPayload | null) => void): () => void
   }
@@ -169,10 +175,15 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
     },
     logout: async (): Promise<void> => {
       if (hostMode) {
-        // Host-owned session: nothing to revoke browser-side beyond our cache.
-        hostSession = null
-        storage.clear()
-        emit(null)
+        // Host-owned session: ask the EDA host to log out (node half →
+        // hq-edge → AuthService.TriggerLogout). Success only means the
+        // request was accepted, so re-resolve the host session and emit the
+        // HOST's verdict — never a locally invented "logged out". A rejected
+        // request throws and leaves `hostSession` (the real state) intact.
+        await transport.pushLogout()
+        hostSessionLoaded = false
+        await resolveHost()
+        emit(hostSession)
         return
       }
       storage.clear()

@@ -101,6 +101,73 @@ describe('InMemoryHuaqiuAuthService', () => {
     expect(await svc.auth.isAuthenticated()).toBe(true)
   })
 
+  it('host-mode logout requests EDA logout through hq-edge (never fakes it locally)', async () => {
+    const calls: string[] = []
+    // The host confirms the logout: it now reports `authenticated: false`.
+    let hostAuthenticated = true
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      calls.push(url)
+      if (url.endsWith('/api/v1/auth/logout')) {
+        hostAuthenticated = false
+        return { ok: true, status: 200, json: async () => ({ ok: true }) } as Response
+      }
+      if (url.includes('/api/token/validate')) {
+        return { ok: true, status: 200, json: async () => ({ result: true }) } as Response
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          token: 'host-tok',
+          userId: 'host-u',
+          authenticated: hostAuthenticated,
+        }),
+      } as Response
+    }) as unknown as typeof fetch
+
+    const svc = new InMemoryHuaqiuAuthService(
+      { hqEdgeBaseUrl: 'http://localhost:9999' },
+      { fetchImpl },
+    )
+    expect(await svc.auth.isAuthenticated()).toBe(true)
+
+    await svc.auth.logout()
+
+    // The request reached the host's logout endpoint (→ TriggerLogout).
+    expect(calls.some((u) => u.endsWith('/api/v1/auth/logout'))).toBe(true)
+    // The unauthenticated verdict comes from the HOST, re-read after the
+    // request — not from a local flag set when logout() resolved.
+    expect(hostAuthenticated).toBe(false)
+    expect(await svc.auth.isAuthenticated()).toBe(false)
+  })
+
+  it('host-mode logout keeps the session when the host rejects the request', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/api/v1/auth/logout')) {
+        return { ok: false, status: 502, json: async () => ({ ok: false }) } as Response
+      }
+      if (url.includes('/api/token/validate')) {
+        return { ok: true, status: 200, json: async () => ({ result: true }) } as Response
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ token: 'host-tok', userId: 'host-u', authenticated: true }),
+      } as Response
+    }) as unknown as typeof fetch
+
+    const svc = new InMemoryHuaqiuAuthService(
+      { hqEdgeBaseUrl: 'http://localhost:9999' },
+      { fetchImpl },
+    )
+    await expect(svc.auth.logout()).rejects.toThrow('host logout not completed')
+    // The operator is still logged in — we never pretended otherwise.
+    expect(await svc.auth.isAuthenticated()).toBe(true)
+    expect(await svc.auth.getAccessToken()).toBe('host-tok')
+  })
+
   it('host-mode login propagates a not-completed dialog', async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)

@@ -130,7 +130,11 @@ export function createAuthHandler(service: HuaqiuAuthService): AuthHandler {
       }
 
       if (req.method === 'POST' && pathname === `${AUTH_ROUTE_PREFIX}/logout`) {
-        service.invalidate()
+        // Forward through `auth.logout()` rather than invalidating locally: in
+        // host mode the EDA host owns the session, so only it can log the
+        // operator out. A rejected request surfaces as 500 and the browser
+        // half keeps its current (authenticated) state.
+        await service.auth.logout()
         sendJson(res, 200, { ok: true })
         return
       }

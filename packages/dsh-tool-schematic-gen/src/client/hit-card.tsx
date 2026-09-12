@@ -388,8 +388,15 @@ export const GenHit = memo(function GenHit(props: GenHitProps): ReactElement {
           source_format: 'kicad',
         },
       })
-      const body = (res ?? {}) as { design_id?: string; status?: string }
-      setImportStatus(t('card.import.done', { id: body.design_id ?? body.status ?? 'ok' }))
+      const body = (res ?? {}) as {
+        design_id?: string
+        status?: string
+        project_dir?: string
+        project_name?: string
+      }
+      // hq-edge owns the final project directory — show the actual path the
+      // design was opened from (falls back to the design id / status).
+      setImportStatus(t('card.import.done', { id: body.project_dir ?? body.design_id ?? body.status ?? 'ok' }))
     } catch (e) {
       console.warn('[hq-schematic-gen] open-in-eda failed', e)
       setImportStatus(t('card.import.failed', { detail: String((e as Error)?.message || e) }))

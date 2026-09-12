@@ -39,6 +39,8 @@ export interface HuaqiuAuthConfig {
   hostAuthPath?: string
   /** Host endpoint that triggers the EDA login dialog; default "/api/v1/auth/login". */
   hostLoginPath?: string
+  /** Host endpoint that requests EDA logout; default "/api/v1/auth/logout". */
+  hostLogoutPath?: string
   /** Seconds a host session is reused before re-fetching. Default 300. */
   hostSessionTtlSeconds?: number
   /** Seconds remote token-validation results are cached. Default 60. */
@@ -47,6 +49,7 @@ export interface HuaqiuAuthConfig {
 
 export const DEFAULT_HOST_AUTH_PATH = '/api/v1/auth/token'
 export const DEFAULT_HOST_LOGIN_PATH = '/api/v1/auth/login'
+export const DEFAULT_HOST_LOGOUT_PATH = '/api/v1/auth/logout'
 export const DEFAULT_HOST_TTL_SECONDS = 300
 export const DEFAULT_VALIDATION_TTL_SECONDS = 60
 
@@ -68,6 +71,9 @@ export function resolveHostConfig(
   const hostLoginPath = config?.hostLoginPath
     ?? env.HQ_EDGE_LOGIN_PATH
     ?? DEFAULT_HOST_LOGIN_PATH
+  const hostLogoutPath = config?.hostLogoutPath
+    ?? env.HQ_EDGE_LOGOUT_PATH
+    ?? DEFAULT_HOST_LOGOUT_PATH
   const ttlRaw = config?.hostSessionTtlSeconds ?? env.HQ_EDGE_HOST_TTL_SECONDS
   let ttl = DEFAULT_HOST_TTL_SECONDS
   if (typeof ttlRaw === 'number' && Number.isFinite(ttlRaw) && ttlRaw > 0) {
@@ -88,6 +94,7 @@ export function resolveHostConfig(
     hqEdgeBaseUrl: baseUrl,
     hostAuthPath,
     hostLoginPath,
+    hostLogoutPath,
     hostSessionTtlSeconds: ttl,
     validationTtlSeconds,
   }

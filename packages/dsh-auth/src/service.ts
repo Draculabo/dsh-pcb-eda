@@ -51,8 +51,17 @@ export interface HuaqiuAuthApi {
   isAuthenticated(): Promise<boolean>
   getAccessToken(): Promise<string | null>
   getUserInfo(): Promise<HuaqiuUserInfo | null>
-  /** Node-side no-op: login always happens in the browser. */
+  /** Node-side no-op in standalone: login always happens in the browser. */
   login(): Promise<void>
+  /**
+   * Request logout.
+   *
+   * In host mode this asks the EDA host (through hq-edge) to log out — it is
+   * a REQUEST, never a local declaration. The authoritative state keeps coming
+   * from the host, so on success we only drop the cached host session and let
+   * the next `resolve()` re-ask hq-edge. A failed request throws and leaves
+   * the current authentication state untouched.
+   */
   logout(): Promise<void>
   /**
    * Single authoritative validation path (spec §7). Works identically for
@@ -90,6 +99,13 @@ export interface HuaqiuAuthService {
 
 const PERSIST_FILE = 'session.json'
 const PERSIST_DIR = () => dshHomePath('auth')
+
+/**
+ * Bounded wait for the host to confirm a logout. Shorter than the login wait
+ * (which must cover a human completing the EDA dialog): logout is a host-side
+ * operation, so a confirmation that takes longer than this means it failed.
+ */
+const LOGOUT_WAIT_MS = 30_000
 
 /**
  * Returns the persisted session, or null if absent/unreadable. Best-effort: a
@@ -149,6 +165,7 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
   private readonly validator: TokenValidator
   private readonly doFetch: typeof fetch
   private readonly hostLoginPath: string
+  private readonly hostLogoutPath: string
   /** Bound on the host login RPC (user must complete the EDA dialog). */
   private readonly loginWaitMs: number
   /**
@@ -178,6 +195,7 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
       this.doFetch,
     )
     this.hostLoginPath = resolved.hostLoginPath ?? '/api/v1/auth/login'
+    this.hostLogoutPath = resolved.hostLogoutPath ?? '/api/v1/auth/logout'
     this.loginWaitMs = 5 * 60_000
     this.validator = new TokenValidator({
       ttlMs: (resolved.validationTtlSeconds ?? 60) * 1000,
@@ -231,7 +249,31 @@ export class InMemoryHuaqiuAuthService implements HuaqiuAuthService {
       this.validator.invalidate()
       this.emit()
     },
-    logout: async () => this.invalidate(),
+    logout: async () => {
+      // Standalone: the browser owns the credential — drop it locally.
+      if (!this.host.enabled) {
+        this.invalidate()
+        return
+      }
+      // Host mode: the EDA host (KiCad) owns the session, so logout is a
+      // REQUEST forwarded through hq-edge (→ AuthService.TriggerLogout).
+      // Success only means the host accepted/performed it; the authoritative
+      // state is whatever the host reports next, so we drop the cached host
+      // session and let the following resolve() re-ask hq-edge instead of
+      // declaring the operator logged out ourselves.
+      const res = await this.doFetch(`${this.host.baseUrl}${this.hostLogoutPath}`, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(LOGOUT_WAIT_MS),
+      })
+      if (!res.ok) {
+        throw new Error(`host logout not completed: HTTP ${res.status}`)
+      }
+      this.host.clear()
+      this.stale = true
+      this.validator.invalidate()
+      this.emit()
+    },
     validate: () => this.validateInternal(),
     invalidate: () => this.markStale(),
     onAuthStateChanged: (listener) => this.on(listener),
