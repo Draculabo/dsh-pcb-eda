@@ -58,7 +58,13 @@ function redactInner(value: unknown, depth: number, seen: WeakSet<object>): unkn
   if (typeof value === 'symbol') return value.toString()
 
   if (value instanceof Error) {
-    return { name: value.name, message: redactString(value.message), ...(value.stack ? { stack: value.stack } : {}) }
+    const cause = (value as Error & { cause?: unknown }).cause
+    return {
+      name: value.name,
+      message: redactString(value.message),
+      ...(value.stack ? { stack: value.stack } : {}),
+      ...(cause !== undefined ? { cause: redactInner(cause, depth + 1, seen) } : {}),
+    }
   }
   if (value instanceof Date) return value.toISOString()
 
