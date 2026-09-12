@@ -159,7 +159,10 @@ export function createHttpPorts(options: HttpPortsOptions): ComponentGenPorts {
     },
 
     async deleteHistory(id: string): Promise<void> {
-      await doFetch(url(`/history/${encodeURIComponent(id)}`), { method: 'DELETE' })
+      const res = await doFetch(url(`/history/${encodeURIComponent(id)}`), { method: 'DELETE' })
+      if (!res.ok) {
+        await readJson<never>(res)
+      }
     },
 
     async artifactContent(artifactId: string): Promise<string> {
