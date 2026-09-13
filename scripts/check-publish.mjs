@@ -77,10 +77,18 @@ for (const pkg of pkgs) {
   }
 
   // Built entry (node half).
-  const mainRel = manifest.main || 'lib/index.mjs'
-  if (!existsSync(join(dir, mainRel))) fail(`${rel}: built entry missing (${mainRel}) — run pnpm -r build first`)
-  const typesRel = manifest.types || 'lib/index.d.mts'
-  if (!existsSync(join(dir, typesRel))) fail(`${rel}: built types missing (${typesRel})`)
+  const mainRel = manifest.main ?? 'lib/index.mjs'
+  if (typeof mainRel !== 'string' || mainRel.length === 0) {
+    fail(`${rel}: main must be a non-empty string`)
+  } else if (!existsSync(join(dir, mainRel))) {
+    fail(`${rel}: built entry missing (${mainRel}) — run pnpm -r build first`)
+  }
+  const typesRel = manifest.types ?? 'lib/index.d.mts'
+  if (typeof typesRel !== 'string' || typesRel.length === 0) {
+    fail(`${rel}: types must be a non-empty string`)
+  } else if (!existsSync(join(dir, typesRel))) {
+    fail(`${rel}: built types missing (${typesRel})`)
+  }
 
   // Client bundle (dual-face packages).
   if (manifest.dsh?.client && !existsSync(join(dir, 'lib/client.js'))) {
