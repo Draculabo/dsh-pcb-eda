@@ -215,8 +215,8 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
       timeoutMs: TOOL_TIMEOUT_MS,
       async execute(args) {
         const parts: PartIdentifier[] = args.parts.map((part) => ({
-          manufacturerId: part.manufacturer_id,
-          mpn: part.mpn,
+          manufacturerId: part.manufacturer_id.trim(),
+          mpn: part.mpn.trim(),
         }))
         return asJson(await service.getSupplyChain(parts))
       },
@@ -226,5 +226,5 @@ export function createPartSearchTools(service: PartSearchServiceLike) {
 
 /** Narrow the shared `manufacturer_id` + `mpn` args into a PartIdentifier. */
 function toPartIdentifier(args: { manufacturer_id: string; mpn: string }): PartIdentifier {
-  return { manufacturerId: args.manufacturer_id, mpn: args.mpn }
+  return { manufacturerId: args.manufacturer_id.trim(), mpn: args.mpn.trim() }
 }
