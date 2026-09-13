@@ -207,15 +207,23 @@ export function mountSidebarEntry(options: SidebarEntryOptions): () => void {
   // Reflect the panel's open state on the row (active highlight). Note: assigning
   // undefined to dataset.active materializes data-active="undefined" and keeps the
   // row permanently highlighted — delete the attribute instead.
-  const unsubscribeActive = options.active === undefined ? undefined : (() => {
+  let unsubscribeActive: (() => void) | undefined
+  if (options.active !== undefined) {
     const syncActive = (): void => {
-      if (options.active!.isOpen()) entry.dataset.active = 'true'
-      else delete entry.dataset.active
+      if (options.active!.isOpen()) {
+        entry.dataset.active = 'true'
+      } else {
+        delete entry.dataset.active
+      }
     }
-    const unsubscribe = options.active.subscribe(syncActive)
-    syncActive()
-    return unsubscribe
-  })()
+    try {
+      unsubscribeActive = options.active.subscribe(syncActive)
+      syncActive()
+    } catch {
+      // Active-state wiring is optional; a failed subscription must not prevent
+      // the sidebar entry itself from mounting and remaining usable.
+    }
+  }
 
   tryPlace()
 
