@@ -74,7 +74,7 @@ export function createComponentGenHandler(deps: ComponentGenHandlerDeps): Compon
 
   return async (req, res) => {
     const raw = pathnameOf(req.url)
-    if (!raw.startsWith(COMPONENT_GEN_ROUTE_PREFIX)) {
+    if (raw !== COMPONENT_GEN_ROUTE_PREFIX && !raw.startsWith(`${COMPONENT_GEN_ROUTE_PREFIX}/`)) {
       sendJson(res, 404, { error: 'not found' })
       return
     }
