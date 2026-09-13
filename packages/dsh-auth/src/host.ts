@@ -131,15 +131,19 @@ export interface ResolvedHostUser {
 }
 
 /**
- * Fetches and caches the host (HQ Edge) session. The cache is memory-only with
- * a TTL; the loopback GET is cheap, so we never persist the credential.
+ * Fetches the host (HQ Edge) session over the loopback `GET` on EVERY call.
+ * The GET is in-memory and loopback-cheap, and the DSH browser half polls this
+ * resolver every few seconds (client/index.tsx `refreshHost`) — so re-fetching
+ * is exactly what makes a host logout (token cleared) become visible within one
+ * poll instead of leaving the UI "logged in" until a page reload.
  *
- * Caching rule — **only a usable session is cached**. A host that is up but has
- * no credential yet (EDA not logged in, or the login dialog still open) must
- * NOT be cached: the operator may complete the login a second later, and a
- * cached negative would pin every tool to `needs_auth` for the whole TTL. The
- * old code cached whatever it got, so a DSH that booted before EDA
- * authenticated stayed "logged out" for up to `hostSessionTtlSeconds` (300s).
+ * Caching rule — **a usable (authenticated) session is NEVER held across a
+ * clear**. We fetch fresh each time and drop the cache the moment the host
+ * reports no credential (logout / not-yet-logged-in). The only thing the cache
+ * is now used for is a TRANSIENT ERROR FALLBACK: if the host is momentarily
+ * unreachable we return a recent usable session (within `ttlMs`) rather than
+ * spuriously logging the operator out — but never past the TTL, or a stale
+ * fallback would mask a real logout that happened while the host was down.
  */
 export class HostSessionResolver {
   private cache: HostSession | null = null
@@ -159,9 +163,6 @@ export class HostSessionResolver {
   async resolve(): Promise<ResolvedHostUser | null> {
     if (!this.enabled) return null
     const now = Date.now()
-    if (this.cache !== null && now - this.cache.fetchedAt < this.ttlMs) {
-      return this.cache.info
-    }
     const url = `${this.baseUrl}${this.path}`
     let info: ResolvedHostUser | null = null
     let status: number | null = null
@@ -176,9 +177,15 @@ export class HostSessionResolver {
         info = normalizeHostUser(data)
       }
     } catch (err) {
-      // Network error: nothing usable right now.
+      // Network error: the host is momentarily unreachable. Fall back to a
+      // RECENT usable cache so a transient blip does not log the operator out —
+      // but only within the TTL window, or a stale fallback would mask a real
+      // logout that happened while the host was down.
       log().warn('host session fetch failed', { url, error: String(err) })
-      info = null
+      if (this.cache !== null && now - this.cache.fetchedAt < this.ttlMs) {
+        return this.cache.info
+      }
+      return null
     }
     if (info !== null && info.authenticated) {
       this.cache = { info, fetchedAt: now }
@@ -194,7 +201,12 @@ export class HostSessionResolver {
       return info
     }
     // Unusable (unreachable, unparseable, or the host says it has no
-    // credential). Drop the cache so the very next call re-asks the host.
+    // credential — including a logout that just cleared the token). Drop the
+    // cache so the very next call re-asks the host and sees the state flip.
+    // We NEVER hold a positive (authenticated) session across a clear: the DSH
+    // browser half polls every few seconds and would otherwise miss the logout
+    // for the whole TTL and stay "logged in" until a reload (see
+    // client/index.tsx refreshHost).
     this.cache = null
     log().info('no usable host session', {
       url,

@@ -74,7 +74,7 @@ describe('HostSessionResolver', () => {
     expect(await r.resolve()).toBeNull()
   })
 
-  it('fetches, caches within TTL, and re-fetches after TTL', async () => {
+  it('re-fetches each call and never holds a stale positive cache', async () => {
     const fetchImpl = fakeFetchOnce({ token: 'tok', userId: 'u' })
     const r = new HostSessionResolver('http://hq', '/api/v1/auth/token', 300_000, fetchImpl)
     // Hosts without an explicit `authenticated` field are taken as the old
@@ -83,8 +83,9 @@ describe('HostSessionResolver', () => {
     // re-probe a public endpoint that does not know this token class.
     expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', authenticated: true })
     expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', authenticated: true })
-    // second call served from cache → fetch called exactly once
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    // No stale positive cache: every resolve re-asks the host so a credential
+    // clear (logout) is observed on the very next poll. fetch is hit each time.
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it('clear() forces a re-fetch', async () => {
@@ -96,9 +97,47 @@ describe('HostSessionResolver', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
-  it('falls back to a cached value on network error', async () => {
-    const fetchImpl = vi.fn(async () => { throw new Error('boom') }) as unknown as typeof fetch
-    const r = new HostSessionResolver('http://hq', '/api/v1/auth/token', 300_000, fetchImpl)
+  it('falls back to a recent cached session on a transient network error', async () => {
+    const fetchImpl = vi.fn()
+    fetchImpl.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: 'tok', userId: 'u' }),
+    }))
+    fetchImpl.mockImplementationOnce(async () => {
+      throw new Error('boom')
+    })
+    const r = new HostSessionResolver(
+      'http://hq',
+      '/api/v1/auth/token',
+      300_000,
+      fetchImpl as unknown as typeof fetch,
+    )
+    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', authenticated: true })
+    // Second call errors, but the recent successful cache is returned (within TTL)
+    // so a transient host blip does not log the operator out.
+    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', authenticated: true })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('does NOT fall back to cache when the TTL window is zero', async () => {
+    const fetchImpl = vi.fn()
+    fetchImpl.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ token: 'tok', userId: 'u' }),
+    }))
+    fetchImpl.mockImplementationOnce(async () => {
+      throw new Error('boom')
+    })
+    const r = new HostSessionResolver(
+      'http://hq',
+      '/api/v1/auth/token',
+      0 /* no error-fallback window — the cache must never be used */,
+      fetchImpl as unknown as typeof fetch,
+    )
+    expect(await r.resolve()).toEqual({ id: 'u', token: 'tok', authenticated: true })
+    // With no fallback window the error is surfaced rather than masked.
     expect(await r.resolve()).toBeNull()
   })
 })

@@ -240,7 +240,13 @@ describe('HuaqiuAuthService validation lifecycle (spec §19)', () => {
     const user = await svc.auth.getUserInfo()
     expect(user).not.toBeNull()
     expect(user?.id).toBe('6215935')
-    expect(fetchImpl).toHaveBeenCalledTimes(1) // only the host route, never the validator
+    // Every resolve() re-asks the host route (no stale positive cache). The
+    // reads above hit hq-edge as follows: isAuthenticated() calls resolve() once
+    // (to run the host-version observation) and again inside validateInternal()
+    // = 2; getAccessToken() and getUserInfo() call resolve() once each = 2 more.
+    // The point of the regression is that the host is the sole authority — the
+    // remote validator is never called for an hq-edge-held credential.
+    expect(fetchImpl).toHaveBeenCalledTimes(4) // only the host route, never the validator
   })
 
   it('regression: a host version bump re-arms the session after a 401 invalidation', async () => {
