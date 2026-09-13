@@ -58,10 +58,10 @@ export function ResultStage({ ports, kind, result, t, srcKey }: ResultStageProps
   const [placeStatus, setPlaceStatus] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!artifactId) return
-    let cancelled = false
     setContent(null)
     setPreviewErr(null)
+    if (!artifactId) return
+    let cancelled = false
     ports.artifactContent(artifactId)
       .then((text) => { if (!cancelled) setContent(text) })
       .catch((e) => { if (!cancelled) setPreviewErr(String((e as Error)?.message || e)) })
