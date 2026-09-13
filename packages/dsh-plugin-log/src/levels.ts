@@ -9,7 +9,7 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 /** Levels ordered from most to least verbose. */
-export const LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error']
+export const LOG_LEVELS: readonly LogLevel[] = Object.freeze(['debug', 'info', 'warn', 'error'])
 
 const RANK: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 }
 
