@@ -53,13 +53,13 @@ function createLogger(component: string, defaults: LogFields): PluginLogger {
     try {
       if (!isEnabled(level, currentLevel())) return
       const record: Record<string, unknown> = {
+        ...defaults,
+        ...(fields ?? {}),
         ts: new Date().toISOString(),
         level,
         component,
         msg: message,
       }
-      if (Object.keys(defaults).length > 0) Object.assign(record, defaults)
-      if (fields && Object.keys(fields).length > 0) Object.assign(record, fields)
 
       const safe = redact(record) as Record<string, unknown>
       ring.push(safe)
