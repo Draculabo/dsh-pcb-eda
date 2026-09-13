@@ -27,7 +27,7 @@ function createStubService() {
       return {} as EdaModels
     },
     async getSupplyChain(parts: readonly PartIdentifier[]) {
-      calls.push(`getSupplyChain:${parts.length}`)
+      calls.push(`getSupplyChain:${JSON.stringify(parts)}`)
       return [] as SupplyOffer[]
     },
   }
@@ -76,27 +76,29 @@ describe('createPartSearchTools', () => {
     expect(calls).toEqual(['searchParts:{"query":"0402 10k resistor"}'])
   })
 
-  it('maps manufacturer_id/mpn/language for detail and models', async () => {
+  it('normalizes manufacturer_id/mpn for detail and models', async () => {
     const { service, calls } = createStubService()
     const tools = createPartSearchTools(service) as unknown as Tool[]
-    await tools[1]!.execute({ manufacturer_id: '7189', mpn: 'STM32F410T8Y6TR', language: 'zh' })
-    await tools[2]!.execute({ manufacturer_id: '7189', mpn: 'STM32F410T8Y6TR' })
+    await tools[1]!.execute({ manufacturer_id: ' 7189 ', mpn: ' STM32F410T8Y6TR ', language: 'zh' })
+    await tools[2]!.execute({ manufacturer_id: '\t7189', mpn: 'STM32F410T8Y6TR\n' })
     expect(calls).toEqual([
       'getPart:7189/STM32F410T8Y6TR/zh',
       'getEdaModels:7189/STM32F410T8Y6TR/',
     ])
   })
 
-  it('maps the parts array for supply-chain (batched)', async () => {
+  it('normalizes the parts array for supply-chain (batched)', async () => {
     const { service, calls } = createStubService()
     const tools = createPartSearchTools(service) as unknown as Tool[]
     await tools[3]!.execute({
       parts: [
-        { manufacturer_id: '7189', mpn: 'STM32F103C8T6' },
-        { manufacturer_id: '1944', mpn: 'LD1117S33TR' },
+        { manufacturer_id: ' 7189 ', mpn: 'STM32F103C8T6 ' },
+        { manufacturer_id: '\t1944', mpn: ' LD1117S33TR\n' },
       ],
     })
-    expect(calls).toEqual(['getSupplyChain:2'])
+    expect(calls).toEqual([
+      'getSupplyChain:[{"manufacturerId":"7189","mpn":"STM32F103C8T6"},{"manufacturerId":"1944","mpn":"LD1117S33TR"}]',
+    ])
   })
 
   it('renders every canonical value as a single text block', async () => {
