@@ -18,7 +18,7 @@
 
 'use strict';
 
-import { execSync, spawn } from 'child_process';
+import { execFileSync, execSync, spawn } from 'child_process';
 import { accessSync, readFileSync } from 'node:fs';
 import os from 'os';
 import path from 'path';
@@ -106,11 +106,19 @@ function killPort(port) {
  */
 function run(cmd, args = [], cwd = process.cwd()) {
   console.log(`> ${cmd} ${args.join(' ')}`);
-  execSync(`${cmd} ${args.map(a => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`, {
+  if (process.platform === 'win32') {
+    execSync(`${cmd} ${args.map(a => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`, {
+      stdio: 'inherit',
+      cwd,
+      env: process.env,
+      shell: true,
+    });
+    return;
+  }
+  execFileSync(cmd, args, {
     stdio: 'inherit',
     cwd,
     env: process.env,
-    shell: true, // needed for pnpm on Windows
   });
 }
 
