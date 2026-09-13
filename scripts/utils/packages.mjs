@@ -19,7 +19,7 @@
  *     ship to npm but are not plugins, so they are excluded here.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -55,13 +55,10 @@ export function discoverPackages() {
     if (!entry.isDirectory()) continue
     const rel = entry.name
     const dir = join(packagesDir, rel)
-    let manifest
-    try {
-      manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-    } catch {
-      // Not a package (no parseable package.json) — skip.
-      continue
-    }
+    const manifestPath = join(dir, 'package.json')
+    if (!existsSync(manifestPath)) continue
+
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     if (typeof manifest?.name !== 'string' || manifest.name.length === 0) continue
     found.push({
       rel,
