@@ -64,6 +64,8 @@ it('keeps the width field synchronized with geometry dragging', async () => {
 
   await act(async () => {
     widthHandle.dispatchEvent(pointerEvent('pointerdown', 326, 115))
+  })
+  await act(async () => {
     svg.dispatchEvent(pointerEvent('pointermove', 355.2, 115))
   })
 
