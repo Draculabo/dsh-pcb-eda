@@ -190,12 +190,14 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
     const view = pointerToViewBox(svgRef.current, ev.clientX, ev.clientY, VIEW_W, VIEW_H)
     let next = values
     let nextEdited = edited
+    let nextFieldText = fieldText
     if (drag.mode === 'W' || drag.mode === 'WH') {
       if (widthKey) {
         const bW = dimensionBounds(widthKey)
         const newW = clampDimension(drag.startW + (view.x - drag.startX) * (drag.startW / drag.rectW), bW.min, bW.max)
         next = withKey(next, widthKey, newW)
         nextEdited = withKeyBool(nextEdited, widthKey, true)
+        nextFieldText = { ...nextFieldText, [widthKey]: formatDimension(newW) }
       }
     }
     if (drag.mode === 'H' || drag.mode === 'WH') {
@@ -204,10 +206,12 @@ export const GeometryEditor = memo(function GeometryEditor(props: GeometryEditor
         const newH = clampDimension(drag.startH + (view.y - drag.startY) * (drag.startH / drag.rectH), bH.min, bH.max)
         next = withKey(next, heightKey, newH)
         nextEdited = withKeyBool(nextEdited, heightKey, true)
+        nextFieldText = { ...nextFieldText, [heightKey]: formatDimension(newH) }
       }
     }
     if (next !== values) setValues(next)
     if (nextEdited !== edited) setEdited(nextEdited)
+    if (nextFieldText !== fieldText) setFieldText(nextFieldText)
   }
 
   function endDrag(): void {
