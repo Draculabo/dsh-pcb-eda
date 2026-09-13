@@ -79,6 +79,7 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
   let hostMode = false
   let hostSession: AuthTokenPayload | null = null
   let hostSessionLoaded = false
+  let hostRefreshPromise: Promise<boolean> | null = null
 
   const emit = (info: AuthTokenPayload | null): void => {
     for (const listener of listeners) listener(info)
@@ -250,23 +251,33 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
      * late host handover still flips the gate.
      */
     async refreshHost(): Promise<boolean> {
-      // Remember what callers currently believe, so we only notify on a real
-      // change. This routine is re-run periodically in host mode (there is no
-      // push channel into the webview), and re-emitting an identical payload
-      // would re-render every mounted card and HIT for nothing.
-      const prevToken = hostSession?.token ?? storage.get()?.token ?? null
-      let mode = false
+      if (hostRefreshPromise) return hostRefreshPromise
+
+      hostRefreshPromise = (async () => {
+        // Remember what callers currently believe, so we only notify on a real
+        // change. This routine is re-run periodically in host mode (there is no
+        // push channel into the webview), and re-emitting an identical payload
+        // would re-render every mounted card and HIT for nothing.
+        const prevToken = hostSession?.token ?? storage.get()?.token ?? null
+        let mode = false
+        try {
+          mode = await transport.fetchHostMode()
+        } catch {
+          mode = false
+        }
+        hostMode = mode
+        hostSessionLoaded = false
+        await resolveHost()
+        const next = hostSession ?? storage.get()
+        if (next?.token !== prevToken) emit(next)
+        return hostMode
+      })()
+
       try {
-        mode = await transport.fetchHostMode()
-      } catch {
-        mode = false
+        return await hostRefreshPromise
+      } finally {
+        hostRefreshPromise = null
       }
-      hostMode = mode
-      hostSessionLoaded = false
-      await resolveHost()
-      const next = hostSession ?? storage.get()
-      if (next?.token !== prevToken) emit(next)
-      return hostMode
     },
     /**
      * Browser→node transport. Exposed so the client entry can read host mode
