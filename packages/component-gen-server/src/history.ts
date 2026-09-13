@@ -29,7 +29,7 @@ function writeJsonFile(path: string, value: unknown): void {
 
 /** `data:image/...;base64,....` → { mime, bytes } | null. */
 export function parseDataUrl(dataUrl: string): { mime: string; bytes: Buffer } | null {
-  const m = /^data:([^;,]+);base64,(.+)$/s.exec(dataUrl)
+  const m = /^data:(image\/[A-Za-z0-9.+-]+);base64,(.+)$/s.exec(dataUrl)
   if (!m) return null
   try {
     return { mime: m[1]!, bytes: Buffer.from(m[2]!, 'base64') }
