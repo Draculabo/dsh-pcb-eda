@@ -147,6 +147,7 @@ export interface ResolvedHostUser {
  */
 export class HostSessionResolver {
   private cache: HostSession | null = null
+  private revision = 0
 
   constructor(
     readonly baseUrl: string,
@@ -162,6 +163,7 @@ export class HostSessionResolver {
 
   async resolve(): Promise<ResolvedHostUser | null> {
     if (!this.enabled) return null
+    const revision = this.revision
     const now = Date.now()
     const url = `${this.baseUrl}${this.path}`
     let info: ResolvedHostUser | null = null
@@ -177,16 +179,14 @@ export class HostSessionResolver {
         info = normalizeHostUser(data)
       }
     } catch (err) {
-      // Network error: the host is momentarily unreachable. Fall back to a
-      // RECENT usable cache so a transient blip does not log the operator out —
-      // but only within the TTL window, or a stale fallback would mask a real
-      // logout that happened while the host was down.
       log().warn('host session fetch failed', { url, error: String(err) })
+      if (revision !== this.revision) return null
       if (this.cache !== null && now - this.cache.fetchedAt < this.ttlMs) {
         return this.cache.info
       }
       return null
     }
+    if (revision !== this.revision) return null
     if (info !== null && info.authenticated) {
       this.cache = { info, fetchedAt: now }
       // Never log the credential itself — id/version are enough to correlate
@@ -217,9 +217,10 @@ export class HostSessionResolver {
     return null
   }
 
-  /** Drop the cached value so the next `resolve()` re-fetches (reactive invalidation). */
+  /** Drop the cached value and invalidate any in-flight resolution. */
   clear(): void {
     this.cache = null
+    this.revision += 1
   }
 }
 
