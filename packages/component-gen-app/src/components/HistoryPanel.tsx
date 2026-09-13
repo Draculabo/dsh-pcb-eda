@@ -5,7 +5,7 @@
  * reopen / download / delete. Stays DSH-agnostic — actions resolve through
  * the ports, and artifact text comes from `ports.artifactContent`.
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import type { ComponentGenPorts, HistoryEntry } from '../ports.js'
 import type { Translate } from '../copy/index.js'
 import { triggerDownload } from '../utils/ecad.js'
@@ -25,24 +25,33 @@ export function HistoryPanel({ ports, t, activeKind = null, onReopen }: HistoryP
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const loadRevision = useRef(0)
 
   const load = useCallback(async (nextCursor: string | null): Promise<void> => {
+    const revision = ++loadRevision.current
     setLoading(true)
     try {
       const page = await ports.history({ limit: PAGE, cursor: nextCursor })
+      if (revision !== loadRevision.current) return
       if (!nextCursor) setEntries(page.entries)
       else setEntries((prev) => [...prev, ...page.entries])
       setCursor(page.nextCursor ?? null)
       if (!page.nextCursor) setDone(true)
     } catch (e) {
+      if (revision !== loadRevision.current) return
       console.warn('[hq-component-gen] history load failed', e)
       setDone(true)
     } finally {
-      setLoading(false)
+      if (revision === loadRevision.current) setLoading(false)
     }
   }, [ports])
 
-  useEffect(() => { void load(null) }, [load])
+  useEffect(() => {
+    void load(null)
+    return () => {
+      loadRevision.current += 1
+    }
+  }, [load])
 
   const doDelete = useCallback(async (entry: HistoryEntry): Promise<void> => {
     setBusy(entry.id)
