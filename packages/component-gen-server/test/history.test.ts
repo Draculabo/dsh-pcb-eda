@@ -92,4 +92,9 @@ describe('parseDataUrl', () => {
   it('returns null for non-data URLs', () => {
     expect(parseDataUrl('https://example.com/a.png')).toBeNull()
   })
+  it('rejects non-image and malformed media types', () => {
+    const payload = Buffer.from('<html></html>').toString('base64')
+    expect(parseDataUrl(`data:text/html;base64,${payload}`)).toBeNull()
+    expect(parseDataUrl(`data:image/png\r\nx-test: yes;base64,${payload}`)).toBeNull()
+  })
 })
