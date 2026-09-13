@@ -36,7 +36,11 @@ export function PreviewStage({ kind, content, srcKey, t }: PreviewStageProps): R
         if (cancelled || canvas !== canvasRef.current) return
         sizeCanvasFor(canvas)
         disposeViewer = await renderArtifactToCanvas(kind ?? 'symbol', content, canvas)
-        if (cancelled || canvas !== canvasRef.current) return
+        if (cancelled || canvas !== canvasRef.current) {
+          try { disposeViewer() } catch { /* ignore */ }
+          disposeViewer = null
+          return
+        }
         setView({ view: 'ready', message: '' })
       } catch (e) {
         if (!cancelled) {
