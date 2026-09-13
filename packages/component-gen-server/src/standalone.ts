@@ -89,7 +89,7 @@ function serveStatic(root: string, urlPath: string, res: ServerResponse): void {
   if (!existsSync(target) || !statSync(target).isFile()) {
     // SPA fallback: serve index.html for unknown non-asset paths.
     const idx = join(root, 'index.html')
-    if (existsSync(idx)) {
+    if (!extname(rel) && existsSync(idx)) {
       res.writeHead(200, { 'content-type': MIME['.html'] })
       res.end(readFileSync(idx))
       return
