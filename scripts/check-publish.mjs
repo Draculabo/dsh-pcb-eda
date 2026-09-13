@@ -58,7 +58,7 @@ for (const pkg of pkgs) {
   if (name !== `@huaqiu/${rel}`) {
     fail(`${rel}: name must be "@huaqiu/${rel}" (got "${name}")`)
   }
-  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+/.test(version)) {
+  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) {
     fail(`${rel}: invalid version ${version}`)
   }
 
