@@ -75,6 +75,9 @@ export function openLoginDialog(options: { lang?: AuthLocale; theme?: AuthTheme 
 
   const root = document.createElement('div')
   root.setAttribute(DIALOG_OVERLAY_ATTR, '')
+  root.setAttribute('role', 'dialog')
+  root.setAttribute('aria-modal', 'true')
+  root.setAttribute('aria-label', translate(locale, 'card.title'))
   // Backdrop: dim the host without blanking it. Theme-agnostic — rgba black
   // works on both light and dark hosts.
   root.style.cssText = [
@@ -177,6 +180,7 @@ export function openLoginDialog(options: { lang?: AuthLocale; theme?: AuthTheme 
     if (!container) return
     applyCardColors()
     iframe.style.background = getCurrentSurfaceColor()
+    root.setAttribute('aria-label', translate(getCurrentLocale(), 'card.title'))
     closeButton.title = translate(getCurrentLocale(), 'dialog.close')
     closeButton.setAttribute('aria-label', closeButton.title)
   })
