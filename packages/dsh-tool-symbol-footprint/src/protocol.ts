@@ -47,7 +47,7 @@ export const packageTypes = ['bga', 'dip', 'plcc', 'qfn', 'son', 'qfp', 'sop', '
 export const DEFAULT_WS_ENDPOINT = 'wss://www.eda.cn/componentV2/chat'
 
 /** Hosts allowed to receive component commands — the two NextChat itself uses. */
-export const ALLOWED_WS_HOSTS = ['www.eda.cn', 'www.fdatasheets.com']
+export const ALLOWED_WS_HOSTS = Object.freeze(['www.eda.cn', 'www.fdatasheets.com'] as const)
 
 // ── Budgets ──────────────────────────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ export function resolveEndpoint(env?: Record<string, string | undefined>): strin
   if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
     throw new Error('symbol-footprint: component endpoint must use ws:// or wss:// (got ' + parsed.protocol + ')')
   }
-  if (!ALLOWED_WS_HOSTS.includes(parsed.hostname)) {
+  if (!ALLOWED_WS_HOSTS.includes(parsed.hostname as (typeof ALLOWED_WS_HOSTS)[number])) {
     throw new Error(
       'symbol-footprint: component endpoint host "' + parsed.hostname + '" is not allowed (expected one of ' +
       ALLOWED_WS_HOSTS.join(', ') + ')',
