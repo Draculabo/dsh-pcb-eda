@@ -74,9 +74,11 @@ export const KNOWN_TRACE_EVENT_NAMES: readonly string[] = [
 ]
 
 export function isTraceEventName(name: unknown): boolean {
-  if (typeof name !== 'string' || name.length === 0) return false
-  if (KNOWN_TRACE_EVENT_NAMES.includes(name)) return true
-  return /_TRACE$/i.test(name)
+  if (typeof name !== 'string') return false
+  const normalized = name.trim()
+  if (normalized.length === 0) return false
+  if (KNOWN_TRACE_EVENT_NAMES.includes(normalized)) return true
+  return /_TRACE$/i.test(normalized)
 }
 
 // ── Parsing ────────────────────────────────────────────────────────────────
@@ -98,30 +100,30 @@ export function parseTraceEvent(value: unknown): TraceEvent | null {
   const timestamp = typeof ts === 'number' && Number.isFinite(ts) ? ts : Date.now()
 
   if (kind === 'node') {
-    const node = value['node']
-    if (typeof node !== 'string' || node.length === 0) return null
+    const node = typeof value['node'] === 'string' ? value['node'].trim() : ''
+    if (node.length === 0) return null
     const ev: NodeTraceEvent = { kind: 'node', phase, node, ts: timestamp }
-    const scope = value['scope']
-    if (typeof scope === 'string' && scope.length > 0) ev.scope = scope
+    const scope = typeof value['scope'] === 'string' ? value['scope'].trim() : ''
+    if (scope.length > 0) ev.scope = scope
     const note = value['note']
     if (typeof note === 'string' && note.length > 0) ev.note = note
     return ev
   }
 
   if (kind === 'tool') {
-    const name = value['name']
-    if (typeof name !== 'string' || name.length === 0) return null
-    const scope = value['scope']
+    const name = typeof value['name'] === 'string' ? value['name'].trim() : ''
+    if (name.length === 0) return null
+    const scope = typeof value['scope'] === 'string' ? value['scope'].trim() : ''
     const ev: ToolTraceEvent = {
       kind: 'tool',
       phase,
       // Tolerate a missing scope by degrading to the tool's own name.
-      scope: typeof scope === 'string' && scope.length > 0 ? scope : name,
+      scope: scope.length > 0 ? scope : name,
       name,
       ts: timestamp,
     }
-    const path = value['path']
-    if (typeof path === 'string' && path.length > 0) ev.path = path
+    const path = typeof value['path'] === 'string' ? value['path'].trim() : ''
+    if (path.length > 0) ev.path = path
     if (value['ok'] === false) ev.ok = false
     return ev
   }
