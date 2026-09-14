@@ -90,5 +90,5 @@ export function getLogger(component: string, defaults: LogFields = {}): PluginLo
 
 /** Snapshot of the in-memory ring — handy from the devtools console. */
 export function dumpPluginLogs(): Array<Record<string, unknown>> {
-  return ring.slice()
+  return ring.map((record) => redact(record) as Record<string, unknown>)
 }
