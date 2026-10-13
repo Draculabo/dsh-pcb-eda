@@ -44,11 +44,45 @@
 'use strict';
 
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { dshPlugins } from './utils/packages.mjs';
 
 const PROFILE = 'web';
+
+/**
+ * hq-edge checkout whose canonical plugin lock we compare against.
+ *
+ * `config/dsh-plugins.lock.json` is HQ Edge's list of BUILT-IN plugins. Override
+ * with HQ_EDGE_DIR when the checkout is not a sibling of this repo.
+ */
+const HQ_EDGE_DIR = process.env.HQ_EDGE_DIR
+  ? path.resolve(process.env.HQ_EDGE_DIR)
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'hq-edge');
+
+/**
+ * Read HQ Edge's built-in plugin names, or null when the lock is unavailable.
+ *
+ * Why this matters: `dsh plugin add` writes the local package into
+ * <DSH_HOME>/profiles/web/node_modules/<name>, but HQ Edge's supervisor
+ * re-points that exact path at its own materialized bundle on every boot
+ * (DshSupervisor.ensureHQBuiltinPlugins → linkPluginIntoProfile). For a package
+ * that is ALSO a built-in, this update therefore does not stick.
+ */
+function builtinPluginNames() {
+  const lockPath = path.join(HQ_EDGE_DIR, 'config', 'dsh-plugins.lock.json');
+  if (!existsSync(lockPath)) return null;
+  try {
+    const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+    const plugins = lock?.plugins;
+    if (!plugins || typeof plugins !== 'object') return null;
+    return new Set(Object.keys(plugins));
+  } catch {
+    console.warn(`warn: could not parse ${lockPath} — skipping the built-in collision check.`);
+    return null;
+  }
+}
 
 /**
  * Plugins that must NOT be added to the kicad profile:
@@ -176,6 +210,31 @@ function main() {
   if (plugins.length === 0) {
     throw new Error('No local DSH plugins discovered under packages/.');
   }
+
+  // Warn up-front about packages HQ Edge will overwrite at boot, so the
+  // "I added it locally but the old build keeps loading" case is never a
+  // mystery. This is advisory only — the update still runs.
+  const builtins = builtinPluginNames();
+  const collides = dshPlugins()
+    .filter((p) => plugins.includes(p.dir))
+    .filter((p) => builtins?.has(p.name));
+  if (collides.length > 0) {
+    console.log(
+      `\n== NOTE: ${collides.length} package(s) are also HQ Edge built-in plugins ==`
+    );
+    for (const p of collides) {
+      console.log(`  - ${p.name}`);
+    }
+    console.log(
+      '  HQ Edge materializes its own copy of each built-in plugin and re-links\n' +
+        '  <DSH_HOME>/profiles/web/node_modules/<name> to that copy on every boot,\n' +
+        '  so this update will NOT stick for them.\n' +
+        '  To test local changes to a built-in, use the hq-edge dev plugin root:\n' +
+        `    cd ${HQ_EDGE_DIR} && pnpm dev:dsh-plugins-root\n` +
+        '    export DSH_PATCH=<out>/edge-bridge/overlay.yml'
+    );
+  }
+
   console.log(`== Updating ${plugins.length} local plugins into the kicad profile ==`);
   for (const dir of plugins) {
     console.log(`\n--- ${path.basename(dir)} ---`);

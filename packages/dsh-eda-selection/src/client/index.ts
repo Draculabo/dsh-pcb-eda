@@ -104,6 +104,46 @@ function getHqEdge(ctx: ClientContext): HqEdgeLike | undefined {
   }
 }
 
+/** Browser-console tag — greppable so the sync loop can be traced end to end. */
+const TRACE = '[dsh-eda-selection]'
+
+/**
+ * Emit one line describing a snapshot the dock received.
+ *
+ * The chip is the last hop of a four-stage chain (KiCad selection tool → gRPC
+ * `SubscribeSelection` → hq-edge `SelectionWatcher` → `/runtime/dsh` poll →
+ * this component), and a blank chip can originate at any of them. Logging
+ * what arrived here is what separates "the host never published" from "the
+ * state arrived but was not renderable".
+ *
+ * Never throws and never blocks render: a host console that is not a real
+ * console (or one that rejects the object) must not take the composer down.
+ */
+function traceSnapshot(where: string, snapshot: SelectionSnapshot | null): void {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug(
+      TRACE,
+      where,
+      snapshot === null
+        ? 'unknown'
+        : {
+            revision: snapshot.revision,
+            editor: snapshot.editor,
+            hasSelection: snapshot.hasSelection,
+            itemCount: snapshot.itemCount,
+            labels: snapshot.labels,
+            // The gate the chip applies — `hasSelection && itemCount > 0`. A
+            // state that arrives but fails this is the "no chip, but not
+            // because the sync broke" case.
+            renderable: snapshot.hasSelection && snapshot.itemCount > 0,
+          },
+    )
+  } catch {
+    /* a non-console host must never break the composer */
+  }
+}
+
 /**
  * Read and normalize the current snapshot from the bridge.
  *
@@ -141,20 +181,25 @@ export function SelectionDock({ t, getEdge }: SelectionDockProps): ReactElement 
     // No bridge (standalone DSH) or a bridge without the selection face
     // (older edge-bridge): render nothing, permanently. Not an error.
     if (!edge || typeof edge.selection?.onChanged !== 'function') {
+      traceSnapshot('mount: no bridge selection face — nothing will render', null)
       setSnapshot(null)
       return
     }
 
     // `onChanged` replays the current state immediately when one is known, so
     // this read is only needed for the unknown-at-mount case.
-    setSnapshot(readSnapshot(edge))
+    const initial = readSnapshot(edge)
+    traceSnapshot('mount', initial)
+    setSnapshot(initial)
 
     let alive = true
     const dispose = edge.selection.onChanged((next) => {
       if (!alive) return
       // Normalize on the way in too: a listener must never be handed a shape
       // it did not expect, whatever the bridge did.
-      setSnapshot(normalizeSelectionSnapshot(next))
+      const normalized = normalizeSelectionSnapshot(next)
+      traceSnapshot('onChanged', normalized)
+      setSnapshot(normalized)
     })
 
     return () => {
