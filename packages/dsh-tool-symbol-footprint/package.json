@@ -37,11 +37,13 @@
   "dependencies": {
     "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.0",
     "@huaqiu/component-gen-server": "workspace:*",
-    "@huaqiu/dsh-plugin-log": "workspace:*"
+    "@huaqiu/dsh-plugin-log": "workspace:*",
+    "@huaqiu/dsh-sidebar-entry": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.0",
     "@huaqiu/component-gen-app": "workspace:*",
+    "@huaqiu/dsh-sidebar-entry": "workspace:*",
     "@huaqiu/component-gen-server": "workspace:*",
     "@huaqiu/dsh-artifacts": "workspace:*",
     "@huaqiu/dsh-auth": "workspace:*",

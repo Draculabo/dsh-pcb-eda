@@ -162,6 +162,37 @@ importers:
         specifier: workspace:*
         version: link:../dsh-plugin-log
 
+  packages/dsh-eda-selection:
+    dependencies:
+      '@huaqiu/dsh-plugin-log':
+        specifier: workspace:*
+        version: link:../dsh-plugin-log
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2
+      '@deepseek-ai/dsh-client-locale':
+        specifier: ^0.1.5-rc.2
+        version: 0.1.5-rc.2(@deepseek-ai/cordis@4.0.2)
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: ^0.1.5-rc.2
+        version: 0.1.5-rc.2(@deepseek-ai/cordis@4.0.2)
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: ^0.1.0-rc.0
+        version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.2))
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.5
+        version: 18.3.7(@types/react@18.3.31)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+
   packages/dsh-hqsch:
     dependencies:
       '@deepseek-ai/cordis':
@@ -227,7 +258,7 @@ importers:
         version: 0.1.0-rc.8(60a5acffe69dfec1022871fdb15fdfc9)
       '@types/node':
         specifier: ^22.19.0
-        version: 22.20.4
+        version: 22.20.5
       '@types/react':
         specifier: ^18.3.31
         version: 18.3.31
@@ -246,6 +277,12 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
+
+  packages/dsh-sidebar-entry:
+    devDependencies:
+      jsdom:
+        specifier: ^26.0.0
+        version: 26.1.0
 
   packages/dsh-tool-part-search:
     dependencies:
@@ -316,6 +353,9 @@ importers:
       '@huaqiu/dsh-plugin-log':
         specifier: workspace:*
         version: link:../dsh-plugin-log
+      '@huaqiu/dsh-sidebar-entry':
+        specifier: workspace:*
+        version: link:../dsh-sidebar-entry
     devDependencies:
       '@huaqiu/dsh-artifacts':
         specifier: workspace:*
@@ -356,6 +396,9 @@ importers:
       '@huaqiu/dsh-plugin-log':
         specifier: workspace:*
         version: link:../dsh-plugin-log
+      '@huaqiu/dsh-sidebar-entry':
+        specifier: workspace:*
+        version: link:../dsh-sidebar-entry
     devDependencies:
       '@deepseek-ai/dsh-host-webserver':
         specifier: ^0.1.0-rc.0
@@ -814,8 +857,8 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
-  '@types/node@22.20.4':
-    resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
+  '@types/node@22.20.5':
+    resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
 
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
@@ -1933,7 +1976,7 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/node@22.20.4':
+  '@types/node@22.20.5':
     dependencies:
       undici-types: 6.21.0
 

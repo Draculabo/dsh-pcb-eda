@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@huaqiu/dsh-artifacts": "workspace:*",
+    "@huaqiu/dsh-sidebar-entry": "workspace:*",
     "@huaqiu/dsh-auth": "workspace:*",
     "@huaqiu/dsh-tool-uncollapse": "workspace:*",
     "@huaqiu/ecad-renderer": "^0.2.4",
@@ -58,6 +59,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@huaqiu/dsh-plugin-log": "workspace:*"
+    "@huaqiu/dsh-plugin-log": "workspace:*",
+    "@huaqiu/dsh-sidebar-entry": "workspace:*"
   }
 }

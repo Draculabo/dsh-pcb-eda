@@ -1,15 +1,22 @@
 /**
  * `@huaqiu/dsh-tool-symbol-footprint` — sidebar entry wiring over the shared
- * injection core (`sidebar-entry-core.ts`, adapted from dsh-web's task-board /
- * skill-explorer / ssh pattern).
+ * family package `@huaqiu/dsh-sidebar-entry` (adapted from dsh-web's
+ * task-board / skill-explorer / ssh pattern).
  *
  * Injects two compact rows — 封装生成 and Symbol 生成 — between the shell's New
  * Session button and the workspace browser, instead of the previous cramped
  * `sidebar.footer.action` buttons. Each row toggles the shared
  * `shell.overlay` workspace on its page. The row is plain DOM (no React tree);
  * the overlay it toggles is the React workspace owned by `workspace.tsx`.
+ *
+ * The injection core now lives in `@huaqiu/dsh-sidebar-entry` so
+ * `dsh-tool-schematic-gen` can mount a sibling row with identical placement,
+ * ordering and self-healing behaviour instead of forking it.
  */
-import { mountSidebarEntry as mountSharedSidebarEntry } from './sidebar-entry-core.js'
+import {
+  HUAQIU_SIDEBAR_ENTRY_FAMILY,
+  mountSidebarEntry as mountSharedSidebarEntry,
+} from '@huaqiu/dsh-sidebar-entry'
 
 /** Stable data attributes identifying the injected entry rows. */
 export const FOOTPRINT_ENTRY_SELECTOR = '[data-hqcg-footprint-entry]'
@@ -163,7 +170,9 @@ export function mountComponentGenSidebarEntries(
   if (typeof document === 'undefined') return () => {}
   injectSidebarEntryStyles()
 
-  const familySelectors = [FOOTPRINT_ENTRY_SELECTOR, SYMBOL_ENTRY_SELECTOR] as const
+  // Shared with dsh-tool-schematic-gen so the family block keeps one stable
+  // order whichever plugin mounts first.
+  const familySelectors = HUAQIU_SIDEBAR_ENTRY_FAMILY
   const disposers = rows.map((row) =>
     mountSharedSidebarEntry({
       rowAttribute: row.attribute,
