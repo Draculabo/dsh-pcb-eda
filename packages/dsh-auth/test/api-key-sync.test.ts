@@ -23,6 +23,7 @@ import {
   HuaqiuApiKeySync,
   HUAQIU_API_KEY_REF,
   type CredentialStore,
+  type CredentialStoreProvider,
   type SyncLogger,
 } from '../src/apiKeySync.js'
 
@@ -58,7 +59,7 @@ function makeHarness(behavior: FetchBehavior = {}) {
   const sync = new HuaqiuApiKeySync(
     'http://localhost:18080',
     '/api/v1/auth/token',
-    credentials,
+    () => credentials,
     logger,
     50,
     fetchImpl,
@@ -179,7 +180,7 @@ describe('HuaqiuApiKeySync', () => {
     const sync = new HuaqiuApiKeySync(
       'http://localhost:18080',
       '/api/v1/auth/token',
-      credentials,
+      () => credentials,
       { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
       50,
       fetchImpl,
@@ -196,11 +197,58 @@ describe('HuaqiuApiKeySync', () => {
     sync.dispose()
   })
 
+  it('skips the round (no throw, no write) while the credentials service is unavailable', async () => {
+    // Boot-order window: `ctx.credentials` is not injected yet. Direct property
+    // access would throw "cannot get property ... without inject"; the sync
+    // must resolve lazily and defer to the next poll instead.
+    const fetchImpl = fetchStub()
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn() } as unknown as SyncLogger & {
+      debug: ReturnType<typeof vi.fn>
+      info: ReturnType<typeof vi.fn>
+      warn: ReturnType<typeof vi.fn>
+    }
+    const sync = new HuaqiuApiKeySync(
+      'http://localhost:18080',
+      '/api/v1/auth/token',
+      () => null,
+      logger,
+      50,
+      fetchImpl,
+    )
+    await expect(sync.syncNow()).resolves.toBeUndefined()
+    expect(logger.debug).toHaveBeenCalled()
+    expect(logger.warn).not.toHaveBeenCalled()
+    expect(logger.info).not.toHaveBeenCalled()
+  })
+
+  it('recovers once the credentials service becomes available (provider flips to a store)', async () => {
+    // Self-healing: a skipped round does not wedge the sync; the next round
+    // writes the token as soon as the service is resolvable.
+    let store: CredentialStore | null = null
+    const credentials: CredentialStore & { set: ReturnType<typeof vi.fn>; unset: ReturnType<typeof vi.fn> } = {
+      set: vi.fn().mockResolvedValue(undefined),
+      unset: vi.fn().mockResolvedValue(undefined),
+    }
+    const sync = new HuaqiuApiKeySync(
+      'http://localhost:18080',
+      '/api/v1/auth/token',
+      () => store,
+      { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
+      50,
+      fetchStub(),
+    )
+    await sync.syncNow() // skipped: service unavailable
+    store = credentials // service activates
+    await sync.syncNow() // next round writes
+    expect(credentials.set).toHaveBeenCalledTimes(1)
+    expect(credentials.set).toHaveBeenCalledWith(HUAQIU_API_KEY_REF, 'tok-1')
+  })
+
   it('is disabled with an empty base URL', () => {
     const sync = new HuaqiuApiKeySync(
       '',
       '/api/v1/auth/token',
-      { set: vi.fn(), unset: vi.fn() },
+      () => null,
       { debug: vi.fn(), info: vi.fn(), warn: vi.fn() },
     )
     expect(sync.enabled).toBe(false)

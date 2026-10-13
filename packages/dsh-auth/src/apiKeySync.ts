@@ -35,6 +35,19 @@ export interface CredentialStore {
   unset(ref: string): Promise<void>
 }
 
+/**
+ * Resolves the credential store lazily on every sync round.
+ *
+ * The DSH `credentials` service may not be activated yet when this plugin
+ * boots (service activation order), and direct `ctx.credentials` property
+ * access throws "cannot get property ... without inject" in that window.
+ * Resolving through `ctx.get('credentials')` per round returns `undefined`
+ * while the service is unavailable — the round is skipped and retried on the
+ * next poll, so the sync self-heals once the service activates, without a
+ * restart (cordis guidance: "switch to `ctx.get('x')` with an absence check").
+ */
+export type CredentialStoreProvider = () => CredentialStore | null
+
 /** Logger surface used by the sync (kept small so tests can pass a spy). */
 export interface SyncLogger {
   debug(msg: string, ctx?: Record<string, unknown>): void
@@ -54,7 +67,7 @@ export class HuaqiuApiKeySync {
     readonly baseUrl: string,
     /** Token path on the host; default "/api/v1/auth/token". */
     readonly path: string,
-    private readonly credentials: CredentialStore,
+    private readonly storeProvider: CredentialStoreProvider,
     private readonly log: SyncLogger,
     private readonly intervalMs: number = DEFAULT_HUAQIU_API_KEY_SYNC_MS,
     private readonly doFetch: typeof fetch = globalThis.fetch.bind(globalThis),
@@ -91,6 +104,14 @@ export class HuaqiuApiKeySync {
    * rounds deterministically without timers.
    */
   async syncNow(): Promise<void> {
+    // Resolve the credential store lazily: the `credentials` service may not
+    // be activated yet while this plugin boots (activation order). Skipping
+    // the round is safe — the next poll retries once the service is live.
+    const store = this.storeProvider()
+    if (store === null) {
+      this.log.debug('huaqiu api-key sync skipped: credentials service unavailable')
+      return
+    }
     const url = `${this.baseUrl}${this.path}`
     let res: Response | null = null
     let info: ResolvedHostUser | null = null
@@ -111,7 +132,7 @@ export class HuaqiuApiKeySync {
     if (info !== null && info.authenticated) {
       if (info.token !== this.lastToken) {
         this.lastToken = info.token
-        await this.credentials.set(HUAQIU_API_KEY_REF, info.token)
+        await store.set(HUAQIU_API_KEY_REF, info.token)
         this.log.info('huaqiu api-key credential synced', { userId: info.id })
       }
       return
@@ -123,7 +144,7 @@ export class HuaqiuApiKeySync {
     if (res !== null && res.ok) {
       if (this.lastToken !== null) {
         this.lastToken = null
-        await this.credentials.unset(HUAQIU_API_KEY_REF)
+        await store.unset(HUAQIU_API_KEY_REF)
         this.log.info('huaqiu api-key credential cleared', { explicit: true })
       }
       return

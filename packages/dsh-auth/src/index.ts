@@ -80,9 +80,21 @@ export function apply(ctx: Context, config?: Partial<HuaqiuAuthConfig>): void {
       const sync = new HuaqiuApiKeySync(
         resolved.hqEdgeBaseUrl ?? '',
         resolved.hostAuthPath ?? DEFAULT_HOST_AUTH_PATH,
-        {
-          set: (ref, value) => ctx.credentials.set(ref as CredentialRef, value),
-          unset: (ref) => ctx.credentials.unset(ref as CredentialRef),
+        // Lazy per-round resolution: the `credentials` service may not be
+        // activated yet while this plugin boots (activation order). Direct
+        // `ctx.credentials` property access would throw "cannot get property
+        // ... without inject" in that window; `ctx.get('credentials')`
+        // returns undefined instead, so the round is skipped and the next
+        // poll retries once the service is live (self-healing, no restart).
+        () => {
+          const credentials = ctx.get('credentials') as
+            | { set(ref: string, value: string): Promise<void>; unset(ref: string): Promise<void> }
+            | undefined
+          if (credentials === undefined) return null
+          return {
+            set: (ref, value) => credentials.set(ref as CredentialRef, value),
+            unset: (ref) => credentials.unset(ref as CredentialRef),
+          }
         },
         {
           debug: (msg, ctx2) => log.debug(msg, ctx2),
