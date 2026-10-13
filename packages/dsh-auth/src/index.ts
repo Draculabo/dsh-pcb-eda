@@ -5,17 +5,29 @@
  * mounts the browser→node credential routes on `ctx.webServer`.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { getLogger } from '@huaqiu/dsh-plugin-log'
+import {
+  DEFAULT_HOST_AUTH_PATH,
+  resolveHostConfig,
+  type HuaqiuAuthConfig,
+} from './host.js'
+import { HuaqiuApiKeySync, HUAQIU_API_KEY_REF } from './apiKeySync.js'
 import { InMemoryHuaqiuAuthService, type HuaqiuAuthService } from './service.js'
 import { AUTH_ROUTE_PREFIX, createAuthHandler } from './routes.js'
-import type { HuaqiuAuthConfig } from './host.js'
 
 const log = getLogger('dsh-auth')
 
 export type { HuaqiuAuthApi, HuaqiuAuthService, HuaqiuUserInfo } from './service.js'
 export { InMemoryHuaqiuAuthService } from './service.js'
 export { AUTH_ROUTE_PREFIX, createAuthHandler, type AuthHandler } from './routes.js'
+export {
+  DEFAULT_HUAQIU_API_KEY_SYNC_MS,
+  HuaqiuApiKeySync,
+  HUAQIU_API_KEY_REF,
+  type CredentialStore,
+} from './apiKeySync.js'
 export type { HuaqiuAuthConfig } from './host.js'
 
 export const name = '@huaqiu/dsh-auth'
@@ -54,6 +66,34 @@ export function apply(ctx: Context, config?: Partial<HuaqiuAuthConfig>): void {
     path: AUTH_ROUTE_PREFIX,
     handler: createAuthHandler(service),
   }))
+
+  // Host mode: mirror the operator token into the DSH credential reference
+  // `HUAQIU_API_KEY` so the bundled `huaqiu` AI provider can resolve it per
+  // request (task huaqiu-ai-gateway §5). The sync re-fetches the loopback
+  // token endpoint on an immediate round plus a 5 s non-overlapping poll;
+  // it is host-scoped only — standalone DSH keeps its browser-login flow and
+  // the reference stays unset (missing credential → explicit
+  // MISSING_CREDENTIAL, never a fallback key).
+  if (service.hostMode) {
+    ctx.effect(() => {
+      const resolved = resolveHostConfig(config)
+      const sync = new HuaqiuApiKeySync(
+        resolved.hqEdgeBaseUrl ?? '',
+        resolved.hostAuthPath ?? DEFAULT_HOST_AUTH_PATH,
+        {
+          set: (ref, value) => ctx.credentials.set(ref as CredentialRef, value),
+          unset: (ref) => ctx.credentials.unset(ref as CredentialRef),
+        },
+        {
+          debug: (msg, ctx2) => log.debug(msg, ctx2),
+          info: (msg, ctx2) => log.info(msg, ctx2),
+          warn: (msg, ctx2) => log.warn(msg, ctx2),
+        },
+      )
+      sync.start()
+      return () => sync.dispose()
+    })
+  }
 
   log.info('dsh-auth node half ready', { routes: AUTH_ROUTE_PREFIX, hostMode: service.hostMode })
 }
