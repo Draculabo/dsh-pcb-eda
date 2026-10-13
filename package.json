@@ -18,7 +18,8 @@
     "check:release:version": "node scripts/check-release-version.mjs",
     "publish:dry": "node scripts/publish.mjs --dry-run",
     "publish:local": "node scripts/publish.mjs",
-    "launch-dsh": "node scripts/launch-dsh.mjs"
+    "launch-dsh": "node scripts/launch-dsh.mjs",
+    "update-bundled-plugins:kicad": "node scripts/update-bundled-plugins-kicad.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
