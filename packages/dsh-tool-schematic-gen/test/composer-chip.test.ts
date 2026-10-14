@@ -16,7 +16,7 @@ import {
   type InputStateLike,
   type SessionInputLike,
 } from '../src/client/composer-chip.js'
-import { SCHEMATIC_GEN_CLIPBOARD, SCHEMATIC_GEN_LABEL, SCHEMATIC_GEN_REF, SCHEMATIC_GEN_SOURCE } from '../src/client/schematic-ref.js'
+import { SCHEMATIC_GEN_CLIPBOARD, SCHEMATIC_GEN_REF, SCHEMATIC_GEN_SOURCE, schematicGenInsert, schematicGenLabel } from '../src/client/schematic-ref.js'
 
 /** One recorded `insertReference` call. */
 interface Call {
@@ -101,15 +101,25 @@ describe('insertSchematicChip', () => {
     expect(result).toEqual({ ok: true })
     expect(calls).toHaveLength(1)
     expect(calls[0]!.span).toEqual({ start: 23, end: 23, draftRev: 7 })
+    // The default insert resolves its label against the host UI language at
+    // call time (the sidebar button passes no insert); with no host tag this
+    // environment falls back to zh — the same path that used to be frozen to
+    // the English literal under a Chinese UI.
     expect(calls[0]!.ref).toEqual({
       source: SCHEMATIC_GEN_SOURCE,
       ref: SCHEMATIC_GEN_REF,
-      label: SCHEMATIC_GEN_LABEL,
+      label: schematicGenLabel(),
       clipboardText: SCHEMATIC_GEN_CLIPBOARD,
     })
     // The chip deliberately carries no `appearance`: ReferenceChip then renders
     // the standard `@` marker, matching the shipped reference chips.
     expect('appearance' in (calls[0]!.ref as Record<string, unknown>)).toBe(false)
+  })
+
+  it('inserts an English chip when the caller resolves the host as en', () => {
+    const { input, calls } = fakeInput(() => ({ draft: 'x', draftRev: 1, phase: 'plain', occurrences: [] }))
+    expect(insertSchematicChip(depsWith('s1', input), schematicGenInsert('en'))).toEqual({ ok: true })
+    expect(calls[0]!.ref.label).toBe('Generate schematic')
   })
 
   it('accounts for chips already in the draft', () => {

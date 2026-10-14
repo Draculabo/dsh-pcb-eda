@@ -10,13 +10,19 @@
  * the user's message instead of degrading quietly.
  *
  * Registering it also buys the typed path for free: the user can type `@` and
- * pick *Generate schematic* from a group beside *Files & folders* / *Sessions*.
+ * pick *Generate schematic* (生成原理图 under a Chinese UI) from a group beside
+ * *Files & folders* / *Sessions*.
  *
  * Everything the pipeline needs is declared STRUCTURALLY — no DSH package is
  * imported, so the client bundle stays pure (see `test/client-bundle-purity`).
+ * The one import, `@huaqiu/dsh-sidebar-entry`, is our own plain library and is
+ * covered by `alwaysBundle`; it is read for the host `<html lang>`, which is
+ * how the chip label follows the UI language.
  *
  * @module
  */
+
+import { detectHostLocale, type HostLocale } from '@huaqiu/dsh-sidebar-entry'
 
 /** Menu group / chip owner name (unique per trigger char). */
 export const SCHEMATIC_GEN_SOURCE = 'schematic-gen'
@@ -24,8 +30,28 @@ export const SCHEMATIC_GEN_SOURCE = 'schematic-gen'
 /** Owner-scoped reference id carried by the chip. */
 export const SCHEMATIC_GEN_REF = 'generate'
 
-/** Inline chip label (and menu candidate name). */
+/**
+ * Inline chip label and menu candidate name — the ENGLISH copy, exported for
+ * tests and for callers that need a stable literal.
+ *
+ * Never use it as the rendered string: `schematicGenLabel()` is the localized
+ * accessor. The label used to BE this constant, which is why the chip in the
+ * composer stayed English under a Chinese UI — the sidebar row, the tooltip and
+ * the HIT card were all localized, and only the chip they insert was not.
+ */
 export const SCHEMATIC_GEN_LABEL = 'Generate schematic'
+
+/**
+ * Localized chip label / menu candidate name.
+ *
+ * Read fresh on every call rather than captured at registration: the chip is
+ * created on a user gesture (button click or menu pick), so the language at
+ * that moment is the language the user is looking at. zh is the fallback,
+ * matching the sidebar row and the HIT card.
+ */
+export function schematicGenLabel(lang: HostLocale | undefined = detectHostLocale()): string {
+  return lang === 'en' ? 'Generate schematic' : '生成原理图'
+}
 
 /** Clipboard / draft-persistence projection of the chip. */
 export const SCHEMATIC_GEN_CLIPBOARD = '@schematic-gen'
@@ -35,6 +61,16 @@ export const SCHEMATIC_GEN_TRIGGER = '@'
 
 /** Menu group display order (lower = higher in the list). */
 export const SCHEMATIC_GEN_ORDER = 10
+
+/** Menu/group candidate description — the English copy (see {@link schematicGenDescription}). */
+export const SCHEMATIC_GEN_DESCRIPTION = 'Generate a KiCad schematic from a description'
+
+/** Localized menu/group candidate description (zh fallback, like the label). */
+export function schematicGenDescription(lang: HostLocale | undefined = detectHostLocale()): string {
+  return lang === 'en'
+    ? 'Generate a KiCad schematic from a description'
+    : '根据描述生成 KiCad 原理图'
+}
 
 /**
  * Model form of the chip: what the agent actually reads at the chip's position
@@ -56,8 +92,6 @@ export const SCHEMATIC_GEN_SERIALIZED =
   '</schematic-gen>'
 
 /** Menu/group candidate description. */
-export const SCHEMATIC_GEN_DESCRIPTION = 'Generate a KiCad schematic from a description'
-
 /**
  * The frozen `ReferenceInsert` shape DSH's composer consumes.
  *
@@ -74,12 +108,17 @@ export interface ReferenceInsertLike {
   readonly clipboardText: string
 }
 
-/** The `ReferenceInsert` this source produces on pick (and on button click). */
-export function schematicGenInsert(): ReferenceInsertLike {
+/**
+ * The `ReferenceInsert` this source produces on pick (and on button click).
+ *
+ * The label is resolved against the host UI language at call time, so the chip
+ * that lands in the composer reads in the language the user is currently in.
+ */
+export function schematicGenInsert(lang?: HostLocale): ReferenceInsertLike {
   return {
     source: SCHEMATIC_GEN_SOURCE,
     ref: SCHEMATIC_GEN_REF,
-    label: SCHEMATIC_GEN_LABEL,
+    label: schematicGenLabel(lang),
     clipboardText: SCHEMATIC_GEN_CLIPBOARD,
   }
 }
@@ -112,22 +151,35 @@ export interface SchematicGenSource {
 /**
  * Build the source object. Pure — nothing here touches the DOM or the
  * composer, so it is fully unit-testable.
+ *
+ * `getLang` defaults to the host `<html lang>` read and is called fresh on
+ * every `candidates()` / `onPick()`, so a language change takes effect without
+ * re-registering the source (and without a locale-service dependency). It is a
+ * parameter so tests can pin the language without a DOM.
+ *
  * @param extraCandidates - optional extra rows merged ahead of the built-in one.
  * @returns the source, ready for `registerSource`.
  */
 export function createSchematicGenSource(
   extraCandidates: readonly CandidateLike[] = [],
+  getLang: () => HostLocale | undefined = detectHostLocale,
 ): SchematicGenSource {
   return {
     trigger: SCHEMATIC_GEN_TRIGGER,
     name: SCHEMATIC_GEN_SOURCE,
     order: SCHEMATIC_GEN_ORDER,
     showGroupTitle: true,
-    candidates: () => Promise.resolve([
-      ...extraCandidates,
-      { name: SCHEMATIC_GEN_LABEL, description: SCHEMATIC_GEN_DESCRIPTION },
-    ]),
-    onPick: () => ({ insert: schematicGenInsert() }),
+    candidates: () => {
+      const lang = getLang()
+      return Promise.resolve([
+        ...extraCandidates,
+        {
+          name: schematicGenLabel(lang),
+          description: schematicGenDescription(lang),
+        },
+      ])
+    },
+    onPick: () => ({ insert: schematicGenInsert(getLang()) }),
     codec: {
       clipboardText: () => SCHEMATIC_GEN_CLIPBOARD,
       serialize: () => Promise.resolve(SCHEMATIC_GEN_SERIALIZED),

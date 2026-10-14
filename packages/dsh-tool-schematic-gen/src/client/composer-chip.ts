@@ -19,7 +19,8 @@
  * @module
  */
 import {
-  SCHEMATIC_GEN_CLIPBOARD, SCHEMATIC_GEN_LABEL, SCHEMATIC_GEN_REF, SCHEMATIC_GEN_SOURCE,
+  SCHEMATIC_GEN_REF, SCHEMATIC_GEN_SOURCE,
+  schematicGenInsert,
   type ReferenceInsertLike,
 } from './schematic-ref.js'
 
@@ -123,17 +124,15 @@ const BUSY_PHASES: readonly string[] = ['adjudicating', 'submitting']
  * exactly as it was.
  *
  * @param deps - lazy service accessors (resolved per call, never captured).
- * @param insert - the reference to insert (defaults to the schematic-gen one).
+ * @param insert - the reference to insert (defaults to the schematic-gen one,
+ *                 whose label is resolved against the host language at call
+ *                 time — so the chip matches the UI language, not a frozen
+ *                 English literal).
  * @returns whether a chip landed, and why not when it did not.
  */
 export function insertSchematicChip(
   deps: ChipInserterDeps,
-  insert: ReferenceInsertLike = {
-    source: SCHEMATIC_GEN_SOURCE,
-    ref: SCHEMATIC_GEN_REF,
-    label: SCHEMATIC_GEN_LABEL,
-    clipboardText: SCHEMATIC_GEN_CLIPBOARD,
-  },
+  insert: ReferenceInsertLike = schematicGenInsert(),
 ): InsertResult {
   const sessions = deps.getSessions()
   const conversation = deps.getConversation()
