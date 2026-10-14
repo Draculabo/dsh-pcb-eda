@@ -1,6 +1,6 @@
 {
   "name": "@huaqiu/dsh-tool-freerouting",
-  "version": "0.5.20",
+  "version": "0.5.21",
   "description": "Windows KiCad 10 IPC FreeRouting adapter with live editor preview and transactional final import",
   "keywords": [
     "deepseek-harness",
