@@ -44,6 +44,14 @@ const zh = {
   'subscription.quotaHeader': '套餐与使用额度',
   'subscription.upgrade': '订阅 / 升级套餐',
   'subscription.online': '在线',
+  // AI token usage (`/user-rest/api/ai/usage`) — the third metric beside GEN
+  // and ERC. `aiUsageCount` is the used/total point balance;
+  // `aiUsagePercent` is the hover detail, because the bar itself only shows
+  // the ratio visually.
+  'subscription.ai': 'AI 用量',
+  'subscription.aiUsageCount': '{used} / {total} 点',
+  'subscription.aiUsagePercent': '已使用 {percent}%',
+  'subscription.aiUsageUnknown': '暂无数据',
 
   'card.title': '华秋 EDA AI（eda.cn）登录',
   'card.desc': '工具「{tool}」需要登录华秋 EDA AI 账号才能继续。请在下方的登录框完成登录（或点击左侧「华秋EDA AI登录」按钮）；登录完成后，回复助手「已登录，请重试」，助手会自动重新调用该工具。',
@@ -88,6 +96,14 @@ const en: Record<AuthCopyKey, string> = {
   'subscription.quotaHeader': 'Plan & usage quota',
   'subscription.upgrade': 'Subscribe / Upgrade plan',
   'subscription.online': 'Online',
+  // AI token usage (`/user-rest/api/ai/usage`) — the third metric beside GEN
+  // and ERC. `aiUsageCount` is the used/total point balance;
+  // `aiUsagePercent` is the hover detail, because the bar itself only shows
+  // the ratio visually.
+  'subscription.ai': 'AI usage',
+  'subscription.aiUsageCount': '{used} / {total} pts',
+  'subscription.aiUsagePercent': '{percent}% used',
+  'subscription.aiUsageUnknown': 'No data',
 
   'card.title': 'Huaqiu EDA AI (eda.cn) login',
   // The reply phrase used to be hardcoded to the Chinese "已登录，请重试" even

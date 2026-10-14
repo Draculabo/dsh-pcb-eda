@@ -26,9 +26,9 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { getAuth, getAuthState, getHqEdge, setProfile, subscribeAuth } from '../auth-state.js'
-import { buildProfileUrl, ERC_PRODUCT_CODE, GEN_PRODUCT_CODE, type SubscriptionQuota } from '../lib.js'
+import { buildProfileUrl, ERC_PRODUCT_CODE, GEN_PRODUCT_CODE, type AiTokenUsage, type SubscriptionQuota } from '../lib.js'
 import { useIsDark, useLocale } from '../ui-env.js'
-import { useT } from '../i18n.js'
+import { useT, type Translate } from '../i18n.js'
 import { HQ_ICON } from './hq-icon.jsx'
 
 export interface SidebarFooterActionOwnerProps {
@@ -63,9 +63,10 @@ interface Palette {
   primarySoft: string
   /** Progress-bar track (prototype `dark:bg-gray-800`). */
   track: string
-  /** GEN / ERC progress gradients (prototype blue→indigo, purple→pink). */
+  /** GEN / ERC / AI progress gradients (prototype blue→indigo, purple→pink). */
   genGradient: string
   ercGradient: string
+  aiGradient: string
   /** "Online" dot green. */
   online: string
 }
@@ -90,6 +91,7 @@ const LIGHT_PALETTE: Palette = {
   track: '#e4e7ec',
   genGradient: 'linear-gradient(90deg, #3b82f6, #6366f1)',
   ercGradient: 'linear-gradient(90deg, #a855f7, #ec4899)',
+  aiGradient: 'linear-gradient(90deg, #10b981, #06b6d4)',
   online: '#10b981',
 }
 
@@ -113,6 +115,7 @@ const DARK_PALETTE: Palette = {
   track: 'rgba(255, 255, 255, 0.10)',
   genGradient: 'linear-gradient(90deg, #3b82f6, #6366f1)',
   ercGradient: 'linear-gradient(90deg, #a855f7, #ec4899)',
+  aiGradient: 'linear-gradient(90deg, #10b981, #06b6d4)',
   online: '#10b981',
 }
 
@@ -349,34 +352,63 @@ function ChevronRightIcon(): React.JSX.Element {
   )
 }
 
+/** AI usage metric glyph (lucide `sparkles`) — the token balance. */
+function SparklesIcon(): React.JSX.Element {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#10b981"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={{ flex: '0 0 auto' }}
+    >
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+      <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
+    </svg>
+  )
+}
+
+/**
+ * One normalized metric reading — everything {@link QuotaMetric} renders.
+ *
+ * The card itself knows nothing about where a reading comes from, so GEN, ERC
+ * and the AI token balance are three small pure adapters over the same
+ * presentational component (and each is unit-testable without a DOM).
+ */
+interface MetricReading {
+  /** Right-aligned mono text (already localized and formatted). */
+  value: string
+  /** Hover detail; defaults to `value`. */
+  title?: string
+  /** Bar fill, 0–100. Fractional is allowed (sub-1% usage is normal for tokens). */
+  percent: number
+  /** false → the value renders in the danger color (unsubscribed / no data). */
+  ok: boolean
+}
+
 /** Quota metric card: icon + label, mono count and a gradient progress bar. */
 function QuotaMetric({
   label,
   icon,
-  quota,
+  reading,
   gradient,
   palette,
 }: {
   label: string
   icon: React.JSX.Element
-  quota: SubscriptionQuota | null
+  reading: MetricReading | null
   gradient: string
   palette: Palette
 }): React.JSX.Element {
   const t = useT()
   const [hovered, setHovered] = useState(false)
-  const used = quota?.currentQuota
-  const total = quota?.totalQuota
-  const percent = quota?.hasSubscription && typeof total === 'number' && total > 0
-    ? Math.max(0, Math.min(100, Math.round(((used ?? 0) / total) * 100)))
-    : 0
-  const value = quota
-    ? (quota.hasSubscription
-        ? (typeof total === 'number'
-            ? t('subscription.quotaCount', { used: used ?? 0, total })
-            : String(used ?? 0))
-        : t('subscription.unsubscribed'))
-    : '—'
+  const value = reading?.value ?? '—'
   return (
     <div
       role="presentation"
@@ -399,22 +431,71 @@ function QuotaMetric({
         <span
           style={{
             fontWeight: 700,
-            color: quota?.hasSubscription ? palette.text : palette.danger,
+            color: reading?.ok ? palette.text : palette.danger,
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
             fontSize: 12,
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}
-          title={value}
+          title={reading?.title ?? value}
         >
           {value}
         </span>
       </div>
       <div style={{ width: '100%', height: 6, borderRadius: 999, background: palette.track, overflow: 'hidden' }}>
-        <div style={{ width: `${percent}%`, height: '100%', borderRadius: 999, background: gradient }} />
+        <div style={{ width: `${reading?.percent ?? 0}%`, height: '100%', borderRadius: 999, background: gradient }} />
       </div>
     </div>
   )
+}
+
+/**
+ * GEN / ERC reading from an eda.cn active-subscription payload.
+ *
+ * `hasSubscription` false (or an unknown total) is NOT an error: it is an
+ * account with no plan, which reads as 0% plus the "not subscribed" copy in
+ * the danger color.
+ */
+export function quotaReading(quota: SubscriptionQuota | null, t: Translate): MetricReading | null {
+  if (!quota) return null
+  const used = quota.currentQuota
+  const total = quota.totalQuota
+  const percent = quota.hasSubscription && typeof total === 'number' && total > 0
+    ? Math.max(0, Math.min(100, Math.round((used / total) * 100)))
+    : 0
+  return {
+    value: quota.hasSubscription
+      ? (typeof total === 'number'
+          ? t('subscription.quotaCount', { used, total })
+          : String(used))
+      : t('subscription.unsubscribed'),
+    percent,
+    ok: quota.hasSubscription,
+  }
+}
+
+/**
+ * AI token reading from `/user-rest/api/ai/usage`.
+ *
+ * The balance is reported as `usedPoints` + `availablePoints`, so the total is
+ * their sum — there is no separate `totalPoints` field to read. Percent keeps
+ * one decimal: a fresh account burns well under 1% of its balance, and rounding
+ * 0.6% up to "1%" would overstate consumption fourfold.
+ */
+export function aiUsageReading(usage: AiTokenUsage | null, t: Translate): MetricReading | null {
+  if (!usage) return null
+  const used = Math.max(0, usage.usedPoints)
+  const available = Math.max(0, usage.availablePoints)
+  const total = used + available
+  const percent = total > 0
+    ? Math.min(100, Math.round((used / total) * 1000) / 10)
+    : 0
+  return {
+    value: t('subscription.aiUsageCount', { used, total }),
+    title: t('subscription.aiUsagePercent', { percent }),
+    percent,
+    ok: true,
+  }
 }
 
 /**
@@ -578,7 +659,7 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
   const [avatarBroken, setAvatarBroken] = useState(false)
   const [hovered, setHovered] = useState(false)
-  const [quota, setQuota] = useState<{ gen: SubscriptionQuota | null; erc: SubscriptionQuota | null } | null>(null)
+  const [quota, setQuota] = useState<{ gen: SubscriptionQuota | null; erc: SubscriptionQuota | null; ai: AiTokenUsage | null } | null>(null)
   const [subscribing, setSubscribing] = useState(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -635,7 +716,10 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
 
   // Live quota: EVERY time the menu opens (and every time the auth state
   // flips to authenticated) re-fetch the active subscription for GEN and ERC
-  // DIRECTLY from eda.cn — the sidebar must never show a stale count.
+  // DIRECTLY from eda.cn — the sidebar must never show a stale count. The AI
+  // token balance rides the same pass (`/user-rest/api/ai/usage`, one GET, no
+  // hq-edge hop), so all three metrics share one loading window instead of
+  // three staggered ones.
   useEffect(() => {
     if (!menuOpen || !authenticated) {
       if (!menuOpen) setQuota(null)
@@ -645,8 +729,9 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
     void Promise.all([
       auth?.getSubscriptionQuota?.(GEN_PRODUCT_CODE).catch(() => null) ?? Promise.resolve(null),
       auth?.getSubscriptionQuota?.(ERC_PRODUCT_CODE).catch(() => null) ?? Promise.resolve(null),
-    ]).then(([gen, erc]) => {
-      if (!cancelled) setQuota({ gen, erc })
+      auth?.getAiTokenUsage?.().catch(() => null) ?? Promise.resolve(null),
+    ]).then(([gen, erc, ai]) => {
+      if (!cancelled) setQuota({ gen, erc, ai })
     })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -822,15 +907,22 @@ export const HuaqiuAuthSidebarAction = memo(function HuaqiuAuthSidebarAction({ w
                 <QuotaMetric
                   label={t('subscription.gen')}
                   icon={<CpuIcon />}
-                  quota={quota?.gen ?? null}
+                  reading={quotaReading(quota?.gen ?? null, t)}
                   gradient={palette.genGradient}
                   palette={palette}
                 />
                 <QuotaMetric
                   label={t('subscription.erc')}
                   icon={<WaveIcon />}
-                  quota={quota?.erc ?? null}
+                  reading={quotaReading(quota?.erc ?? null, t)}
                   gradient={palette.ercGradient}
+                  palette={palette}
+                />
+                <QuotaMetric
+                  label={t('subscription.ai')}
+                  icon={<SparklesIcon />}
+                  reading={aiUsageReading(quota?.ai ?? null, t)}
+                  gradient={palette.aiGradient}
                   palette={palette}
                 />
               </div>

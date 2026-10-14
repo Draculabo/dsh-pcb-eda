@@ -48,6 +48,37 @@ export const SUBSCRIPTION_PREFERRED_SIZE = { width: 1400, height: 740 } as const
 export const GEN_PRODUCT_CODE = 'auto-design'
 export const ERC_PRODUCT_CODE = 'erc'
 
+// ── AI token usage ──────────────────────────────────────────────────────────
+
+/**
+ * Normalized AI token usage — the shape the node half's `/ai-usage` route
+ * returns (the node half owns the upstream call; see
+ * `routes.ts#fetchAiTokenUsage`).
+ *
+ * `points` is the account-level token balance (what the user thinks of as
+ * "tokens"); `quota` is the same figure in the gateway's internal unit
+ * (points × 50) and `usd` its money equivalent. All three pairs are reported
+ * because the endpoint reports all three; the UI reads `points`.
+ *
+ * WHY THE BROWSER NEVER CALLS THIS ENDPOINT DIRECTLY: it is served over plain
+ * `http` (`http://www.fdatasheets.com/user-rest/api/ai/usage`), which the
+ * WebView refuses twice over — App Transport Security ("the resource could not
+ * be loaded because the App Transport Security policy requires the use of a
+ * secure connection") and CORS (the response carries no
+ * `Access-Control-Allow-Origin`). The node half has neither restriction — it is
+ * the same process that already calls this host for the Huaqiu AI gateway — so
+ * IT performs the fetch and this half reads a same-origin route, exactly like
+ * the eda.cn profile on `/user-info`.
+ */
+export interface AiTokenUsage {
+  availablePoints: number
+  availableQuota: number
+  availableUsd: number
+  usedPoints: number
+  usedQuota: number
+  usedUsd: number
+}
+
 /**
  * Build the subscription landing URL. Mirrors `buildProfileUrl`: the token is
  * always attached — `gen.eda.cn/subscription` consumes it to establish the

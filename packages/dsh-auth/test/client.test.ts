@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { AUTH_ORIGIN, buildLoginUrl, parseAuthMessage, handleAuthMessage, type AuthTokenPayload } from '../src/client/lib.js'
+import { AUTH_ORIGIN, buildLoginUrl, parseAuthMessage, handleAuthMessage, type AiTokenUsage, type AuthTokenPayload } from '../src/client/lib.js'
 import { createAuthStorage } from '../src/client/storage.js'
 import { createAuthClient } from '../src/client/client.js'
 import type { HostSessionUser } from '../src/client/transport.js'
@@ -49,6 +49,7 @@ function makeClient() {
       ({ authenticated: false, user: null })),
     triggerLogin: vi.fn(async () => { pushes.push(['login']) }),
     fetchUserInfo: vi.fn(async () => null),
+    fetchAiUsage: vi.fn(async (): Promise<AiTokenUsage | null> => null),
   }
   const storage = createAuthStorage(localStorage)
   const listeners: Array<(e: MessageEvent) => void> = []
@@ -636,7 +637,7 @@ describe('subscription (quota + dialog)', () => {
     })
     expect(quota).toEqual({ hasSubscription: true, packageName: 'Pro', currentQuota: 3, totalQuota: 10 })
     // The request must hit /sub-api/subscriptions/active with auth headers.
-    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toContain('/sub-api/subscriptions/active')
     expect(url).toContain('productCode=auto-design')
     expect(url).toContain('userId=u1')
@@ -648,6 +649,44 @@ describe('subscription (quota + dialog)', () => {
     const { client, storage } = makeClient()
     storage.clear()
     await expect(client.auth.getSubscriptionQuota('erc')).resolves.toBeNull()
+  })
+
+  it('getAiTokenUsage resolves through the node /ai-usage route, never a direct browser fetch', async () => {
+    const c = makeClient()
+    // Sign in — the gate reads the persisted credential.
+    c.client.handleMessageEvent({ origin: AUTH_ORIGIN, data: JSON.stringify(validEnvelope) })
+    const usage = {
+      availablePoints: 198735,
+      availableQuota: 9936735,
+      availableUsd: 19.87347,
+      usedPoints: 1265,
+      usedQuota: 63265,
+      usedUsd: 0.12653,
+    }
+    c.transport.fetchAiUsage.mockResolvedValue(usage)
+    // A direct call to the upstream would be refused by the WebView (plain http
+    // → App Transport Security + CORS), so make one fatal: reaching it would
+    // throw rather than silently produce a null.
+    vi.stubGlobal('fetch', vi.fn(() => {
+      throw new Error('the browser half must not fetch the AI endpoint')
+    }))
+
+    await expect(c.client.auth.getAiTokenUsage()).resolves.toEqual(usage)
+    expect(c.transport.fetchAiUsage).toHaveBeenCalledTimes(1)
+  })
+
+  it('getAiTokenUsage passes a null (node-side failure) through unchanged', async () => {
+    const c = makeClient()
+    c.client.handleMessageEvent({ origin: AUTH_ORIGIN, data: JSON.stringify(validEnvelope) })
+    c.transport.fetchAiUsage.mockResolvedValue(null)
+    await expect(c.client.auth.getAiTokenUsage()).resolves.toBeNull()
+  })
+
+  it('getAiTokenUsage returns null without a credential (no route round trip)', async () => {
+    const { client, storage, transport } = makeClient()
+    storage.clear()
+    await expect(client.auth.getAiTokenUsage()).resolves.toBeNull()
+    expect(transport.fetchAiUsage).not.toHaveBeenCalled()
   })
 
   it('openSubscriptionDialog opens the in-app iframe dialog in standalone mode', async () => {
@@ -684,8 +723,8 @@ describe('subscription (quota + dialog)', () => {
     await hostClient.refreshHost()
     await hostClient.auth.openSubscriptionDialog()
     expect(openHostDialog).toHaveBeenCalledTimes(1)
-    expect(openHostDialog.mock.calls[0][0]).toContain('https://gen.eda.cn/subscription?token=h1-tok')
-    expect(openHostDialog.mock.calls[0][1]).toMatchObject({ size: { width: 1400, height: 740 }, key: 'hq-subscription-dialog' })
+    expect(openHostDialog.mock.calls[0]![0]).toContain('https://gen.eda.cn/subscription?token=h1-tok')
+    expect(openHostDialog.mock.calls[0]![1]).toMatchObject({ size: { width: 1400, height: 740 }, key: 'hq-subscription-dialog' })
     // No in-app iframe is opened over the host UI.
     expect(document.querySelector('[data-hq-sub-dialog]')).toBeNull()
   })

@@ -9,6 +9,7 @@ import {
   fetchSubscriptionQuota,
   handleAuthMessage,
   SUBSCRIPTION_PREFERRED_SIZE,
+  type AiTokenUsage,
   type AuthMessageEventLike,
   type AuthTokenPayload,
   type LoginOptions,
@@ -71,6 +72,14 @@ export interface AuthClient {
      * failure / no credential (callers decide fail-open vs fail-closed).
      */
     getSubscriptionQuota(productCode: string): Promise<SubscriptionQuota | null>
+    /**
+     * AI token usage for the signed-in account. Resolved by the NODE half
+     * (`GET /api/v1/huaqiu/auth/ai-usage`) — the endpoint is served over plain
+     * `http`, which this WebView refuses (App Transport Security + CORS), so the
+     * request must not be made from here. Null on fetch failure / no credential,
+     * the same one-round-trip shape as {@link getSubscriptionQuota}.
+     */
+    getAiTokenUsage(): Promise<AiTokenUsage | null>
     /**
      * Open the subscription landing page (`gen.eda.cn/subscription` with the
      * token). Host mode: ask the EDA host to open its NATIVE dialog through
@@ -237,6 +246,13 @@ export function createAuthClient(deps: AuthClientDeps): AuthClient {
         : (hostSession?.id ?? storage.get()?.id ?? null)
       if (!token || !id) return null
       return fetchSubscriptionQuota({ userId: id, token, productCode })
+    },
+    getAiTokenUsage: async (): Promise<AiTokenUsage | null> => {
+      if (hostMode && !hostSessionLoaded) await resolveHost()
+      // Gate on a credential first: the node route resolves the token itself,
+      // so a request without one is a guaranteed-null round trip.
+      if (!(await auth.getAccessToken())) return null
+      return transport.fetchAiUsage()
     },
     openSubscriptionDialog: async (): Promise<void> => {
       if (hostMode && !hostSessionLoaded) await resolveHost()
