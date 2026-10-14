@@ -42,6 +42,25 @@ export const SCHEMATIC_GEN_REF = 'generate'
 export const SCHEMATIC_GEN_LABEL = 'Generate schematic'
 
 /**
+ * Browser-console tag — greppable so the chip's language can be traced end to
+ * end in the DSH WebView without a debugger.
+ *
+ * Every line is `console.debug` and every helper is wrapped, so a host without
+ * a console (or one that rejects the payload) can never break the plugin.
+ */
+const TRACE = '[schematic-gen:ref]'
+
+/** Emit one trace line. Never throws. */
+function trace(event: string, payload?: unknown): void {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug(TRACE, event, payload ?? '')
+  } catch {
+    /* a non-console host must never break the composer */
+  }
+}
+
+/**
  * Localized chip label / menu candidate name.
  *
  * Read fresh on every call rather than captured at registration: the chip is
@@ -50,7 +69,20 @@ export const SCHEMATIC_GEN_LABEL = 'Generate schematic'
  * matching the sidebar row and the HIT card.
  */
 export function schematicGenLabel(lang: HostLocale | undefined = detectHostLocale()): string {
-  return lang === 'en' ? 'Generate schematic' : '生成原理图'
+  const label = lang === 'en' ? 'Generate schematic' : '生成原理图'
+  // The one line that answers "why is my chip English": it shows both what the
+  // host reported (`<html lang>`) and what we rendered from it.
+  trace('label', { hostLang: lang ?? null, htmlLang: readHtmlLang(), label })
+  return label
+}
+
+/** `<html lang>` as the plugin sees it, for the trace (null when unavailable). */
+function readHtmlLang(): string | null {
+  try {
+    return document.documentElement?.getAttribute('lang') ?? null
+  } catch {
+    return null
+  }
 }
 
 /** Clipboard / draft-persistence projection of the chip. */
@@ -115,12 +147,14 @@ export interface ReferenceInsertLike {
  * that lands in the composer reads in the language the user is currently in.
  */
 export function schematicGenInsert(lang?: HostLocale): ReferenceInsertLike {
-  return {
+  const insert = {
     source: SCHEMATIC_GEN_SOURCE,
     ref: SCHEMATIC_GEN_REF,
     label: schematicGenLabel(lang),
     clipboardText: SCHEMATIC_GEN_CLIPBOARD,
   }
+  trace('insert', insert)
+  return insert
 }
 
 /** Structural view of one `@` menu candidate (DSH `InputTriggerCandidate`). */
@@ -171,15 +205,21 @@ export function createSchematicGenSource(
     showGroupTitle: true,
     candidates: () => {
       const lang = getLang()
-      return Promise.resolve([
+      const rows = [
         ...extraCandidates,
         {
           name: schematicGenLabel(lang),
           description: schematicGenDescription(lang),
         },
-      ])
+      ]
+      trace('candidates', rows)
+      return Promise.resolve(rows)
     },
-    onPick: () => ({ insert: schematicGenInsert(getLang()) }),
+    onPick: () => {
+      const insert = schematicGenInsert(getLang())
+      trace('onPick', insert)
+      return { insert }
+    },
     codec: {
       clipboardText: () => SCHEMATIC_GEN_CLIPBOARD,
       serialize: () => Promise.resolve(SCHEMATIC_GEN_SERIALIZED),

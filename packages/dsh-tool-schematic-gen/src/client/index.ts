@@ -24,7 +24,8 @@
 import { createElement, useEffect, useState, type ComponentType } from 'react'
 import { GenHit } from './hit-card.jsx'
 import { injectStyles, removeStyles, disposeThemeObserver, installSchematicUncollapser } from './theme.js'
-import { registerSchematicGenSource } from './schematic-ref.js'
+import { registerSchematicGenSource, schematicGenLabel } from './schematic-ref.js'
+import { detectHostLocale } from '@huaqiu/dsh-sidebar-entry'
 import {
   insertSchematicChip,
   type ChipInserterDeps,
@@ -89,6 +90,25 @@ export interface HuaqiuAuthClientService {
 
 const LOGGED_OUT: AuthStateLike = { authenticated: false }
 
+/**
+ * Browser-console tag for the client half's lifecycle.
+ *
+ * One line at `apply()` time is what tells you WHICH bundle is live: the
+ * pre-localization build emits nothing at all, so "no `client` line in the
+ * console" means the materialized plugin is stale, not that the click handler
+ * is broken.
+ */
+const CLIENT_TRACE = '[schematic-gen:client]'
+
+function traceClient(event: string, payload?: unknown): void {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug(CLIENT_TRACE, event, payload ?? '')
+  } catch {
+    /* a non-console host must never break the composer */
+  }
+}
+
 function stateOf(info: { nickname?: string } | null): AuthStateLike {
   if (!info) return LOGGED_OUT
   return {
@@ -151,6 +171,15 @@ export function createChipInserterDeps(ctx: ClientContext): ChipInserterDeps {
 export function apply(ctx: ClientContext): () => void {
   const disposers: Array<() => void> = []
 
+  traceClient('apply', {
+    // Resolved at load: the chip labels this build can render, and the host
+    // language it currently sees. A mismatch between the two is the bug.
+    zhLabel: schematicGenLabel('zh'),
+    enLabel: schematicGenLabel('en'),
+    hostLang: detectHostLocale() ?? null,
+    htmlLang: document.documentElement?.getAttribute('lang') ?? null,
+  })
+
   const authService = ctx.get<HuaqiuAuthClientService | undefined>('huaqiuAuth')
   const useAuthState = createUseAuthState(authService?.auth)
 
@@ -185,7 +214,12 @@ export function apply(ctx: ClientContext): () => void {
   const chipDeps = createChipInserterDeps(ctx)
   disposers.push(mountSchematicGenSidebarEntry({
     onToggle: () => {
+      // Traced here (not only inside the inserter) so a click that never
+      // reaches the composer is distinguishable from one that reached it and
+      // was refused — the two look identical from the UI.
+      traceClient('sidebar-click')
       const result = insertSchematicChip(chipDeps)
+      traceClient('sidebar-click:result', result)
       // 'already-present' is the idempotent case, not a failure: a second
       // click on a draft that already carries the chip is a no-op.
       if (result.ok || result.reason === 'already-present') return

@@ -24,6 +24,19 @@ import {
   type ReferenceInsertLike,
 } from './schematic-ref.js'
 
+/** Browser-console tag for the insertion path (see schematic-ref.ts). */
+const TRACE = '[schematic-gen:chip]'
+
+/** Emit one trace line. Never throws. */
+function trace(event: string, payload?: unknown): void {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug(TRACE, event, payload ?? '')
+  } catch {
+    /* a non-console host must never break the composer */
+  }
+}
+
 /** Why an insertion attempt did not produce a chip. */
 export type InsertFailure =
   /** No current session — nothing was touched. */
@@ -137,6 +150,7 @@ export function insertSchematicChip(
   const sessions = deps.getSessions()
   const conversation = deps.getConversation()
   if (sessions === undefined || conversation === undefined || conversation.input === undefined) {
+    trace('unavailable', { hasSessions: sessions !== undefined, hasConversation: conversation !== undefined })
     return { ok: false, reason: 'unavailable' }
   }
 
@@ -172,23 +186,36 @@ export function insertSchematicChip(
 
   // Two attempts: a fresh snapshot each time, so a revision bump between read
   // and write costs one retry and never a misplaced chip.
+  trace('inserting', { label: insert.label, clipboardText: insert.clipboardText })
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const state = input.state?.getSnapshot() ?? {}
-    if (hasSchematicChip(state)) return { ok: false, reason: 'already-present' }
+    if (hasSchematicChip(state)) {
+      trace('already-present')
+      return { ok: false, reason: 'already-present' }
+    }
 
     const phase = state.phase ?? 'plain'
-    if (BUSY_PHASES.includes(phase)) return { ok: false, reason: 'busy' }
+    if (BUSY_PHASES.includes(phase)) {
+      trace('busy', { phase })
+      return { ok: false, reason: 'busy' }
+    }
 
     const draftRev = typeof state.draftRev === 'number' ? state.draftRev : 0
     const end = detectLengthOf(state)
     let applied = false
     try {
       applied = input.insertReference(insert, { start: end, end, draftRev })
-    } catch {
+    } catch (err) {
+      trace('insertReference threw', err instanceof Error ? err.message : err)
       applied = false
     }
-    if (applied) return { ok: true }
+    if (applied) {
+      trace('inserted', { label: insert.label, span: { start: end, end, draftRev } })
+      return { ok: true }
+    }
+    trace('cas-miss', { attempt })
   }
 
+  trace('conflict')
   return { ok: false, reason: 'conflict' }
 }
