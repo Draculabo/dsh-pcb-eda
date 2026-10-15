@@ -502,7 +502,13 @@ export function apply(ctx: ClientContext): () => void {
     store.stop()
   }
   if (typeof ctx.effect === 'function') {
-    ctx.effect(dispose, 'plugin-update')
+    // `ctx.effect` takes a SETUP function and calls it immediately, keeping
+    // whatever it returns as the teardown. Passing `dispose` itself would run
+    // the teardown synchronously — disconnecting the sidebar-entry observers
+    // and stopping the store before the shell ever renders the sidebar, so the
+    // row could never be placed. Hand it a factory that returns the teardown
+    // instead (the same shape the sibling tool plugins use).
+    ctx.effect(() => dispose, 'plugin-update')
   }
   return dispose
 }
