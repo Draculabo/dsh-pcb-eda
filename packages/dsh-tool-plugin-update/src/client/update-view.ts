@@ -194,9 +194,14 @@ function renderList(
     )
     const state = el('span', `hqpu-item-state hqpu-state-${item.state}`, stateLabel(item, copy))
     row.append(name, version, state)
-    const reason = blockedReason(item, copy)
-    if (reason !== undefined) {
-      row.append(el('span', 'hqpu-item-reason', reason))
+    // A block reason belongs to a blocked offer only. A plugin that is already
+    // up to date has no compatibility decision to report, so it must never
+    // carry a "cannot verify" note.
+    if (item.state === 'blocked') {
+      const reason = blockedReason(item, copy)
+      if (reason !== undefined) {
+        row.append(el('span', 'hqpu-item-reason', reason))
+      }
     }
     list.append(row)
   }
