@@ -1,6 +1,0 @@
-.dsh-host-smoke/
-lib/
-dist/
-python/vendor/
-bundled/
-package-lock.json

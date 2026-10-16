@@ -102,16 +102,6 @@
       "maxHqEdge": null,
       "minDsh": null
     },
-    "@huaqiu/dsh-tool-freerouting": {
-      "version": "0.5.22",
-      "hosts": [
-        "kicad"
-      ],
-      "requiresHqEdge": false,
-      "minHqEdge": ">=0.3.0",
-      "maxHqEdge": null,
-      "minDsh": ">=0.1.7-rc.2"
-    },
     "@huaqiu/dsh-tool-part-search": {
       "version": "0.6.1",
       "hosts": [

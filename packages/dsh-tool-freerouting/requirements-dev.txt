@@ -1,2 +1,0 @@
-# Development lint/format tool; not a plugin runtime dependency.
-ruff==0.15.17
