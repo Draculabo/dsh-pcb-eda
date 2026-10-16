@@ -12,10 +12,13 @@ export const UPDATE_BASE = '/api/v1/huaqiu/plugin-update'
 
 export interface PluginUpdateItem {
   name: string
-  currentVersion: string
+  /** Version installed in the active bundle; null when the plugin is absent. */
+  currentVersion: string | null
   availableVersion: string
   state: 'current' | 'update' | 'install' | 'blocked' | 'ignored'
-  blockedBy?: string[]
+  /** The block reason, or null when the item is not blocked. The server sends a
+   *  single code (`"runtime-unknown"`), so it is normalized before use. */
+  blockedBy?: string | string[] | null
   ignored?: boolean
   reasons?: string[]
   notes?: string[]
@@ -23,21 +26,22 @@ export interface PluginUpdateItem {
 
 export interface RuntimeUpdateInfo {
   configured: boolean
-  currentVersion?: string
-  latest?: string
+  currentVersion?: string | null
+  latest?: string | null
   updateAvailable: boolean
-  checkedAt?: string
-  lastError?: string
+  checkedAt?: string | null
+  lastError?: string | null
 }
 
 export interface PluginUpdateReport {
-  manifestVersion: string
+  /** The evaluated release set; null while no manifest has been read. */
+  manifestVersion: string | null
   pluginSetVersion?: string
   items: PluginUpdateItem[]
   actionableCount: number
   ignoredSet: boolean
   fetchedAt?: string
-  lastError?: string
+  lastError?: string | null
   runtime: RuntimeUpdateInfo
 }
 

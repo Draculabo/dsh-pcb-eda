@@ -23,6 +23,7 @@ import {
 } from '@huaqiu/dsh-sidebar-entry'
 import { checkUpdates, fetchReport, type PluginUpdateReport } from './api.js'
 import { COPY } from './copy.js'
+import { PLUGIN_ICON } from './icons.js'
 import { openUpdateView, type UpdateStoreLike } from './update-view.js'
 
 /** Stable data attributes identifying the injected entry row. */
@@ -47,17 +48,15 @@ function entryCopy(lang: HostLocale | undefined): { label: string; tooltip: stri
     : { label: COPY.zh.entryLabel, tooltip: COPY.zh.entryTooltip }
 }
 
-/** Inline update glyph — `currentColor`, 16×16 like the shell's nav glyphs. */
-export const UPDATE_ICON =
-`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-    <g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M2.5 8a5.5 5.5 0 1 1 1.61 3.89" />
-        <path d="M2.5 8V4.75M2.5 8h3.25" />
-    </g>
-</svg>`
+/** The sidebar glyph — the same pinwheel the shell's own Plugins entry draws
+ *  (`IconPluginPinwheelOutlineRegular`), so both rows read as one feature. */
+export const UPDATE_ICON = PLUGIN_ICON(16)
 
 /** Sidebar entry styles — matched to the family rows (same inset/padding/gap
- *  as the shell's own Plugins entry). The badge is a 16px rounded pill. */
+ *  as the shell's own Plugins entry, `SidebarRoot.module.css` `.panelRow`).
+ *  Every colour rides a `--dsw-alias-*` token so the row follows the shell's
+ *  light/dark theme; the badge foreground uses the toast label, the shell's
+ *  "always light ink on a saturated surface" token. */
 const ENTRY_CSS_TEXT = `
 .hqpu-sidebar-entry {
   box-sizing: border-box;
@@ -70,7 +69,7 @@ const ENTRY_CSS_TEXT = `
   padding: 7px 8px;
   background: transparent;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
   font: inherit;
@@ -84,6 +83,10 @@ const ENTRY_CSS_TEXT = `
 .hqpu-sidebar-entry[data-active] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+.hqpu-sidebar-entry:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
 }
 .hqpu-sidebar-entry__icon {
   display: inline-flex;
@@ -108,11 +111,13 @@ const ENTRY_CSS_TEXT = `
   height: 16px;
   padding: 0 5px;
   border-radius: 8px;
-  background: var(--dsw-alias-bg-badge, #e5484d);
-  color: #fff;
+  background: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-toast-label);
   font-size: 11px;
   line-height: 16px;
+  font-weight: 500;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 /* Collapsed rail: icon-only, centered — same 36px square the shell uses. */
 [data-sidebar-collapsed] .hqpu-sidebar-entry {
@@ -132,9 +137,28 @@ const ENTRY_CSS_TEXT = `
 }
 `
 
-/** Modal styles (hqpu-*). Plain overlay + panel, aligned to the shell's
- *  dark/light aliases. */
+/**
+ * View styles (hqpu-*). Plain overlay + panel, drawn with the SAME design
+ * tokens and geometry the shell's own plugin manager uses
+ * (`ui-plugin-manager/src/client/PluginManagerPage.module.css` +
+ * `ui-primitives/src/{Modal,Toast,Tag,StateDot}.module.css`), so this page
+ * reads as part of the product rather than a bolt-on.
+ *
+ * Two rules keep it honest across themes:
+ *   1. every colour is a `--dsw-alias-*` token — no literal hex/rgb, so light
+ *      and dark both come out right (the old sheet invented
+ *      `--dsw-alias-bg-surface` / `--dsw-alias-line-border` / `--dsw-alias-bg-badge`,
+ *      none of which exist, and so always fell back to a white panel);
+ *   2. `color-mix()` tints come from the state token itself, so a palette
+ *      change moves fill and ink together.
+ *
+ * The chrome (panel, scrim, header, footer) follows `ui-primitives/Modal`,
+ * because this view IS a dialog; the body follows `PluginManagerPage`, because
+ * that is the content it heads. The one token the bundled shell does not
+ * publish is backfilled by {@link ensureDesignTokens} — see the note there.
+ */
 const VIEW_CSS_TEXT = `
+/* ── Overlay + panel (ui-primitives Modal.module.css) ─────────────────── */
 .hqpu-overlay {
   position: fixed;
   inset: 0;
@@ -142,176 +166,685 @@ const VIEW_CSS_TEXT = `
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
+  /* The frame's own top inset keeps a tall card clear of the window chrome. */
+  padding: max(24px, var(--dsh-frame-overlay-top, 24px)) 24px;
+}
+.hqpu-scrim {
+  position: absolute;
+  /* Only paint excludes the native caption; the root still blocks clicks. */
+  inset: var(--dsh-frame-chrome-top, 0px) 0 0;
+  background: var(--dsw-alias-bg-mask-1);
+  animation: hqpu-fade var(--ds-transition-duration, 0.2s) var(--ds-ease-in-out, ease);
 }
 .hqpu-panel {
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
-  width: min(640px, calc(100vw - 48px));
-  max-height: min(80vh, 720px);
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
-  background: var(--dsw-alias-bg-surface, #fff);
-  color: var(--dsw-alias-label-primary, #1f2329);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+  gap: 20px;
+  width: min(920px, 100%);
+  max-height: 100%;
   overflow: hidden;
+  border: 0;
+  border-radius: var(--dsw-radius-panel);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-label-primary);
+  animation: hqpu-panel-in var(--ds-transition-duration, 0.2s) var(--ds-ease-in-out, ease);
 }
-.hqpu-header {
+.hqpu-panel:focus {
+  outline: none;
+}
+@keyframes hqpu-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes hqpu-panel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Head row (ui-primitives Modal .header) ─────────────────────────────── */
+.hqpu-head {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--dsw-alias-line-border, rgba(0,0,0,.08));
+  flex: none;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  box-sizing: border-box;
+  /* The official Title row: 22/14/12/24 — the toolbar sits 10px further right
+   * than the body content on purpose, matching the shell's own close button. */
+  padding: 22px 14px 12px 24px;
+}
+.hqpu-head-main {
+  min-width: 0;
+  max-width: 100%;
 }
 .hqpu-title {
-  flex: 1;
-  font-size: 15px;
-  font-weight: 600;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+  color: var(--dsw-alias-label-primary);
 }
-.hqpu-body {
-  overflow: auto;
-  padding: 16px;
+.hqpu-intro {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+.hqpu-info:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-info:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+.hqpu-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
   gap: 16px;
 }
-.hqpu-section {
+
+/* ── Scrolling body: the page's centred column ────────────────────────── */
+.hqpu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+  /* The panel's 20px gap already separates this from the head and footer. */
+  padding: 0 clamp(16px, 3vw, 32px) 4px;
+  /* Anything that scrolls inside the panel draws the l2 thumb. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+.hqpu-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+}
+/* A stack of groups (or the single toast host) inside the column. */
+.hqpu-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.hqpu-toast-host:empty {
+  display: none;
+}
+
+/* ── Groups (PluginManagerPage .group) ────────────────────────────────── */
+.hqpu-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.hqpu-manifest {
+.hqpu-group-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: var(--dsw-alias-label-secondary, #646a73);
 }
-.hqpu-manifest-value {
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary, #1f2329);
-}
-.hqpu-list {
-  list-style: none;
+.hqpu-group-title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.hqpu-item {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0,0,0,.04));
-  font-size: 13px;
-}
-.hqpu-item-name {
+  font-size: 14px;
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
 }
-.hqpu-item-version {
-  color: var(--dsw-alias-label-secondary, #646a73);
+.hqpu-group-count {
+  flex: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
   font-variant-numeric: tabular-nums;
 }
-.hqpu-item-state {
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 18px;
+
+/* ── Cards (PluginManagerPage .card) ──────────────────────────────────── */
+.hqpu-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.hqpu-state-current { background: rgba(0,0,0,.06); color: var(--dsw-alias-label-secondary, #646a73); }
-.hqpu-state-update, .hqpu-state-install { background: rgba(229,72,77,.12); color: #d92d33; }
-.hqpu-state-ignored { background: rgba(0,0,0,.06); color: var(--dsw-alias-label-secondary, #646a73); }
-.hqpu-state-blocked { background: rgba(229,72,77,.12); color: #d92d33; }
-.hqpu-item-reason {
-  grid-column: 1 / -1;
-  font-size: 12px;
-  color: var(--dsw-alias-label-tertiary, #8f959e);
+.hqpu-card {
+  min-width: 0;
+  /* The hover surface reaches 8px past the content on both sides. */
+  margin: 0 -8px;
+  border-radius: var(--dsw-radius-xl);
 }
-.hqpu-ignored-banner {
+.hqpu-card:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.hqpu-card-head {
   display: flex;
   align-items: center;
+  gap: 14px;
+  padding: 8px;
+}
+.hqpu-card-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-lg);
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-card-icon svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+.hqpu-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hqpu-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(120,120,120,.1);
+  min-width: 0;
+}
+.hqpu-card-title {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hqpu-card-desc {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.hqpu-card-end {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.hqpu-card-reason {
+  margin: 0;
+  padding: 0 8px 8px 70px;
   font-size: 12px;
-  color: var(--dsw-alias-label-secondary, #646a73);
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ── Tags (ui-primitives Tag.module.css) ──────────────────────────────── */
+.hqpu-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  border-radius: 999px;
+  corner-shape: round;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+  white-space: nowrap;
+}
+.hqpu-tag[data-tone='success'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+  color: var(--dsw-alias-state-success-primary);
+}
+.hqpu-tag[data-tone='info'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+}
+.hqpu-tag[data-tone='warning'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent);
+  color: var(--dsw-alias-state-warn-primary);
+}
+.hqpu-tag[data-tone='danger'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+.hqpu-tag[data-tone='neutral'] {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ── Fact rows (PluginManagerPage .facts / .rows) ─────────────────────── */
+.hqpu-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+.hqpu-facts > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 8px 2px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+.hqpu-facts > div:last-child {
+  border-bottom: 0;
+}
+.hqpu-facts dt {
+  flex: none;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-facts dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: end;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+}
+.hqpu-facts code {
+  padding: 2px 6px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-module-platform);
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+}
+
+/* ── Banner (PluginManagerPage .installSafety) ────────────────────────── */
+.hqpu-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-state-warn-tertiary);
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-banner > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* ── Status, empty, failure (PluginManagerPage .status / .empty / .failure) */
+.hqpu-status {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.hqpu-status--dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.hqpu-failure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--dsw-alias-state-error-primary);
 }
 .hqpu-empty {
-  padding: 24px 0;
+  padding: 32px 0;
   text-align: center;
-  color: var(--dsw-alias-label-tertiary, #8f959e);
   font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
 }
-.hqpu-runtime {
-  border-top: 1px solid var(--dsw-alias-line-border, rgba(0,0,0,.08));
-  padding-top: 12px;
+
+/* ── State dot + spinner (ui-primitives StateDot.module.css) ──────────── */
+.hqpu-dot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
 }
-.hqpu-runtime-title {
-  font-size: 13px;
-  font-weight: 600;
+.hqpu-dot::after {
+  content: '';
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  corner-shape: round;
+  background: currentColor;
 }
-.hqpu-runtime-line {
-  font-size: 12px;
-  color: var(--dsw-alias-label-secondary, #646a73);
+.hqpu-dot[data-state='done'] { color: var(--dsw-alias-state-success-primary); }
+.hqpu-dot[data-state='warning'] { color: var(--dsw-alias-state-warn-primary); }
+.hqpu-dot[data-state='error'] { color: var(--dsw-alias-state-error-primary); }
+.hqpu-dot[data-state='idle'] { color: var(--dsw-alias-state-idle-primary); }
+.hqpu-spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  animation: hqpu-spin 1.5s linear infinite;
 }
-.hqpu-runtime-note {
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary, #8f959e);
+@keyframes hqpu-spin {
+  to { transform: rotate(360deg); }
 }
-.hqpu-runtime-error {
-  font-size: 12px;
-  color: #d92d33;
+
+/* ── Skeleton (PluginManagerPage .skeleton*) ──────────────────────────── */
+.hqpu-skeleton-fill {
+  background: var(--dsw-alias-bg-skeleton);
+  animation: hqpu-skeleton 2s cubic-bezier(0.36, 0, 0.64, 1) infinite;
 }
-.hqpu-actions {
+.hqpu-skeleton-text {
   display: flex;
   align-items: center;
-  gap: 8px;
+  height: 1lh;
+}
+.hqpu-skeleton-bar {
+  width: 100%;
+  height: 12px;
+  border-radius: var(--dsw-radius-xs);
+}
+.hqpu-skeleton-heading { width: 96px; }
+.hqpu-skeleton-title { width: min(144px, 60%); }
+.hqpu-skeleton-desc { width: min(280px, 85%); }
+.hqpu-skeleton-icon { border-color: transparent; }
+@keyframes hqpu-skeleton {
+  0% { opacity: 1; }
+  40% { opacity: 0.6; }
+  80%, 100% { opacity: 1; }
+}
+
+/* ── Toast (ui-primitives Toast.module.css, held inside the panel) ────── */
+.hqpu-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-toast-bg);
+  color: var(--dsw-alias-toast-label);
+  font-size: 14px;
+  line-height: 22px;
+  box-shadow: var(--dsw-shadow-lv3);
+  animation: hqpu-toast-in 160ms ease-out;
+}
+.hqpu-toast-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--dsw-alias-state-warn-label);
+}
+.hqpu-toast-icon[data-tone='success'] { color: var(--dsw-alias-state-success-primary); }
+.hqpu-toast-text { min-width: 0; }
+@keyframes hqpu-toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Buttons (PluginManagerPage .addButton / .iconButton) ─────────────── */
+.hqpu-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+.hqpu-icon-btn svg { display: block; }
+.hqpu-icon-btn:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.hqpu-icon-btn:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
 }
 .hqpu-btn {
   box-sizing: border-box;
-  padding: 6px 14px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0,0,0,.06));
-  color: var(--dsw-alias-label-primary, #1f2329);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 13px;
+  line-height: 20px;
   cursor: pointer;
 }
-.hqpu-btn-primary {
-  background: #e5484d;
-  color: #fff;
+.hqpu-btn svg { display: block; }
+.hqpu-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-solid); }
+.hqpu-btn:disabled { opacity: 0.5; cursor: default; }
+.hqpu-btn:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
 }
-.hqpu-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.hqpu-btn--primary {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
 }
-.hqpu-btn-ghost {
+.hqpu-btn--primary:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover); }
+.hqpu-btn--outline {
   background: transparent;
-  border-color: var(--dsw-alias-line-border, rgba(0,0,0,.12));
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  color: var(--dsw-alias-label-secondary);
 }
-.hqpu-btn-small {
-  padding: 2px 10px;
-  font-size: 12px;
+.hqpu-btn--outline:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.hqpu-btn--ghost { background: transparent; color: var(--dsw-alias-label-secondary); }
+.hqpu-btn--ghost:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.hqpu-btn--danger { color: var(--dsw-alias-state-error-primary); }
+.hqpu-btn--sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.hqpu-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
-.hqpu-installing {
-  font-size: 13px;
-  color: var(--dsw-alias-label-secondary, #646a73);
+
+/* ── Footer action row (ui-primitives Modal .footer) ───────────────────── */
+.hqpu-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 24px 20px;
 }
-.hqpu-error {
-  font-size: 13px;
-  color: #d92d33;
+
+.hqpu-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Reduced motion: drop every decorative animation ──────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .hqpu-scrim,
+  .hqpu-panel,
+  .hqpu-skeleton-fill,
+  .hqpu-spinner,
+  .hqpu-toast {
+    animation: none;
+  }
 }
 `
 
 const STYLE_TAG_ID = 'data-plugin-css="huaqiu-plugin-update"'
+
+/**
+ * Design tokens the bundled DSH shell may not publish.
+ *
+ * hq-edge ships an older `ui-theme` build. A live probe of the running shell
+ * (both themes) shows 13 of the tokens this stylesheet reads are absent:
+ * `--dsw-radius-{xs,sm,md,lg,xl,panel}`, `--dsw-focus-ring-width`,
+ * `--dsw-focus-ring-color`, `--dsw-alias-toast-label`,
+ * `--dsw-alias-state-idle-primary`, `--dsw-font-mono`,
+ * `--dsh-frame-overlay-top` and `--dsh-frame-chrome-top`.
+ *
+ * An unresolved `var()` is not an error — it silently degrades the property to
+ * its initial value. That is how this panel once rendered with
+ * `border-radius: 0px` and a 3px `auto` focus ring while every colour was
+ * already correct.
+ *
+ * The last three (`--dsw-font-mono`, `--dsh-frame-*`) are deliberately NOT
+ * backfilled: the shell's own primitives rely on the inline `var(…, fallback)`
+ * form for those (`Modal.module.css`, `PluginManagerPage.module.css`), so this
+ * sheet does too. Everything else is backfilled below with the canonical value
+ * from `ui-theme/src/styles/{base,focus,design-platform}.css`.
+ *
+ * Values are feature-detected at runtime and scoped to this plugin's own roots
+ * rather than `:root`, so a newer shell always wins and filling a gap can never
+ * restyle the host.
+ */
+
+/** The two roots this plugin styles: the view overlay (built in
+ *  update-view.ts) and the sidebar row ({@link ENTRY_CSS}.entry). */
+const STYLE_ROOTS = '.hqpu-overlay, .hqpu-sidebar-entry'
+
+/** The shell's dark-theme carrier — audited live as `body[data-ds-dark-theme]`. */
+const DARK_THEME_SELECTOR = 'body[data-ds-dark-theme]'
+
+/** Same roots, one rule per theme, for tokens whose official value flips. */
+const DARK_STYLE_ROOTS = STYLE_ROOTS.split(',')
+  .map((root) => `${DARK_THEME_SELECTOR} ${root.trim()}`)
+  .join(',')
+
+type DesignTokenFallback =
+  | { token: string; value: string }
+  | { token: string; value: { light: string; dark: string } }
+
+const DESIGN_TOKEN_FALLBACKS: DesignTokenFallback[] = [
+  // base.css — geometry; theme-invariant.
+  { token: '--dsw-radius-xs', value: '4px' },
+  { token: '--dsw-radius-sm', value: '8px' },
+  { token: '--dsw-radius-md', value: '12px' },
+  { token: '--dsw-radius-lg', value: '16px' },
+  { token: '--dsw-radius-xl', value: '20px' },
+  { token: '--dsw-radius-panel', value: '28px' },
+  // focus.css — the standard ring geometry. The colour already falls back
+  // inline in the sheet; publishing it too keeps the ring intact if that
+  // fallback is ever edited away.
+  { token: '--dsw-focus-ring-width', value: '2px' },
+  { token: '--dsw-focus-ring-color', value: 'var(--dsw-alias-state-business-primary, #C7000B)' },
+  // design-platform.css — `--dsw-static-neutral-bluish-00` is white in both
+  // themes, which is exactly what the official alias resolves to.
+  { token: '--dsw-alias-toast-label', value: 'var(--dsw-static-neutral-bluish-00, #fff)' },
+  // The one token whose official value flips with the theme. `--dsw-static-*`
+  // are theme-invariant, so one rule per carrier reproduces neutral-300
+  // (light) / neutral-600 (dark) without knowing the current theme.
+  {
+    token: '--dsw-alias-state-idle-primary',
+    value: {
+      light: 'var(--dsw-static-neutral-300, #d4d4d4)',
+      dark: 'var(--dsw-static-neutral-600, #545557)',
+    },
+  },
+]
+
+const TOKEN_STYLE_TAG_ID = 'data-plugin-css="huaqiu-plugin-update-tokens"'
+
+/**
+ * Publish canonical values for the design tokens the shell is missing.
+ *
+ * Idempotent and cheap: safe to call on every open, so a shell that publishes
+ * its tokens late still wins (the stale fallbacks are removed in that case).
+ */
+export function ensureDesignTokens(): void {
+  if (typeof document === 'undefined' || document.body === null) return
+  const probe = getComputedStyle(document.body)
+  const missing = DESIGN_TOKEN_FALLBACKS.filter(
+    (entry) => probe.getPropertyValue(entry.token).trim() === '',
+  )
+
+  const existing = document.querySelector<HTMLStyleElement>(`style[${TOKEN_STYLE_TAG_ID}]`)
+  if (missing.length === 0) {
+    existing?.remove()
+    return
+  }
+
+  const flat = missing.filter(
+    (entry): entry is { token: string; value: string } => typeof entry.value === 'string',
+  )
+  const themed = missing.filter(
+    (entry): entry is { token: string; value: { light: string; dark: string } } =>
+      typeof entry.value !== 'string',
+  )
+
+  const rules: string[] = []
+  const lightDecls = [
+    ...flat.map((entry) => `  ${entry.token}: ${entry.value};`),
+    ...themed.map((entry) => `  ${entry.token}: ${entry.value.light};`),
+  ]
+  rules.push(`${STYLE_ROOTS} {\n${lightDecls.join('\n')}\n}`)
+  if (themed.length > 0) {
+    const darkDecls = themed.map((entry) => `  ${entry.token}: ${entry.value.dark};`)
+    rules.push(`${DARK_STYLE_ROOTS} {\n${darkDecls.join('\n')}\n}`)
+  }
+
+  const tag = existing ?? document.createElement('style')
+  tag.dataset.pluginCss = 'huaqiu-plugin-update-tokens'
+  tag.textContent = rules.join('\n')
+  if (tag.parentNode === null) document.head.appendChild(tag)
+}
 
 /** Inject styles once (idempotent). */
 export function injectUpdateStyles(): void {
@@ -432,6 +965,7 @@ export const inject: string[] = []
 export function apply(ctx: ClientContext): () => void {
   if (typeof document === 'undefined') return () => {}
   injectUpdateStyles()
+  ensureDesignTokens()
 
   const store = new UpdateStore()
   const copy = { zh: COPY.zh, en: COPY.en }
@@ -465,6 +999,10 @@ export function apply(ctx: ClientContext): () => void {
   }
 
   const openView = (): void => {
+    // Re-detect the shell's design tokens on every open: a shell that
+    // publishes them after this plugin mounted must win, and one that never
+    // does must keep the canonical fallbacks.
+    ensureDesignTokens()
     // Always re-check on open so the review screen never shows stale data.
     void store.check().then((report) => {
       if (report !== null) openUpdateView(store, copyFor())
