@@ -459,6 +459,22 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1
 
+  packages/dsh-tool-plugin-update:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.1
+        version: 4.0.4(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
+      '@huaqiu/dsh-plugin-log':
+        specifier: workspace:*
+        version: link:../dsh-plugin-log
+      '@huaqiu/dsh-sidebar-entry':
+        specifier: workspace:*
+        version: link:../dsh-sidebar-entry
+    devDependencies:
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: 0.1.0-rc.8
+        version: 0.1.0-rc.8(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-invariants@0.1.7-rc.2(@deepseek-ai/cordis@4.0.4))
+
   packages/dsh-tool-quote:
     dependencies:
       '@deepseek-ai/cordis':

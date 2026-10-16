@@ -1,0 +1,10 @@
+# DSH bundle patch: inserts the Huaqiu plugin-update toolbutton + review UI.
+# The entry inject must match the node-half module contract (`src/index.ts` —
+# export const inject). `hqEdge` is REQUIRED: the update/review UI is a thin
+# reader of the hq-edge plugin-update HTTP API (discovery, install handoff,
+# ignore persistence); `webServer` carries the same-origin forwarding routes
+# the browser half polls.
+- insert:
+    - id: huaqiu-tool-plugin-update
+      name: '@huaqiu/dsh-tool-plugin-update'
+      inject: ['hqEdge', 'webServer']

@@ -47,6 +47,15 @@ export interface SidebarEntryOptions {
    * tooltip whenever the active locale changes.
    */
   refresh?: { subscribe(listener: () => void): () => void }
+  /**
+   * Optional numeric badge (e.g. actionable plugin-update count). When set,
+   * the row renders a small count badge after the label; the badge is hidden
+   * at count 0. `subscribe` re-renders the badge whenever the count changes.
+   */
+  badge?: {
+    subscribe(listener: () => void): () => void
+    count(): number
+  }
   /** Click action (open/toggle the owning panel). */
   onToggle(): void
   /** Family-block position: 'before' inserts ahead of sibling plugin rows, 'after' behind them. */
@@ -86,7 +95,11 @@ function newSessionButton(root: HTMLElement): HTMLButtonElement | undefined {
 }
 
 /** Build the entry row (a detached button; insert once the shell is up). */
-function createEntry(options: SidebarEntryOptions): { entry: HTMLButtonElement; applyLabel: () => void } {
+function createEntry(options: SidebarEntryOptions): {
+  entry: HTMLButtonElement
+  applyLabel: () => void
+  applyBadge: () => void
+} {
   const entry = document.createElement('button')
   entry.type = 'button'
   entry.setAttribute(options.rowAttribute, '')
@@ -101,14 +114,33 @@ function createEntry(options: SidebarEntryOptions): { entry: HTMLButtonElement; 
   iconSpan.className = options.css['entryIcon'] ?? ''
   iconSpan.innerHTML = options.icon
   entry.append(iconSpan, labelSpan)
+  // Optional numeric badge (visible only when count > 0).
+  let badgeSpan: HTMLSpanElement | null = null
+  const applyBadge = (): void => {
+    if (options.badge === undefined) return
+    const count = options.badge.count()
+    if (count <= 0) {
+      badgeSpan?.remove()
+      badgeSpan = null
+      return
+    }
+    if (badgeSpan === null) {
+      badgeSpan = document.createElement('span')
+      badgeSpan.className = options.css['entryBadge'] ?? ''
+      entry.append(badgeSpan)
+    }
+    badgeSpan.textContent = String(count)
+    entry.setAttribute('data-has-badge', '')
+  }
   const applyLabel = (): void => {
     entry.setAttribute('aria-label', options.label())
     if (options.tooltip !== undefined) entry.setAttribute('title', options.tooltip())
     labelSpan.textContent = options.label()
   }
   applyLabel()
+  applyBadge()
   entry.addEventListener('click', options.onToggle)
-  return { entry, applyLabel }
+  return { entry, applyLabel, applyBadge }
 }
 
 /** Re-insert the entry after the New Session row (before the browser region). */
@@ -150,7 +182,7 @@ export function mountSidebarEntry(options: SidebarEntryOptions): () => void {
   if (typeof document !== 'undefined' && document.querySelector(options.rowSelector) !== null) {
     return () => {}
   }
-  const { entry, applyLabel } = createEntry(options)
+  const { entry, applyLabel, applyBadge } = createEntry(options)
   let root: HTMLElement | undefined
   let placed = false
   let unsubscribeRefresh: (() => void) | undefined
@@ -160,6 +192,15 @@ export function mountSidebarEntry(options: SidebarEntryOptions): () => void {
     } catch {
       // A throwing subscription must not break the mount; the label stays at
       // its initial value and the next reload resolves it again.
+    }
+  }
+  let unsubscribeBadge: (() => void) | undefined
+  if (options.badge !== undefined) {
+    try {
+      unsubscribeBadge = options.badge.subscribe(applyBadge)
+    } catch {
+      // Same defensive rule as refresh: a throwing subscription must not
+      // break the mount; the badge keeps its initial value.
     }
   }
 
@@ -230,7 +271,7 @@ export function mountSidebarEntry(options: SidebarEntryOptions): () => void {
     waitObserver.disconnect()
     rootObserver.disconnect()
     unsubscribeRefresh?.()
-    unsubscribeActive?.()
+    unsubscribeBadge?.()
     entry.remove()
   }
 }
@@ -247,6 +288,7 @@ export const HUAQIU_SIDEBAR_ENTRY_FAMILY: readonly string[] = [
   '[data-hqcg-footprint-entry]',
   '[data-hqcg-symbol-entry]',
   '[data-hqcg-schematic-entry]',
+  '[data-hq-plugin-update-entry]',
 ]
 
 // ---- host locale detection (shared by every family sidebar row) ----

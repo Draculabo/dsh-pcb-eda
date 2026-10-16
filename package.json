@@ -19,7 +19,9 @@
     "publish:dry": "node scripts/publish.mjs --dry-run",
     "publish:local": "node scripts/publish.mjs",
     "launch-dsh": "node scripts/launch-dsh.mjs",
-    "update-bundled-plugins:kicad": "node scripts/update-bundled-plugins-kicad.mjs"
+    "link-plugins:kicad": "node scripts/link-plugins-kicad.mjs",
+    "unlink-plugins:kicad": "node scripts/link-plugins-kicad.mjs --unlink",
+    "plugin-status:kicad": "node scripts/link-plugins-kicad.mjs --status"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
