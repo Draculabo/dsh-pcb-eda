@@ -289,6 +289,7 @@ export const HUAQIU_SIDEBAR_ENTRY_FAMILY: readonly string[] = [
   '[data-hqcg-symbol-entry]',
   '[data-hqcg-schematic-entry]',
   '[data-hq-plugin-update-entry]',
+  '[data-hq-dummy-entry]',
 ]
 
 // ---- host locale detection (shared by every family sidebar row) ----
