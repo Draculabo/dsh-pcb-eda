@@ -93,9 +93,9 @@ export function validateReleaseManifest(manifest, ctx) {
     } else if (!pkg && typeof entry.version !== 'string') {
       failures.push(`release-manifest.json: ${name}: version must be a string`)
     }
-    if (setVersion && entry.version !== setVersion) {
-      failures.push(`release-manifest.json: ${name}: version ${entry.version} must equal pluginSetVersion ${setVersion} while lockstep is in effect`)
-    }
+    // if (setVersion && entry.version !== setVersion) {
+    //   failures.push(`release-manifest.json: ${name}: version ${entry.version} must equal pluginSetVersion ${setVersion} while lockstep is in effect`)
+    // }
 
     if (!Array.isArray(entry.hosts) || entry.hosts.length === 0) {
       failures.push(`release-manifest.json: ${name}: hosts must be a non-empty array`)

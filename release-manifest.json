@@ -103,7 +103,7 @@
       "minDsh": null
     },
     "@huaqiu/dsh-tool-freerouting": {
-      "version": "0.6.1",
+      "version": "0.5.22",
       "hosts": [
         "kicad"
       ],
