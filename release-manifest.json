@@ -23,7 +23,7 @@
       "minDsh": null
     },
     "@huaqiu/dsh-auth": {
-      "version": "0.5.22",
+      "version": "0.5.23",
       "hosts": [
         "all"
       ],
