@@ -7,7 +7,11 @@
  * re-render displaces the row, family ordering, label refresh and disposal.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { mountSidebarEntry, type SidebarEntryOptions } from '../src/index.js'
+import {
+  HUAQIU_SIDEBAR_ENTRY_FAMILY,
+  mountSidebarEntry,
+  type SidebarEntryOptions,
+} from '../src/index.js'
 
 /** Minimal dsh sidebar shell: column > root > logoRow(newSession). */
 function mountShell(): HTMLElement {
@@ -186,5 +190,31 @@ describe('mountSidebarEntry', () => {
     await microtask()
     await microtask()
     expect(document.querySelectorAll('[data-test-entry]').length).toBe(0)
+  })
+
+  it('honors the family array order regardless of mount order', () => {
+    const root = mountShell()
+    const family = HUAQIU_SIDEBAR_ENTRY_FAMILY
+    // Mount in REVERSE array order to prove placement does not follow mount
+    // order: the Plugin Updates row (family[0]) must still lead the block.
+    const disposers: Array<() => void> = []
+    for (const selector of [...family].reverse()) {
+      const attribute = selector.slice(1, -1)
+      disposers.push(
+        mountSidebarEntry(
+          options({ rowAttribute: attribute, rowSelector: selector, position: 'after', familySelectors: family }),
+        ),
+      )
+    }
+
+    const placed = family.map((selector) => root.querySelector<HTMLElement>(selector)!)
+    expect(placed.every((row) => row !== null)).toBe(true)
+    for (let i = 1; i < placed.length; i += 1) {
+      expect(follows(placed[i - 1]!, placed[i]!)).toBe(true)
+    }
+    // The leading row is the Plugin Updates entry.
+    expect(placed[0]!.hasAttribute('data-hq-plugin-update-entry')).toBe(true)
+
+    disposers.forEach((dispose) => dispose())
   })
 })

@@ -991,12 +991,6 @@ export function apply(ctx: ClientContext): () => void {
       }
     }
   })
-  const labelState = { label: entryCopy(locale).label, tooltip: entryCopy(locale).tooltip }
-  const applyLabel = (): void => {
-    const c = entryCopy(locale)
-    labelState.label = c.label
-    labelState.tooltip = c.tooltip
-  }
 
   const openView = (): void => {
     // Re-detect the shell's design tokens on every open: a shell that
@@ -1015,8 +1009,12 @@ export function apply(ctx: ClientContext): () => void {
     plugin: PLUGIN_ID,
     icon: UPDATE_ICON,
     css: ENTRY_CSS,
-    label: () => labelState.label,
-    tooltip: () => labelState.tooltip,
+    // Read the live locale on every refresh (the locale observer fires
+    // `refresh.subscribe`'s listener, which re-applies these) so the row
+    // re-localizes when the host UI language changes — matching the sibling
+    // family rows, which read a live `currentLang` variable the same way.
+    label: () => entryCopy(locale).label,
+    tooltip: () => entryCopy(locale).tooltip,
     refresh: { subscribe: refreshSubscribe },
     badge: {
       subscribe: (listener) => store.subscribe(listener),

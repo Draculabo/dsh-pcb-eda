@@ -143,26 +143,51 @@ function createEntry(options: SidebarEntryOptions): {
   return { entry, applyLabel, applyBadge }
 }
 
-/** Re-insert the entry after the New Session row (before the browser region). */
+/**
+ * Re-insert the entry after the New Session row, in the family's intended
+ * order.
+ *
+ * The `familySelectors` array order is the single source of truth for visual
+ * order, so the rendered order is stable regardless of which plugin mounts
+ * first or of observer callback order — a re-render can never swap two rows.
+ * (Earlier builds used the `position: 'before' | 'after'` convention, which
+ * clustered rows by mount order and let a late-mounting `before` row steal the
+ * lead. The array order supersedes it; `position` remains only as a fallback
+ * for a row whose selector is absent from the family list.)
+ */
 function placeEntry(root: HTMLElement, entry: HTMLButtonElement, options: SidebarEntryOptions): boolean {
   const button = newSessionButton(root)
   if (button === undefined) return false
   if (entry.parentElement !== root) {
-    // Position relative to the family block (entries injected by sibling
-    // plugins), never relative to transient logoRow geometry: every family
-    // plugin that self-heals during a re-render then lands in the same
-    // relative order, so the entries cannot swap positions regardless of
-    // observer callback order or of shell wrapper changes. There is no
-    // append-to-end fallback: appending at the end would randomly reorder
-    // the block after a shell re-render.
     const row = button.closest('[class*="logoRow"]')
     const base = (row !== null && row.parentElement === root) ? row : button
-    const family = Array.from(root.children).filter(
-      (el): el is HTMLElement => el instanceof HTMLElement && el.matches(options.familySelectors.join(', ')),
-    )
-    const anchor = options.position === 'before'
-      ? (family.length > 0 ? family[0] : base.nextElementSibling)
-      : (family.length > 0 ? family[family.length - 1]!.nextElementSibling : base.nextElementSibling)
+
+    // Present family members, each tagged with its index in the intended
+    // order. The entry being placed is detached here, so it is never counted.
+    const order = options.familySelectors
+    const present = Array.from(root.children)
+      .filter((el): el is HTMLElement => el instanceof HTMLElement && el.matches(order.join(', ')))
+      .map((el) => ({ el, idx: order.findIndex((sel) => el.matches(sel)) }))
+
+    const selfIndex = order.indexOf(options.rowSelector)
+    let anchor: Node | null
+    if (selfIndex === -1) {
+      // Not part of the ordered family: keep the legacy position rule.
+      anchor = options.position === 'before'
+        ? (present.length > 0 ? present[0]!.el : base.nextElementSibling)
+        : (present.length > 0 ? present[present.length - 1]!.el.nextElementSibling : base.nextElementSibling)
+    } else {
+      // Insert before the first present member that should come AFTER this
+      // entry; otherwise insert after the last present member that should come
+      // BEFORE it; otherwise sit right after the New Session button.
+      const later = present.find((member) => member.idx > selfIndex)
+      if (later !== undefined) {
+        anchor = later.el
+      } else {
+        const earlier = [...present].reverse().find((member) => member.idx < selfIndex)
+        anchor = earlier !== undefined ? earlier.el.nextElementSibling : base.nextElementSibling
+      }
+    }
     root.insertBefore(entry, anchor ?? null)
   }
   return true
@@ -285,10 +310,12 @@ export function mountSidebarEntry(options: SidebarEntryOptions): () => void {
  * family row means adding its selector here (and to no plugin-local list).
  */
 export const HUAQIU_SIDEBAR_ENTRY_FAMILY: readonly string[] = [
+  // Plugin Updates leads the family block: it is the most frequently used
+  // toolbutton and carries the actionable-update badge, so it sits first.
+  '[data-hq-plugin-update-entry]',
   '[data-hqcg-footprint-entry]',
   '[data-hqcg-symbol-entry]',
   '[data-hqcg-schematic-entry]',
-  '[data-hq-plugin-update-entry]',
   '[data-hq-dummy-entry]',
 ]
 
