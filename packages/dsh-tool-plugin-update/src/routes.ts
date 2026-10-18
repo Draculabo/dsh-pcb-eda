@@ -23,6 +23,10 @@
  *                                → GET  /api/v1/runtime-update/source
  *   POST /plugin-update/runtime-source
  *                                → POST /api/v1/runtime-update/source {url}
+ *   GET  /plugin-update/plugin-source
+ *                                → GET  /api/v1/plugin-updates/source
+ *   POST /plugin-update/plugin-source
+ *                                → POST /api/v1/plugin-updates/source {url}
  *
  * The runtime-update request is user-confirmed in this plugin's review panel:
  * hq-edge validates the version against a fresh manifest, downloads and
@@ -115,6 +119,11 @@ function routeFor(
     if (method === 'POST') return { method: 'POST', path: '/api/v1/runtime-update/source' }
     return null
   }
+  if (sub === '/plugin-source') {
+    if (method === 'GET') return { method: 'GET', path: '/api/v1/plugin-updates/source' }
+    if (method === 'POST') return { method: 'POST', path: '/api/v1/plugin-updates/source' }
+    return null
+  }
   if (sub === '/report' || sub === '') {
     return method === 'GET' ? { method: 'GET', path: '/api/v1/plugin-updates' } : null
   }
@@ -156,6 +165,7 @@ const ROUTE_SUB_PATHS = new Set([
   '/runtime',
   '/runtime-request',
   '/runtime-source',
+  '/plugin-source',
 ])
 
 /** Create the prefix-route handler forwarding to hq-edge. */

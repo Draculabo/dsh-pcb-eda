@@ -231,6 +231,47 @@ describe('plugin-update forwarding routes', () => {
     expect(seen).toHaveLength(0)
   })
 
+  it('forwards GET plugin-source → GET /api/v1/plugin-updates/source', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest('GET', `${UPDATE_ROUTE_PREFIX}/plugin-source`)
+    expect(status).toBe(200)
+    expect(json).toMatchObject({
+      echoed: true,
+      method: 'GET',
+      url: '/api/v1/plugin-updates/source',
+    })
+  })
+
+  it('forwards POST plugin-source with the URL body verbatim', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest(
+      'POST',
+      `${UPDATE_ROUTE_PREFIX}/plugin-source`,
+      JSON.stringify({ url: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json' }),
+    )
+    expect(status).toBe(200)
+    expect(json).toMatchObject({
+      echoed: true,
+      method: 'POST',
+      url: '/api/v1/plugin-updates/source',
+    })
+    expect(seen[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/v1/plugin-updates/source',
+      body: JSON.stringify({ url: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json' }),
+    })
+  })
+
+  it('answers 405 for a method /plugin-source does not serve', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const bad = await driveRequest('PUT', `${UPDATE_ROUTE_PREFIX}/plugin-source`)
+    expect(bad.status).toBe(405)
+    expect(seen).toHaveLength(0)
+  })
+
   it('routes /check /ignore /unignore /runtime to the right upstream paths', async () => {
     const forwarder = createUpdateForwarder(() => baseUrl)
     await startDshSide(forwarder)

@@ -77,6 +77,13 @@ export interface RuntimeUpdateSource {
 }
 
 /**
+ * The plugin release-manifest source (the gitee `release-manifest.json` by
+ * default) — same shape and same edit flow as {@link RuntimeUpdateSource},
+ * because hq-edge serves both from one shared type.
+ */
+export type PluginUpdateSource = RuntimeUpdateSource
+
+/**
  * The latest runtime version to display, or null when there is none.
  *
  * hq-edge sends the full release entry; an older or future server could send
@@ -105,6 +112,11 @@ export interface PluginUpdateReport {
   fetchedAt?: string
   lastError?: string | null
   runtime: RuntimeUpdateInfo
+  /**
+   * Where the plugin release manifest is read from. Optional: an older
+   * hq-edge does not send it, and the panel must degrade to no source row.
+   */
+  pluginSource?: PluginUpdateSource
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -210,6 +222,30 @@ export function getRuntimeUpdateSource(): Promise<RuntimeUpdateSource> {
  */
 export function setRuntimeUpdateSource(url: string): Promise<RuntimeUpdateSource> {
   return request<RuntimeUpdateSource>('/runtime-source', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  })
+}
+
+/**
+ * GET the plugin release-manifest source: the URL discovery reads, its origin
+ * (`override` | `config` | `unset`) and the configured URL behind it. Same
+ * open/read-only contract as the runtime source.
+ */
+export function getPluginUpdateSource(): Promise<PluginUpdateSource> {
+  return request<PluginUpdateSource>('/plugin-source')
+}
+
+/**
+ * POST a new plugin release-manifest URL, or `""` to clear a user override.
+ *
+ * hq-edge persists the override per host AND re-runs discovery in the
+ * background, so the next report (and the sidebar badge) already reflect the
+ * new manifest. This client still re-checks explicitly after a save — the
+ * background pass is a safety net for other consumers, not a substitute.
+ */
+export function setPluginUpdateSource(url: string): Promise<PluginUpdateSource> {
+  return request<PluginUpdateSource>('/plugin-source', {
     method: 'POST',
     body: JSON.stringify({ url }),
   })

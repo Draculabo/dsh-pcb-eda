@@ -724,6 +724,11 @@ const VIEW_CSS_TEXT = `
   gap: 8px;
   margin-top: 12px;
 }
+/* The plugin-source editor sits inside its own group right under the fact
+ * row, so it needs less air than the runtime one under the facts block. */
+.hqpu-source-editor--plugin {
+  margin-top: 4px;
+}
 .hqpu-source-hint {
   flex: 1 1 100%;
   margin: 0;

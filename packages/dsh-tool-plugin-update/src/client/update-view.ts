@@ -23,6 +23,7 @@ import {
   installSet,
   requestRuntimeUpdate,
   runtimeLatestVersion,
+  setPluginUpdateSource,
   setRuntimeUpdateSource,
   unignoreOffer,
   type PluginUpdateItem,
@@ -266,20 +267,46 @@ function skeleton(copy: UpdateCopy): HTMLElement {
   return section
 }
 
+/** Mutable editor state for one manifest source (lives in the panel closure). */
+interface SourceState {
+  editing: boolean
+  saving: boolean
+  draft: string
+}
+
+/**
+ * Shared state + callbacks for one update-source editor.
+ *
+ * hq-edge serves both manifest sources from one shape (plugin release
+ * manifest, runtime-update manifest), and both are editable from this panel:
+ * an override is persisted per host, so pointing discovery at a staging
+ * channel (or a local test rig) needs no env var and no restart. The editor
+ * state lives in the panel closure for the same reason `armed` does — a store
+ * refresh must not discard a half-typed URL or silently close the editor.
+ */
+export interface SourceEditorActions {
+  /** The source editor is open (input shown instead of the read-only row). */
+  sourceEditing: boolean
+  /** A save is in flight. */
+  sourceSaving: boolean
+  /** The URL being edited (what the input shows). */
+  sourceDraft: string
+  onSourceEdit(): void
+  onSourceDraft(value: string): void
+  onSourceSave(): void
+  onSourceCancel(): void
+  /** Clear the user override, falling back to the configured URL. */
+  onSourceReset(): void
+}
+
 /**
  * The runtime-update action row's state and callbacks.
  *
  * Installing the runtime is destructive in a way a plugin install is not: hq-edge
  * shuts itself down so the EDA host can swap the runtime directory. So the row
  * is a two-step confirm (arm → confirm), never a single fire-and-forget click.
- *
- * The source-editing half makes the manifest URL editable from this panel:
- * hq-edge persists the override per host, so pointing the runtime at a staging
- * channel (or a local test rig) needs no env var and no restart. The editor
- * state lives in the panel closure for the same reason `armed` does — a store
- * refresh must not discard a half-typed URL.
  */
-export interface RuntimeActions {
+export interface RuntimeActions extends SourceEditorActions {
   /** A request is in flight (hq-edge accepted it and is restarting). */
   busy: boolean
   /** The confirm step is armed for the version the row names. */
@@ -294,18 +321,6 @@ export interface RuntimeActions {
   onArm(): void
   onConfirm(): void
   onCancel(): void
-  /** The source editor is open (input shown instead of the read-only row). */
-  sourceEditing: boolean
-  /** A save is in flight. */
-  sourceSaving: boolean
-  /** The URL being edited (what the input shows). */
-  sourceDraft: string
-  onSourceEdit(): void
-  onSourceDraft(value: string): void
-  onSourceSave(): void
-  onSourceCancel(): void
-  /** Clear the user override, falling back to the configured URL. */
-  onSourceReset(): void
 }
 
 /**
@@ -331,11 +346,11 @@ function normalizeSource(raw: unknown): RuntimeUpdateSource | null {
 function originLabel(origin: RuntimeUpdateSource['origin'], copy: UpdateCopy): string {
   switch (origin) {
     case 'override':
-      return copy.runtime.originOverride
+      return copy.originOverride
     case 'config':
-      return copy.runtime.originConfig
+      return copy.originConfig
     default:
-      return copy.runtime.originUnset
+      return copy.originUnset
   }
 }
 
@@ -363,25 +378,63 @@ function sourceFactRow(
   facts.append(wrap)
 }
 
+/** Which manifest an editor belongs to — drives data attributes + CSS hook. */
+export type SourceKind = 'runtime' | 'plugin'
+
+/** The localized strings one source editor needs (both kinds share the flow). */
+interface SourceEditorLabels {
+  hint: string
+  edit: string
+  save: string
+  reset: string
+  inputLabel: string
+  placeholder: string
+}
+
+/** Pick the labels for one kind out of the copy table. */
+function sourceLabels(copy: UpdateCopy, kind: SourceKind): SourceEditorLabels {
+  return kind === 'runtime'
+    ? {
+        hint: copy.runtime.sourceHint,
+        edit: copy.runtime.sourceEdit,
+        save: copy.runtime.sourceSave,
+        reset: copy.runtime.sourceReset,
+        inputLabel: copy.runtime.sourceInputLabel,
+        placeholder: copy.runtime.sourcePlaceholder,
+      }
+    : {
+        hint: copy.pluginSource.hint,
+        edit: copy.pluginSource.edit,
+        save: copy.pluginSource.save,
+        reset: copy.pluginSource.reset,
+        inputLabel: copy.pluginSource.inputLabel,
+        placeholder: copy.pluginSource.placeholder,
+      }
+}
+
 /**
- * The update-source editor.
+ * One update-source editor, shared by the plugin manifest and the runtime
+ * manifest (the only differences are the labels and the data-attribute
+ * prefix, so tests and CSS can target each).
  *
  * Read mode is a hint plus a 修改 button; edit mode is the URL field with
  * 保存 / 取消 — plus 恢复默认 while a user override shadows the configured
- * URL. The draft lives in {@link RuntimeActions} (the panel closure), so a
- * background store refresh re-renders the typed URL instead of discarding it.
+ * URL. The draft lives in {@link SourceEditorActions} (the panel closure), so
+ * a background store refresh re-renders the typed URL instead of discarding it.
  */
 function sourceEditor(
+  kind: SourceKind,
   source: RuntimeUpdateSource,
   copy: UpdateCopy,
-  actions: RuntimeActions,
+  actions: SourceEditorActions,
 ): HTMLElement {
-  const block = el('div', 'hqpu-source-editor')
+  const labels = sourceLabels(copy, kind)
+  const block = el('div', `hqpu-source-editor hqpu-source-editor--${kind}`)
   if (!actions.sourceEditing) {
-    block.append(el('p', 'hqpu-status hqpu-source-hint', copy.runtime.sourceHint))
-    const edit = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.runtime.sourceEdit)
+    block.append(el('p', 'hqpu-status hqpu-source-hint', labels.hint))
+    const edit = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', labels.edit)
     edit.type = 'button'
-    edit.dataset.runtimeSourceEdit = ''
+    edit.setAttribute(`data-${kind}-source-edit`, '')
     edit.disabled = actions.sourceSaving
     edit.addEventListener('click', actions.onSourceEdit)
     block.append(edit)
@@ -390,9 +443,9 @@ function sourceEditor(
   const input = el('input', 'hqpu-source-input')
   input.type = 'url'
   input.value = actions.sourceDraft
-  input.placeholder = copy.runtime.sourcePlaceholder
-  input.setAttribute('aria-label', copy.runtime.sourceInputLabel)
-  input.dataset.runtimeSourceInput = ''
+  input.placeholder = labels.placeholder
+  input.setAttribute('aria-label', labels.inputLabel)
+  input.setAttribute(`data-${kind}-source-input`, '')
   input.disabled = actions.sourceSaving
   input.addEventListener('input', () => {
     // Draft-only: no re-render, so the caret and IME stay untouched.
@@ -410,22 +463,22 @@ function sourceEditor(
       actions.onSourceCancel()
     }
   })
-  const save = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm', copy.runtime.sourceSave)
+  const save = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm', labels.save)
   save.type = 'button'
-  save.dataset.runtimeSourceSave = ''
+  save.setAttribute(`data-${kind}-source-save`, '')
   save.disabled = actions.sourceSaving
   save.addEventListener('click', actions.onSourceSave)
   const cancel = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.cancel)
   cancel.type = 'button'
-  cancel.dataset.runtimeSourceCancel = ''
+  cancel.setAttribute(`data-${kind}-source-cancel`, '')
   cancel.disabled = actions.sourceSaving
   cancel.addEventListener('click', actions.onSourceCancel)
   const controls = el('div', 'hqpu-actions hqpu-source-controls')
   controls.append(input, save, cancel)
   if (source.override) {
-    const reset = el('button', 'hqpu-btn hqpu-btn--ghost hqpu-btn--sm', copy.runtime.sourceReset)
+    const reset = el('button', 'hqpu-btn hqpu-btn--ghost hqpu-btn--sm', labels.reset)
     reset.type = 'button'
-    reset.dataset.runtimeSourceReset = ''
+    reset.setAttribute(`data-${kind}-source-reset`, '')
     reset.disabled = actions.sourceSaving
     reset.addEventListener('click', actions.onSourceReset)
     controls.append(reset)
@@ -435,6 +488,32 @@ function sourceEditor(
   // a rejected save wants (the user is dropped back into the field to fix it).
   input.focus()
   return block
+}
+
+/**
+ * The plugin release-manifest source, as its own group above the plugin
+ * groups: it says where the whole list comes from, so it belongs above the
+ * list rather than inside it. Absent on an older hq-edge (no `pluginSource`
+ * in the report) — then nothing is rendered at all.
+ */
+function pluginSourceGroup(
+  report: PluginUpdateReport,
+  copy: UpdateCopy,
+  actions: SourceEditorActions,
+): HTMLElement | null {
+  const source = normalizeSource(report.pluginSource)
+  if (source === null) return null
+  const section = el('section', 'hqpu-group')
+  section.dataset.group = 'plugin-source'
+  const head = el('div', 'hqpu-group-head')
+  head.append(el('h3', 'hqpu-group-title', copy.pluginSource.title))
+  section.append(head)
+
+  const facts = el('dl', 'hqpu-facts')
+  sourceFactRow(facts, source, copy)
+  section.append(facts)
+  section.append(sourceEditor('plugin', source, copy, actions))
+  return section
 }
 
 /** The independent HQ Edge runtime report, as ruled fact rows. */
@@ -500,7 +579,7 @@ function runtimeGroup(
   // manifest, a local rig) without an env var and a restart. hq-edge persists
   // the override per host, so it survives restarts of both processes.
   if (source !== null) {
-    section.append(sourceEditor(source, copy, actions))
+    section.append(sourceEditor('runtime', source, copy, actions))
   }
 
   // ── Runtime update action row ──
@@ -600,6 +679,19 @@ function renderRuntime(
   section.textContent = ''
   if (report === null) return
   section.append(runtimeGroup(report, copy, actions))
+}
+
+/** The plugin-source group, above the plugin groups. No-op without the field. */
+function renderPluginSource(
+  section: HTMLElement,
+  report: PluginUpdateReport | null,
+  copy: UpdateCopy,
+  actions: SourceEditorActions,
+): void {
+  section.textContent = ''
+  if (report === null) return
+  const node = pluginSourceGroup(report, copy, actions)
+  if (node !== null) section.append(node)
 }
 
 /** Run the install transaction, then keep polling until the state settles. */
@@ -791,10 +883,11 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
   // ── Scrolling body: the centred column ──
   const scroll = el('div', 'hqpu-scroll')
   const column = el('div', 'hqpu-column')
+  const pluginSourceSection = el('div', 'hqpu-stack')
   const listSection = el('div', 'hqpu-stack')
   const runtimeSection = el('div', 'hqpu-stack')
   const toastSection = el('div', 'hqpu-toast-host')
-  column.append(listSection, runtimeSection, toastSection)
+  column.append(pluginSourceSection, listSection, runtimeSection, toastSection)
   scroll.append(column)
   panel.append(scroll)
 
@@ -817,12 +910,16 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
   let runtimeArmed = false
   let runtimeBusy = false
   let runtimeAccepted = false
-  // Source-editor state, same reasoning: a background refresh must not discard
-  // a half-typed URL or silently close the editor.
-  let sourceEditing = false
-  let sourceSaving = false
-  let sourceDraft = ''
 
+  // Source-editor state, same reasoning: a background refresh must not discard
+  // a half-typed URL or silently close either editor.
+  const runtimeSourceState: SourceState = { editing: false, saving: false, draft: '' }
+  const pluginSourceState: SourceState = { editing: false, saving: false, draft: '' }
+
+  // Delegated, not spread: `...sourceActionsFor(...)` would evaluate the
+  // getters once and freeze `sourceEditing: false` — the editor would never
+  // open. Read every member through the live object instead.
+  const runtimeSourceActions = sourceActionsFor('runtime', runtimeSourceState)
   const runtimeActions: RuntimeActions = {
     get busy() {
       return runtimeBusy
@@ -845,38 +942,66 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
       void requestRuntime()
     },
     get sourceEditing() {
-      return sourceEditing
+      return runtimeSourceActions.sourceEditing
     },
     get sourceSaving() {
-      return sourceSaving
+      return runtimeSourceActions.sourceSaving
     },
     get sourceDraft() {
-      return sourceDraft
+      return runtimeSourceActions.sourceDraft
     },
-    onSourceEdit: () => {
-      // Prefill with the URL in effect, so 保存 is a no-op unless edited.
-      sourceDraft = normalizeSource(store.report()?.runtime.source)?.url ?? ''
-      sourceEditing = true
-      render()
-    },
-    onSourceDraft: (value: string) => {
-      sourceDraft = value
-    },
-    onSourceSave: () => {
-      void submitRuntimeSource(sourceDraft)
-    },
-    onSourceCancel: () => {
-      sourceEditing = false
-      render()
-    },
-    onSourceReset: () => {
-      void submitRuntimeSource('')
-    },
+    onSourceEdit: () => runtimeSourceActions.onSourceEdit(),
+    onSourceDraft: (value: string) => runtimeSourceActions.onSourceDraft(value),
+    onSourceSave: () => runtimeSourceActions.onSourceSave(),
+    onSourceCancel: () => runtimeSourceActions.onSourceCancel(),
+    onSourceReset: () => runtimeSourceActions.onSourceReset(),
+  }
+
+  const pluginActions: SourceEditorActions = sourceActionsFor('plugin', pluginSourceState)
+
+  /** Build the {@link SourceEditorActions} half for one manifest source. */
+  function sourceActionsFor(
+    kind: SourceKind,
+    state: SourceState,
+  ): SourceEditorActions {
+    return {
+      get sourceEditing() {
+        return state.editing
+      },
+      get sourceSaving() {
+        return state.saving
+      },
+      get sourceDraft() {
+        return state.draft
+      },
+      onSourceEdit: () => {
+        // Prefill with the URL in effect, so 保存 is a no-op unless edited.
+        const report = store.report()
+        const source =
+          kind === 'runtime' ? normalizeSource(report?.runtime.source) : normalizeSource(report?.pluginSource)
+        state.draft = source?.url ?? ''
+        state.editing = true
+        render()
+      },
+      onSourceDraft: (value: string) => {
+        state.draft = value
+      },
+      onSourceSave: () => {
+        void submitSource(kind, state)
+      },
+      onSourceCancel: () => {
+        state.editing = false
+        render()
+      },
+      onSourceReset: () => {
+        void submitSource(kind, state, '')
+      },
+    }
   }
 
   /**
-   * Save the runtime-update source — or clear the override with an empty
-   * URL — then re-run discovery.
+   * Save one manifest source — or clear the override with an empty URL —
+   * then re-run discovery.
    *
    * The re-check is not optional: the report is cached, so without a fresh
    * `POST /check` the facts and the update button would keep naming the OLD
@@ -884,13 +1009,19 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
    * message meant for a person on refusal (bad scheme, credentials, …), which
    * the toast shows verbatim.
    */
-  async function submitRuntimeSource(url: string): Promise<void> {
-    sourceSaving = true
+  async function submitSource(
+    kind: SourceKind,
+    state: SourceState,
+    url: string = state.draft,
+  ): Promise<void> {
+    state.saving = true
     render()
+    const labels = kind === 'runtime' ? copy.runtime : copy.pluginSource
     try {
-      await setRuntimeUpdateSource(url)
-      sourceEditing = false
-      showToast(copy.runtime.sourceSaved, 'success')
+      if (kind === 'runtime') await setRuntimeUpdateSource(url)
+      else await setPluginUpdateSource(url)
+      state.editing = false
+      showToast(labels.saved, 'success')
       try {
         await checkUpdates()
         await store.refresh()
@@ -900,11 +1031,11 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
       }
     } catch (err: unknown) {
       showToast(
-        `${copy.runtime.sourceSaveFailed}: ${err instanceof Error ? err.message : String(err)}`,
+        `${labels.saveFailed}: ${err instanceof Error ? err.message : String(err)}`,
         'error',
       )
     } finally {
-      sourceSaving = false
+      state.saving = false
       render()
     }
   }
@@ -952,6 +1083,7 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
     } else {
       renderList(listSection, report, copy, installing, store)
     }
+    renderPluginSource(pluginSourceSection, report, copy, pluginActions)
     renderRuntime(runtimeSection, report, copy, runtimeActions)
     renderActions(actionBar, report, copy, store, installing)
   }

@@ -19,23 +19,31 @@ import { openUpdateView, type UpdateStoreLike } from '../src/client/update-view.
 
 // The view calls the API directly, so stub the calls it makes. Everything
 // else (facts rows, install bar) is exercised for real.
-const { requestRuntimeUpdate, setRuntimeUpdateSource, checkUpdates } = vi.hoisted(() => ({
-  requestRuntimeUpdate: vi.fn(async (_v: string) => ({
-    requestId: 'req-1',
-    targetVersion: '0.2.12',
-    state: 'accepted',
-  })),
-  setRuntimeUpdateSource: vi.fn(async (url: string) => ({
-    url,
-    origin: url.length > 0 ? ('override' as const) : ('config' as const),
-    configuredUrl: 'https://example.invalid/edge-headless-manifest.json',
-    override: url.length > 0,
-  })),
-  checkUpdates: vi.fn(async () => ({})),
-}))
+const { requestRuntimeUpdate, setRuntimeUpdateSource, setPluginUpdateSource, checkUpdates } = vi.hoisted(
+  () => ({
+    requestRuntimeUpdate: vi.fn(async (_v: string) => ({
+      requestId: 'req-1',
+      targetVersion: '0.2.12',
+      state: 'accepted',
+    })),
+    setRuntimeUpdateSource: vi.fn(async (url: string) => ({
+      url,
+      origin: url.length > 0 ? ('override' as const) : ('config' as const),
+      configuredUrl: 'https://example.invalid/edge-headless-manifest.json',
+      override: url.length > 0,
+    })),
+    setPluginUpdateSource: vi.fn(async (url: string) => ({
+      url,
+      origin: url.length > 0 ? ('override' as const) : ('config' as const),
+      configuredUrl: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+      override: url.length > 0,
+    })),
+    checkUpdates: vi.fn(async () => ({})),
+  }),
+)
 vi.mock('../src/client/api.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/client/api.js')>()
-  return { ...actual, requestRuntimeUpdate, setRuntimeUpdateSource, checkUpdates }
+  return { ...actual, requestRuntimeUpdate, setRuntimeUpdateSource, setPluginUpdateSource, checkUpdates }
 })
 
 function runtimeEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -49,7 +57,12 @@ function runtimeEntry(overrides: Record<string, unknown> = {}): Record<string, u
   }
 }
 
-function reportWith(latest: unknown, updateAvailable = true, source?: unknown): PluginUpdateReport {
+function reportWith(
+  latest: unknown,
+  updateAvailable = true,
+  source?: unknown,
+  pluginSource?: unknown,
+): PluginUpdateReport {
   return {
     manifestVersion: '0.6.1',
     items: [],
@@ -64,6 +77,7 @@ function reportWith(latest: unknown, updateAvailable = true, source?: unknown): 
       lastError: null,
       ...(source !== undefined ? { source: source as never } : {}),
     },
+    ...(pluginSource !== undefined ? { pluginSource: pluginSource as never } : {}),
   }
 }
 
@@ -93,6 +107,7 @@ afterEach(() => {
   document.body.innerHTML = ''
   requestRuntimeUpdate.mockClear()
   setRuntimeUpdateSource.mockClear()
+  setPluginUpdateSource.mockClear()
   checkUpdates.mockClear()
 })
 
@@ -305,5 +320,155 @@ describe('runtime update source editor', () => {
     expect(setRuntimeUpdateSource).not.toHaveBeenCalled()
     // Back to read mode with the URL in effect untouched.
     expect(factsText()).toContain(configSource.url)
+  })
+})
+
+describe('plugin update source editor', () => {
+  const pluginConfigSource = {
+    url: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+    origin: 'config' as const,
+    configuredUrl: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+    override: false,
+  }
+  const pluginEditButton = (): HTMLButtonElement | null =>
+    document.querySelector<HTMLButtonElement>('[data-plugin-source-edit]')
+  const pluginInput = (): HTMLInputElement | null =>
+    document.querySelector<HTMLInputElement>('[data-plugin-source-input]')
+  const runtimeInput = (): HTMLInputElement | null =>
+    document.querySelector<HTMLInputElement>('[data-runtime-source-input]')
+  const reportWithPlugin = (
+    pluginSource: unknown,
+    runtimeSource?: unknown,
+  ): PluginUpdateReport =>
+    reportWith(runtimeEntry(), true, runtimeSource, pluginSource)
+
+  it('renders the plugin source group with the URL in effect and its origin', () => {
+    openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+
+    const group = document.querySelector('[data-group="plugin-source"]')
+    expect(group).not.toBeNull()
+    expect(group?.textContent).toContain('插件更新源')
+    expect(group?.textContent).toContain(pluginConfigSource.url)
+    expect(group?.textContent).toContain('默认配置')
+    // The group sits ABOVE the plugin groups, not inside the runtime block.
+    const column = document.querySelector('.hqpu-column')
+    const kids = [...(column?.children ?? [])].map((n) => n.className)
+    expect(kids.indexOf('hqpu-stack')).toBeLessThan(
+      kids.lastIndexOf('hqpu-stack'),
+    )
+  })
+
+  it('renders nothing when the server sends no pluginSource (older hq-edge)', () => {
+    openUpdateView(fakeStore(reportWith(runtimeEntry())), COPY.zh)
+    expect(document.querySelector('[data-group="plugin-source"]')).toBeNull()
+    expect(pluginEditButton()).toBeNull()
+  })
+
+  it('prefills with the URL in effect and saves the edit, then re-checks', async () => {
+    openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+
+    pluginEditButton()?.click()
+    expect(pluginInput()?.value).toBe(pluginConfigSource.url)
+
+    const input = pluginInput()
+    if (input === null) throw new Error('plugin source input missing')
+    input.value = 'https://staging.example.invalid/release-manifest.json'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    document.querySelector<HTMLButtonElement>('[data-plugin-source-save]')?.click()
+
+    await vi.waitFor(() =>
+      expect(setPluginUpdateSource).toHaveBeenCalledWith(
+        'https://staging.example.invalid/release-manifest.json',
+      ),
+    )
+    // The cached report still named the OLD manifest's offer, so a save must
+    // re-run discovery — otherwise the list and the badge would lie.
+    await vi.waitFor(() => expect(checkUpdates).toHaveBeenCalled())
+    expect(pluginInput()).toBeNull()
+  })
+
+  it('offers reset only while an override shadows the configured URL', async () => {
+    const overrideSource = {
+      ...pluginConfigSource,
+      url: 'https://staging.example.invalid/release-manifest.json',
+      origin: 'override' as const,
+      override: true,
+    }
+    openUpdateView(fakeStore(reportWithPlugin(overrideSource)), COPY.zh)
+
+    pluginEditButton()?.click()
+    document.querySelector<HTMLButtonElement>('[data-plugin-source-reset]')?.click()
+    // Clearing the override is a POST with an empty URL.
+    await vi.waitFor(() => expect(setPluginUpdateSource).toHaveBeenCalledWith(''))
+
+    document.body.innerHTML = ''
+    setPluginUpdateSource.mockClear()
+    openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+    pluginEditButton()?.click()
+    expect(document.querySelector('[data-plugin-source-reset]')).toBeNull()
+  })
+
+  it('keeps the editor open and reports the reason when a save is refused', async () => {
+    setPluginUpdateSource.mockRejectedValueOnce(
+      new Error('http:// is only accepted for a loopback host (localhost / 127.0.0.1)'),
+    )
+    openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+
+    pluginEditButton()?.click()
+    const input = pluginInput()
+    if (input === null) throw new Error('plugin source input missing')
+    input.value = 'http://intranet.example/release-manifest.json'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    document.querySelector<HTMLButtonElement>('[data-plugin-source-save]')?.click()
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain(
+        'http:// is only accepted for a loopback host (localhost / 127.0.0.1)',
+      )
+    })
+    // Still editing — the user fixes the URL in place, draft intact.
+    expect(pluginInput()).not.toBeNull()
+    expect(pluginInput()?.value).toBe('http://intranet.example/release-manifest.json')
+    // A refused save must not trigger discovery against a URL that was never set.
+    expect(checkUpdates).not.toHaveBeenCalled()
+  })
+
+  it('cancel discards the plugin draft without saving', () => {
+    openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+
+    pluginEditButton()?.click()
+    const input = pluginInput()
+    if (input === null) throw new Error('plugin source input missing')
+    input.value = 'https://never-saved.example.invalid/release-manifest.json'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    document.querySelector<HTMLButtonElement>('[data-plugin-source-cancel]')?.click()
+
+    expect(pluginInput()).toBeNull()
+    expect(setPluginUpdateSource).not.toHaveBeenCalled()
+    expect(
+      document.querySelector('[data-group="plugin-source"]')?.textContent,
+    ).toContain(pluginConfigSource.url)
+  })
+
+  it('the two editors keep independent state', () => {
+    openUpdateView(
+      fakeStore(reportWith(runtimeEntry(), true, {
+        url: 'https://example.invalid/edge-headless-manifest.json',
+        origin: 'config' as const,
+        configuredUrl: 'https://example.invalid/edge-headless-manifest.json',
+        override: false,
+      }, pluginConfigSource)),
+      COPY.zh,
+    )
+
+    // Open the runtime editor only: the plugin editor must stay in read mode.
+    document.querySelector<HTMLButtonElement>('[data-runtime-source-edit]')?.click()
+    expect(runtimeInput()).not.toBeNull()
+    expect(pluginInput()).toBeNull()
+
+    document.querySelector<HTMLButtonElement>('[data-runtime-source-cancel]')?.click()
+    pluginEditButton()?.click()
+    expect(pluginInput()).not.toBeNull()
+    expect(runtimeInput()).toBeNull()
   })
 })
