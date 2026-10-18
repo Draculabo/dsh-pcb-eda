@@ -19,6 +19,10 @@
  *   GET  /plugin-update/runtime  → GET  /api/v1/runtime-update
  *   POST /plugin-update/runtime-request
  *                                → POST /api/v1/runtime-update/request {targetVersion}
+ *   GET  /plugin-update/runtime-source
+ *                                → GET  /api/v1/runtime-update/source
+ *   POST /plugin-update/runtime-source
+ *                                → POST /api/v1/runtime-update/source {url}
  *
  * The runtime-update request is user-confirmed in this plugin's review panel:
  * hq-edge validates the version against a fresh manifest, downloads and
@@ -40,7 +44,7 @@ export const DEFAULT_FORWARD_TIMEOUT_MS = 30_000
  *
  * This route is not a quick RPC. Before it answers, hq-edge re-reads the
  * update manifest, downloads the entire runtime bundle (hundreds of MB),
- * verifies its SHA-512, extracts it into the shared staging root and validates
+ * verifies its SHA-256, extracts it into the shared staging root and validates
  * the layout + version stamp. Measured end-to-end against a local update
  * server: 56 s (16:49:49 → 16:50:45).
  *
@@ -91,31 +95,68 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 /**
- * Map a sub-path to { method, path } on the hq-edge API.
+ * Map a sub-path + method to { method, path } on the hq-edge API.
  *
  * `timeoutMs` overrides {@link DEFAULT_FORWARD_TIMEOUT_MS} for routes whose
  * upstream work legitimately outlasts it (only `/runtime-request` today).
+ *
+ * The method is part of the lookup because one sub-path can carry both a read
+ * and a write: `/runtime-source` is GET for the current value and POST to
+ * change it. A method the route does not declare is `null`, which the
+ * forwarder answers 405 rather than forwarding a GET to a POST-only upstream
+ * and surfacing hq-edge's 404 as a plugin bug.
  */
-function routeFor(sub: string): { method: string; path: string; timeoutMs?: number } | null {
+function routeFor(
+  sub: string,
+  method: string,
+): { method: string; path: string; timeoutMs?: number } | null {
+  if (sub === '/runtime-source') {
+    if (method === 'GET') return { method: 'GET', path: '/api/v1/runtime-update/source' }
+    if (method === 'POST') return { method: 'POST', path: '/api/v1/runtime-update/source' }
+    return null
+  }
   if (sub === '/report' || sub === '') {
-    return { method: 'GET', path: '/api/v1/plugin-updates' }
+    return method === 'GET' ? { method: 'GET', path: '/api/v1/plugin-updates' } : null
   }
   if (sub === '/runtime') {
-    return { method: 'GET', path: '/api/v1/runtime-update' }
+    return method === 'GET' ? { method: 'GET', path: '/api/v1/runtime-update' } : null
   }
   if (sub === '/runtime-request') {
-    return {
-      method: 'POST',
-      path: '/api/v1/runtime-update/request',
-      timeoutMs: RUNTIME_REQUEST_TIMEOUT_MS,
-    }
+    return method === 'POST'
+      ? {
+          method: 'POST',
+          path: '/api/v1/runtime-update/request',
+          timeoutMs: RUNTIME_REQUEST_TIMEOUT_MS,
+        }
+      : null
   }
-  if (sub === '/check') return { method: 'POST', path: '/api/v1/plugin-updates/check' }
-  if (sub === '/install') return { method: 'POST', path: '/api/v1/plugin-updates/install' }
-  if (sub === '/ignore') return { method: 'POST', path: '/api/v1/plugin-updates/ignore' }
-  if (sub === '/unignore') return { method: 'POST', path: '/api/v1/plugin-updates/unignore' }
+  if (sub === '/check') {
+    return method === 'POST' ? { method: 'POST', path: '/api/v1/plugin-updates/check' } : null
+  }
+  if (sub === '/install') {
+    return method === 'POST' ? { method: 'POST', path: '/api/v1/plugin-updates/install' } : null
+  }
+  if (sub === '/ignore') {
+    return method === 'POST' ? { method: 'POST', path: '/api/v1/plugin-updates/ignore' } : null
+  }
+  if (sub === '/unignore') {
+    return method === 'POST' ? { method: 'POST', path: '/api/v1/plugin-updates/unignore' } : null
+  }
   return null
 }
+
+/** Every sub-path this forwarder serves — used to tell a 404 from a 405. */
+const ROUTE_SUB_PATHS = new Set([
+  '',
+  '/report',
+  '/check',
+  '/install',
+  '/ignore',
+  '/unignore',
+  '/runtime',
+  '/runtime-request',
+  '/runtime-source',
+])
 
 /** Create the prefix-route handler forwarding to hq-edge. */
 export function createUpdateForwarder(
@@ -128,9 +169,19 @@ export function createUpdateForwarder(
       sendJson(res, 404, { error: 'not found' })
       return
     }
-    const target = routeFor(sub)
+    // HEAD reads like GET: it never carried its own route, and the upstream
+    // has no HEAD semantics to preserve.
+    const method = req.method === 'HEAD' ? 'GET' : (req.method ?? '')
+    const target = routeFor(sub, method)
     if (target === null) {
-      sendJson(res, 404, { error: 'not found' })
+      // Either an unknown sub-path (404) or a known one under a method it does
+      // not serve (405). Both are client errors caught here, not upstream.
+      sendJson(res, sub === '' || ROUTE_SUB_PATHS.has(sub) ? 405 : 404, {
+        error:
+          sub === '' || ROUTE_SUB_PATHS.has(sub)
+            ? `method ${req.method} not allowed on ${sub || '/'}`
+            : 'not found',
+      })
       return
     }
     if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'HEAD') {

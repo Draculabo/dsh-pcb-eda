@@ -34,8 +34,8 @@ export interface PluginUpdateItem {
 export interface RuntimeUpdateEntry {
   /** Clean SemVer of the available distribution. */
   version: string
-  /** SHA-512 of the release archive, lowercase hex (128 chars). */
-  hash: string
+  /** SHA-256 of the release archive, lowercase hex (64 chars). */
+  sha256: string
   /** Platform the archive targets: win | darwin | linux | all. */
   platform: string
   /** Optional CPU architecture: x64 | arm64 (absent = any). */
@@ -52,6 +52,28 @@ export interface RuntimeUpdateInfo {
   updateAvailable: boolean
   checkedAt?: string | null
   lastError?: string | null
+  /**
+   * Where the runtime-update manifest is read from. Optional: an older hq-edge
+   * does not send it, and the panel must degrade to a read-only source row.
+   */
+  source?: RuntimeUpdateSource
+}
+
+/**
+ * The runtime-update manifest source, editable from this panel.
+ *
+ * `origin` says which URL is in effect: `override` is a URL the user set here
+ * (persisted by hq-edge per host), `config` is the packaged/env default, and
+ * `unset` means runtime updates are not configured at all.
+ */
+export interface RuntimeUpdateSource {
+  /** The manifest URL currently in effect; empty when none is known. */
+  url: string
+  origin: 'override' | 'config' | 'unset'
+  /** The URL configuration supplies, independent of any user override. */
+  configuredUrl: string
+  /** True when a user override is shadowing the configured URL. */
+  override: boolean
 }
 
 /**
@@ -162,4 +184,33 @@ export function requestRuntimeUpdate(
 /** POST unignore for the set version (reverses an ignore). */
 export function unignoreOffer(setVersion: string): Promise<unknown> {
   return request<unknown>('/unignore', { method: 'POST', body: JSON.stringify({ setVersion }) })
+}
+
+/**
+ * GET the runtime-update manifest source: the URL in effect, its origin
+ * (`override` | `config` | `unset`) and the configured URL behind it.
+ *
+ * Read-only upstream, so this is open like `/report` — only the mutation
+ * below is loopback-guarded (and reaches it same-origin anyway).
+ */
+export function getRuntimeUpdateSource(): Promise<RuntimeUpdateSource> {
+  return request<RuntimeUpdateSource>('/runtime-source')
+}
+
+/**
+ * POST a new runtime-update manifest URL, or `""` to clear a user override
+ * and fall back to the configured URL.
+ *
+ * hq-edge validates the URL itself (`https` required except for loopback, no
+ * embedded credentials) and answers 422 with a message meant for a person —
+ * this client surfaces it verbatim rather than pre-validating, so the rule
+ * lives in exactly one place. A successful answer is the NEW source; the
+ * caller must then re-run discovery, because the cached report still names
+ * the old manifest's offer.
+ */
+export function setRuntimeUpdateSource(url: string): Promise<RuntimeUpdateSource> {
+  return request<RuntimeUpdateSource>('/runtime-source', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  })
 }

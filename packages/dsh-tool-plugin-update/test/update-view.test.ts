@@ -3,33 +3,45 @@
  * DOM tests for the HQ Edge runtime facts block in the update review panel.
  *
  * Regression guard for the "[object Object]" latest-version row: hq-edge sends
- * `runtime.latest` as a full release ENTRY (`{ version, hash, platform, … }`),
+ * `runtime.latest` as a full release ENTRY (`{ version, sha256, platform, … }`),
  * not a bare string. The client type once claimed `string`, and rendering the
  * entry straight into a text node stringified it. The row must name a version.
+ *
+ * The second half covers the configurable update source: the panel must show
+ * the manifest URL in effect with its origin, edit it through the forwarder,
+ * re-run discovery after a save, and offer 恢复默认 only while a user
+ * override shadows the configured URL.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runtimeLatestVersion, type PluginUpdateReport } from '../src/client/api.js'
 import { COPY } from '../src/client/copy.js'
 import { openUpdateView, type UpdateStoreLike } from '../src/client/update-view.js'
 
-// The view calls the API directly, so stub the one call the runtime button
-// makes. Everything else (facts rows, install bar) is exercised for real.
-const { requestRuntimeUpdate } = vi.hoisted(() => ({
+// The view calls the API directly, so stub the calls it makes. Everything
+// else (facts rows, install bar) is exercised for real.
+const { requestRuntimeUpdate, setRuntimeUpdateSource, checkUpdates } = vi.hoisted(() => ({
   requestRuntimeUpdate: vi.fn(async (_v: string) => ({
     requestId: 'req-1',
     targetVersion: '0.2.12',
     state: 'accepted',
   })),
+  setRuntimeUpdateSource: vi.fn(async (url: string) => ({
+    url,
+    origin: url.length > 0 ? ('override' as const) : ('config' as const),
+    configuredUrl: 'https://example.invalid/edge-headless-manifest.json',
+    override: url.length > 0,
+  })),
+  checkUpdates: vi.fn(async () => ({})),
 }))
 vi.mock('../src/client/api.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/client/api.js')>()
-  return { ...actual, requestRuntimeUpdate }
+  return { ...actual, requestRuntimeUpdate, setRuntimeUpdateSource, checkUpdates }
 })
 
 function runtimeEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     version: '0.2.12',
-    hash: 'a'.repeat(128),
+    sha256: 'a'.repeat(64),
     platform: 'win',
     arch: 'x64',
     url: 'https://example.invalid/edge-headless-0.2.12-win-x64.zip',
@@ -37,7 +49,7 @@ function runtimeEntry(overrides: Record<string, unknown> = {}): Record<string, u
   }
 }
 
-function reportWith(latest: unknown, updateAvailable = true): PluginUpdateReport {
+function reportWith(latest: unknown, updateAvailable = true, source?: unknown): PluginUpdateReport {
   return {
     manifestVersion: '0.6.1',
     items: [],
@@ -50,6 +62,7 @@ function reportWith(latest: unknown, updateAvailable = true): PluginUpdateReport
       updateAvailable,
       checkedAt: null,
       lastError: null,
+      ...(source !== undefined ? { source: source as never } : {}),
     },
   }
 }
@@ -79,6 +92,8 @@ function factsText(): string {
 afterEach(() => {
   document.body.innerHTML = ''
   requestRuntimeUpdate.mockClear()
+  setRuntimeUpdateSource.mockClear()
+  checkUpdates.mockClear()
 })
 
 describe('runtimeLatestVersion', () => {
@@ -161,5 +176,134 @@ describe('runtime update action', () => {
     expect(requestRuntimeUpdate).not.toHaveBeenCalled()
     // Back to the armed-off state: the install button is offered again.
     expect(startButton()).not.toBeNull()
+  })
+})
+
+describe('runtime update source editor', () => {
+  const configSource = {
+    url: 'https://example.invalid/edge-headless-manifest.json',
+    origin: 'config' as const,
+    configuredUrl: 'https://example.invalid/edge-headless-manifest.json',
+    override: false,
+  }
+  const editButton = (): HTMLButtonElement | null =>
+    document.querySelector<HTMLButtonElement>('[data-runtime-source-edit]')
+  const sourceInput = (): HTMLInputElement | null =>
+    document.querySelector<HTMLInputElement>('[data-runtime-source-input]')
+
+  it('shows the source URL in effect with its origin tag', () => {
+    openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+
+    const facts = factsText()
+    expect(facts).toContain('更新源')
+    expect(facts).toContain(configSource.url)
+    expect(facts).toContain('默认配置')
+    // The other fact rows still render — the source row is additive.
+    expect(facts).toContain('0.2.12')
+  })
+
+  it('labels a user override as 自定义', () => {
+    const overrideSource = {
+      ...configSource,
+      url: 'https://staging.example.invalid/manifest.json',
+      origin: 'override' as const,
+      override: true,
+    }
+    openUpdateView(fakeStore(reportWith(runtimeEntry(), true, overrideSource)), COPY.zh)
+
+    expect(factsText()).toContain('自定义')
+    expect(factsText()).toContain(overrideSource.url)
+  })
+
+  it('offers no editor when the server sends no source (older hq-edge)', () => {
+    openUpdateView(fakeStore(reportWith(runtimeEntry())), COPY.zh)
+    expect(editButton()).toBeNull()
+  })
+
+  it('prefills the field with the URL in effect and saves the edit', async () => {
+    openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+
+    editButton()?.click()
+    expect(sourceInput()?.value).toBe(configSource.url)
+
+    const input = sourceInput()
+    if (input === null) throw new Error('source input missing')
+    input.value = 'https://staging.example.invalid/manifest.json'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+
+    document.querySelector<HTMLButtonElement>('[data-runtime-source-save]')?.click()
+    await vi.waitFor(() =>
+      expect(setRuntimeUpdateSource).toHaveBeenCalledWith(
+        'https://staging.example.invalid/manifest.json',
+      ),
+    )
+    // The cached report still named the OLD manifest's offer, so a save must
+    // re-run discovery — otherwise the facts and the update button would lie.
+    await vi.waitFor(() => expect(checkUpdates).toHaveBeenCalled())
+    // Editor closes on success.
+    expect(sourceInput()).toBeNull()
+  })
+
+  it('offers reset only while an override shadows the configured URL', async () => {
+    const overrideSource = {
+      ...configSource,
+      url: 'https://staging.example.invalid/manifest.json',
+      origin: 'override' as const,
+      override: true,
+    }
+    openUpdateView(fakeStore(reportWith(runtimeEntry(), true, overrideSource)), COPY.zh)
+
+    editButton()?.click()
+    document.querySelector<HTMLButtonElement>('[data-runtime-source-reset]')?.click()
+    // Clearing the override is a POST with an empty URL.
+    await vi.waitFor(() => expect(setRuntimeUpdateSource).toHaveBeenCalledWith(''))
+
+    document.body.innerHTML = ''
+    setRuntimeUpdateSource.mockClear()
+    openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+    editButton()?.click()
+    expect(document.querySelector('[data-runtime-source-reset]')).toBeNull()
+  })
+
+  it('keeps the editor open and reports the reason when a save is refused', async () => {
+    setRuntimeUpdateSource.mockRejectedValueOnce(
+      new Error('http:// is only accepted for a loopback host (localhost / 127.0.0.1)'),
+    )
+    openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+
+    editButton()?.click()
+    const input = sourceInput()
+    if (input === null) throw new Error('source input missing')
+    input.value = 'http://evil.example.invalid/manifest.json'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    document.querySelector<HTMLButtonElement>('[data-runtime-source-save]')?.click()
+
+    // hq-edge's 422 message is shown verbatim, and the user is dropped back
+    // into the field to fix the URL rather than losing the draft.
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain(
+        'http:// is only accepted for a loopback host (localhost / 127.0.0.1)',
+      )
+    })
+    expect(sourceInput()).not.toBeNull()
+    expect(sourceInput()?.value).toBe('http://evil.example.invalid/manifest.json')
+    // A refused save must not trigger discovery against a URL that was never set.
+    expect(checkUpdates).not.toHaveBeenCalled()
+  })
+
+  it('cancel discards the draft without saving', () => {
+    openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+
+    editButton()?.click()
+    const input = sourceInput()
+    if (input === null) throw new Error('source input missing')
+    input.value = 'https://never-saved.example.invalid/manifest.json'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    document.querySelector<HTMLButtonElement>('[data-runtime-source-cancel]')?.click()
+
+    expect(sourceInput()).toBeNull()
+    expect(setRuntimeUpdateSource).not.toHaveBeenCalled()
+    // Back to read mode with the URL in effect untouched.
+    expect(factsText()).toContain(configSource.url)
   })
 })

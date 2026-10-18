@@ -703,6 +703,55 @@ const VIEW_CSS_TEXT = `
   margin: 0;
 }
 
+/* ── Runtime update source (fact row + editable URL field) ────────────── */
+.hqpu-source-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.hqpu-source-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hqpu-source-editor {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.hqpu-source-hint {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.hqpu-source-controls {
+  flex: 1 1 100%;
+}
+.hqpu-source-input {
+  flex: 1 1 240px;
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12.5px;
+}
+.hqpu-source-input:disabled {
+  opacity: 0.5;
+}
+.hqpu-source-input:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
 /* ── Footer action row (ui-primitives Modal .footer) ───────────────────── */
 .hqpu-footer {
   display: flex;

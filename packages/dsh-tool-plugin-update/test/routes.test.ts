@@ -187,6 +187,50 @@ describe('plugin-update forwarding routes', () => {
     })
   })
 
+  it('forwards GET runtime-source → GET /api/v1/runtime-update/source', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest('GET', `${UPDATE_ROUTE_PREFIX}/runtime-source`)
+    expect(status).toBe(200)
+    expect(json).toMatchObject({
+      echoed: true,
+      method: 'GET',
+      url: '/api/v1/runtime-update/source',
+    })
+  })
+
+  it('forwards POST runtime-source with the URL body verbatim', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest(
+      'POST',
+      `${UPDATE_ROUTE_PREFIX}/runtime-source`,
+      JSON.stringify({ url: 'https://staging.example.invalid/manifest.json' }),
+    )
+    expect(status).toBe(200)
+    expect(json).toMatchObject({
+      echoed: true,
+      method: 'POST',
+      url: '/api/v1/runtime-update/source',
+    })
+    // The URL must reach hq-edge verbatim — it is the whole request.
+    expect(seen[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/v1/runtime-update/source',
+      body: JSON.stringify({ url: 'https://staging.example.invalid/manifest.json' }),
+    })
+  })
+
+  it('answers 405 for a method /runtime-source does not serve', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    // The sub-path carries a read AND a write; anything else is a client
+    // error caught locally, never forwarded to a 404 upstream.
+    const bad = await driveRequest('PUT', `${UPDATE_ROUTE_PREFIX}/runtime-source`)
+    expect(bad.status).toBe(405)
+    expect(seen).toHaveLength(0)
+  })
+
   it('routes /check /ignore /unignore /runtime to the right upstream paths', async () => {
     const forwarder = createUpdateForwarder(() => baseUrl)
     await startDshSide(forwarder)

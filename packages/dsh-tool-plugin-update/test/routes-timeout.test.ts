@@ -2,7 +2,7 @@
  * Tests for the per-route timeout budget in `src/routes.ts`.
  *
  * `POST /runtime-update/request` is not a quick RPC: hq-edge re-reads the
- * manifest, downloads the whole runtime bundle, verifies its SHA-512 and
+ * manifest, downloads the whole runtime bundle, verifies its SHA-256 and
  * extracts it before answering `202`. Measured end-to-end: 56 s. Under the
  * generic 30 s budget the forwarder aborted it mid-flight and the panel showed
  * "hq-edge request timed out after 30000ms" for an update that was in fact

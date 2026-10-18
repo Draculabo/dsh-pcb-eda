@@ -23,9 +23,11 @@ import {
   installSet,
   requestRuntimeUpdate,
   runtimeLatestVersion,
+  setRuntimeUpdateSource,
   unignoreOffer,
   type PluginUpdateItem,
   type PluginUpdateReport,
+  type RuntimeUpdateSource,
 } from './api.js'
 import type { UpdateCopy } from './copy.js'
 import {
@@ -270,6 +272,12 @@ function skeleton(copy: UpdateCopy): HTMLElement {
  * Installing the runtime is destructive in a way a plugin install is not: hq-edge
  * shuts itself down so the EDA host can swap the runtime directory. So the row
  * is a two-step confirm (arm → confirm), never a single fire-and-forget click.
+ *
+ * The source-editing half makes the manifest URL editable from this panel:
+ * hq-edge persists the override per host, so pointing the runtime at a staging
+ * channel (or a local test rig) needs no env var and no restart. The editor
+ * state lives in the panel closure for the same reason `armed` does — a store
+ * refresh must not discard a half-typed URL.
  */
 export interface RuntimeActions {
   /** A request is in flight (hq-edge accepted it and is restarting). */
@@ -286,6 +294,147 @@ export interface RuntimeActions {
   onArm(): void
   onConfirm(): void
   onCancel(): void
+  /** The source editor is open (input shown instead of the read-only row). */
+  sourceEditing: boolean
+  /** A save is in flight. */
+  sourceSaving: boolean
+  /** The URL being edited (what the input shows). */
+  sourceDraft: string
+  onSourceEdit(): void
+  onSourceDraft(value: string): void
+  onSourceSave(): void
+  onSourceCancel(): void
+  /** Clear the user override, falling back to the configured URL. */
+  onSourceReset(): void
+}
+
+/**
+ * Normalize the report's `runtime.source` to the full shape.
+ *
+ * An older hq-edge predates the feature and sends no `source` at all — that
+ * must degrade to a read-only panel, not crash the render. A future server
+ * may add fields; unknown extras are dropped here rather than trusted.
+ */
+function normalizeSource(raw: unknown): RuntimeUpdateSource | null {
+  if (raw === null || typeof raw !== 'object') return null
+  const candidate = raw as Partial<RuntimeUpdateSource>
+  if (typeof candidate.origin !== 'string') return null
+  return {
+    url: typeof candidate.url === 'string' ? candidate.url : '',
+    origin: candidate.origin as RuntimeUpdateSource['origin'],
+    configuredUrl: typeof candidate.configuredUrl === 'string' ? candidate.configuredUrl : '',
+    override: candidate.override === true,
+  }
+}
+
+/** The tag naming where the URL in effect came from. */
+function originLabel(origin: RuntimeUpdateSource['origin'], copy: UpdateCopy): string {
+  switch (origin) {
+    case 'override':
+      return copy.runtime.originOverride
+    case 'config':
+      return copy.runtime.originConfig
+    default:
+      return copy.runtime.originUnset
+  }
+}
+
+/** The 更新源 fact row: the URL in effect plus an origin tag. */
+function sourceFactRow(
+  facts: HTMLElement,
+  source: RuntimeUpdateSource,
+  copy: UpdateCopy,
+): void {
+  const wrap = el('div')
+  wrap.append(el('dt', '', copy.runtime.source))
+  const dd = el('dd')
+  const line = el('div', 'hqpu-source-line')
+  const code = el(
+    'code',
+    'hqpu-source-url',
+    source.url.length > 0 ? source.url : copy.runtime.notConfigured,
+  )
+  const tag = el('span', 'hqpu-tag')
+  tag.dataset.tone = source.override ? 'info' : source.origin === 'config' ? 'success' : 'neutral'
+  tag.textContent = originLabel(source.origin, copy)
+  line.append(code, tag)
+  dd.append(line)
+  wrap.append(dd)
+  facts.append(wrap)
+}
+
+/**
+ * The update-source editor.
+ *
+ * Read mode is a hint plus a 修改 button; edit mode is the URL field with
+ * 保存 / 取消 — plus 恢复默认 while a user override shadows the configured
+ * URL. The draft lives in {@link RuntimeActions} (the panel closure), so a
+ * background store refresh re-renders the typed URL instead of discarding it.
+ */
+function sourceEditor(
+  source: RuntimeUpdateSource,
+  copy: UpdateCopy,
+  actions: RuntimeActions,
+): HTMLElement {
+  const block = el('div', 'hqpu-source-editor')
+  if (!actions.sourceEditing) {
+    block.append(el('p', 'hqpu-status hqpu-source-hint', copy.runtime.sourceHint))
+    const edit = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.runtime.sourceEdit)
+    edit.type = 'button'
+    edit.dataset.runtimeSourceEdit = ''
+    edit.disabled = actions.sourceSaving
+    edit.addEventListener('click', actions.onSourceEdit)
+    block.append(edit)
+    return block
+  }
+  const input = el('input', 'hqpu-source-input')
+  input.type = 'url'
+  input.value = actions.sourceDraft
+  input.placeholder = copy.runtime.sourcePlaceholder
+  input.setAttribute('aria-label', copy.runtime.sourceInputLabel)
+  input.dataset.runtimeSourceInput = ''
+  input.disabled = actions.sourceSaving
+  input.addEventListener('input', () => {
+    // Draft-only: no re-render, so the caret and IME stay untouched.
+    actions.onSourceDraft(input.value)
+  })
+  // Enter saves, Escape cancels — the field is the whole editor, and Escape
+  // must not fall through to the panel-wide close handler.
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault()
+      actions.onSourceSave()
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      actions.onSourceCancel()
+    }
+  })
+  const save = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm', copy.runtime.sourceSave)
+  save.type = 'button'
+  save.dataset.runtimeSourceSave = ''
+  save.disabled = actions.sourceSaving
+  save.addEventListener('click', actions.onSourceSave)
+  const cancel = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.cancel)
+  cancel.type = 'button'
+  cancel.dataset.runtimeSourceCancel = ''
+  cancel.disabled = actions.sourceSaving
+  cancel.addEventListener('click', actions.onSourceCancel)
+  const controls = el('div', 'hqpu-actions hqpu-source-controls')
+  controls.append(input, save, cancel)
+  if (source.override) {
+    const reset = el('button', 'hqpu-btn hqpu-btn--ghost hqpu-btn--sm', copy.runtime.sourceReset)
+    reset.type = 'button'
+    reset.dataset.runtimeSourceReset = ''
+    reset.disabled = actions.sourceSaving
+    reset.addEventListener('click', actions.onSourceReset)
+    controls.append(reset)
+  }
+  block.append(controls)
+  // Focus on open — and on any re-render while editing, which is exactly what
+  // a rejected save wants (the user is dropped back into the field to fix it).
+  input.focus()
+  return block
 }
 
 /** The independent HQ Edge runtime report, as ruled fact rows. */
@@ -320,8 +469,16 @@ function runtimeGroup(
     facts.append(wrap)
   }
 
+  // The source row: which manifest URL is in effect and where it came from.
+  // Absent on an older hq-edge — then only the legacy notConfigured row shows.
+  const source = normalizeSource(runtime.source)
+
   if (runtime.configured === false) {
-    row(copy.runtime.source, copy.runtime.notConfigured)
+    if (source !== null) {
+      sourceFactRow(facts, source, copy)
+    } else {
+      row(copy.runtime.source, copy.runtime.notConfigured)
+    }
   } else {
     row(copy.runtime.current, runtime.currentVersion ?? copy.runtime.unknown)
     if (runtime.updateAvailable && latestVersion !== null) {
@@ -333,8 +490,18 @@ function runtimeGroup(
     if (typeof runtime.checkedAt === 'string' && runtime.checkedAt.length > 0) {
       row(copy.runtime.checkedAt, new Date(runtime.checkedAt).toLocaleString())
     }
+    if (source !== null) {
+      sourceFactRow(facts, source, copy)
+    }
   }
   section.append(facts)
+
+  // The editor: point the runtime at another release channel (a staging
+  // manifest, a local rig) without an env var and a restart. hq-edge persists
+  // the override per host, so it survives restarts of both processes.
+  if (source !== null) {
+    section.append(sourceEditor(source, copy, actions))
+  }
 
   // ── Runtime update action row ──
   // Only offered when hq-edge reports a newer distribution AND named its
@@ -650,6 +817,11 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
   let runtimeArmed = false
   let runtimeBusy = false
   let runtimeAccepted = false
+  // Source-editor state, same reasoning: a background refresh must not discard
+  // a half-typed URL or silently close the editor.
+  let sourceEditing = false
+  let sourceSaving = false
+  let sourceDraft = ''
 
   const runtimeActions: RuntimeActions = {
     get busy() {
@@ -672,6 +844,69 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
     onConfirm: () => {
       void requestRuntime()
     },
+    get sourceEditing() {
+      return sourceEditing
+    },
+    get sourceSaving() {
+      return sourceSaving
+    },
+    get sourceDraft() {
+      return sourceDraft
+    },
+    onSourceEdit: () => {
+      // Prefill with the URL in effect, so 保存 is a no-op unless edited.
+      sourceDraft = normalizeSource(store.report()?.runtime.source)?.url ?? ''
+      sourceEditing = true
+      render()
+    },
+    onSourceDraft: (value: string) => {
+      sourceDraft = value
+    },
+    onSourceSave: () => {
+      void submitRuntimeSource(sourceDraft)
+    },
+    onSourceCancel: () => {
+      sourceEditing = false
+      render()
+    },
+    onSourceReset: () => {
+      void submitRuntimeSource('')
+    },
+  }
+
+  /**
+   * Save the runtime-update source — or clear the override with an empty
+   * URL — then re-run discovery.
+   *
+   * The re-check is not optional: the report is cached, so without a fresh
+   * `POST /check` the facts and the update button would keep naming the OLD
+   * manifest's offer after the source changed. hq-edge answers 422 with a
+   * message meant for a person on refusal (bad scheme, credentials, …), which
+   * the toast shows verbatim.
+   */
+  async function submitRuntimeSource(url: string): Promise<void> {
+    sourceSaving = true
+    render()
+    try {
+      await setRuntimeUpdateSource(url)
+      sourceEditing = false
+      showToast(copy.runtime.sourceSaved, 'success')
+      try {
+        await checkUpdates()
+        await store.refresh()
+      } catch {
+        // The source IS saved; a failed re-check only leaves the previous
+        // offer on screen until the next refresh — the toolbar re-runs it.
+      }
+    } catch (err: unknown) {
+      showToast(
+        `${copy.runtime.sourceSaveFailed}: ${err instanceof Error ? err.message : String(err)}`,
+        'error',
+      )
+    } finally {
+      sourceSaving = false
+      render()
+    }
   }
 
   async function requestRuntime(): Promise<void> {
