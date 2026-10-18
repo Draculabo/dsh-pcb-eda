@@ -24,13 +24,53 @@ export interface PluginUpdateItem {
   notes?: string[]
 }
 
+/**
+ * One downloadable HQ Edge runtime distribution, as hq-edge reports it
+ * (`RuntimeUpdateEntry` in `apps/server/src/dsh/PluginUpdateService.ts`).
+ *
+ * Note the shape: `runtime.latest` is this ENTRY OBJECT, not a bare version
+ * string. Reading it as a string is what once rendered "[object Object]".
+ */
+export interface RuntimeUpdateEntry {
+  /** Clean SemVer of the available distribution. */
+  version: string
+  /** SHA-512 of the release archive, lowercase hex (128 chars). */
+  hash: string
+  /** Platform the archive targets: win | darwin | linux | all. */
+  platform: string
+  /** Optional CPU architecture: x64 | arm64 (absent = any). */
+  arch?: string
+  /** Exact absolute HTTPS URL of the release archive. */
+  url: string
+}
+
 export interface RuntimeUpdateInfo {
   configured: boolean
   currentVersion?: string | null
-  latest?: string | null
+  /** The latest compatible distribution, or null when the manifest had none. */
+  latest?: RuntimeUpdateEntry | null
   updateAvailable: boolean
   checkedAt?: string | null
   lastError?: string | null
+}
+
+/**
+ * The latest runtime version to display, or null when there is none.
+ *
+ * hq-edge sends the full release entry; an older or future server could send
+ * a bare string. Both are accepted here so the facts row can never again fall
+ * back to `String(object)` — i.e. "[object Object]" — in the DOM.
+ */
+export function runtimeLatestVersion(
+  runtime: RuntimeUpdateInfo | null | undefined,
+): string | null {
+  const latest: unknown = runtime?.latest
+  if (typeof latest === 'string') return latest.length > 0 ? latest : null
+  if (latest !== null && typeof latest === 'object' && 'version' in latest) {
+    const version = (latest as { version?: unknown }).version
+    if (typeof version === 'string' && version.length > 0) return version
+  }
+  return null
 }
 
 export interface PluginUpdateReport {
@@ -90,6 +130,33 @@ export function installSet(setVersion: string): Promise<InstallResult> {
 /** POST ignore for the current offer (set-scoped, persists across restarts). */
 export function ignoreOffer(setVersion: string): Promise<unknown> {
   return request<unknown>('/ignore', { method: 'POST', body: JSON.stringify({ setVersion }) })
+}
+
+/**
+ * The outcome of a user-confirmed HQ Edge runtime update.
+ *
+ * hq-edge answers `202 { requestId, targetVersion, state: 'accepted' }` and
+ * then shuts itself down for the EDA host to swap the runtime, so a success
+ * here means "accepted", not "installed". Failures arrive as 409 (already
+ * updating → `busy`), 422 (preflight/manifest/download refused) or 503.
+ */
+export interface RuntimeUpdateRequestResult {
+  requestId?: string
+  targetVersion?: string
+  state?: string
+  ok?: boolean
+  error?: string
+  busy?: boolean
+}
+
+/** POST the user-confirmed HQ Edge runtime update for one target version. */
+export function requestRuntimeUpdate(
+  targetVersion: string,
+): Promise<RuntimeUpdateRequestResult> {
+  return request<RuntimeUpdateRequestResult>('/runtime-request', {
+    method: 'POST',
+    body: JSON.stringify({ targetVersion }),
+  })
 }
 
 /** POST unignore for the set version (reverses an ignore). */

@@ -21,6 +21,8 @@ import {
   checkUpdates,
   ignoreOffer,
   installSet,
+  requestRuntimeUpdate,
+  runtimeLatestVersion,
   unignoreOffer,
   type PluginUpdateItem,
   type PluginUpdateReport,
@@ -262,8 +264,36 @@ function skeleton(copy: UpdateCopy): HTMLElement {
   return section
 }
 
+/**
+ * The runtime-update action row's state and callbacks.
+ *
+ * Installing the runtime is destructive in a way a plugin install is not: hq-edge
+ * shuts itself down so the EDA host can swap the runtime directory. So the row
+ * is a two-step confirm (arm → confirm), never a single fire-and-forget click.
+ */
+export interface RuntimeActions {
+  /** A request is in flight (hq-edge accepted it and is restarting). */
+  busy: boolean
+  /** The confirm step is armed for the version the row names. */
+  armed: boolean
+  /**
+   * hq-edge answered `202 Accepted`: from here on the outcome belongs to the
+   * EDA host, and this process is about to be replaced. Terminal — the row
+   * must never re-offer the button once this is true, because hq-edge is
+   * already gone and a second request could only fail.
+   */
+  accepted: boolean
+  onArm(): void
+  onConfirm(): void
+  onCancel(): void
+}
+
 /** The independent HQ Edge runtime report, as ruled fact rows. */
-function runtimeGroup(report: PluginUpdateReport, copy: UpdateCopy): HTMLElement {
+function runtimeGroup(
+  report: PluginUpdateReport,
+  copy: UpdateCopy,
+  actions: RuntimeActions,
+): HTMLElement {
   const section = el('section', 'hqpu-group')
   section.dataset.group = 'runtime'
   const head = el('div', 'hqpu-group-head')
@@ -272,6 +302,9 @@ function runtimeGroup(report: PluginUpdateReport, copy: UpdateCopy): HTMLElement
 
   const facts = el('dl', 'hqpu-facts')
   const runtime = report.runtime
+  // `runtime.latest` is a release ENTRY; only its version is ever displayed or
+  // sent back as `targetVersion`.
+  const latestVersion = runtimeLatestVersion(runtime)
 
   const row = (label: string, value: string, code = false): void => {
     const wrap = el('div')
@@ -291,8 +324,8 @@ function runtimeGroup(report: PluginUpdateReport, copy: UpdateCopy): HTMLElement
     row(copy.runtime.source, copy.runtime.notConfigured)
   } else {
     row(copy.runtime.current, runtime.currentVersion ?? copy.runtime.unknown)
-    if (runtime.updateAvailable && runtime.latest != null) {
-      row(copy.runtime.latest, runtime.latest)
+    if (runtime.updateAvailable && latestVersion !== null) {
+      row(copy.runtime.latest, latestVersion)
     }
     if (report.manifestVersion !== null) {
       row(copy.runtime.set, report.manifestVersion, true)
@@ -303,7 +336,49 @@ function runtimeGroup(report: PluginUpdateReport, copy: UpdateCopy): HTMLElement
   }
   section.append(facts)
 
-  section.append(el('p', 'hqpu-status', copy.runtime.note))
+  // ── Runtime update action row ──
+  // Only offered when hq-edge reports a newer distribution AND named its
+  // version: the request needs `targetVersion`, so an entry without one has
+  // nothing to send.
+  if (runtime.updateAvailable && latestVersion !== null) {
+    const row = el('div', 'hqpu-actions hqpu-runtime-actions')
+    if (actions.accepted) {
+      // Terminal state: no button. hq-edge has already exited, so re-offering
+      // "update" here could only produce a transport error.
+      const line = el('span', 'hqpu-status hqpu-status--dot')
+      line.setAttribute('role', 'status')
+      line.append(el('span', 'hqpu-spinner'), el('span', '', copy.runtime.updateAccepted))
+      row.append(line)
+    } else if (actions.busy) {
+      // Downloading + verifying + staging the bundle: tens of seconds to a few
+      // minutes. Say what is happening instead of an open-ended spinner.
+      const line = el('span', 'hqpu-status hqpu-status--dot')
+      line.setAttribute('role', 'status')
+      line.append(el('span', 'hqpu-spinner'), el('span', '', copy.runtime.updating))
+      row.append(line)
+    } else if (actions.armed) {
+      row.append(el('p', 'hqpu-status hqpu-runtime-confirm', copy.runtime.updateConfirm(latestVersion)))
+      const yes = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm', copy.confirmInstall)
+      yes.type = 'button'
+      yes.dataset.runtimeConfirm = ''
+      yes.addEventListener('click', actions.onConfirm)
+      const no = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.cancel)
+      no.type = 'button'
+      no.addEventListener('click', actions.onCancel)
+      row.append(yes, no)
+    } else {
+      const start = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm')
+      start.type = 'button'
+      start.dataset.runtimeUpdate = ''
+      start.innerHTML = `${DOWNLOAD_ICON(13)}<span>${copy.runtime.update}</span>`
+      start.addEventListener('click', actions.onArm)
+      row.append(start)
+    }
+    section.append(row)
+  } else {
+    section.append(el('p', 'hqpu-status', copy.runtime.note))
+  }
+
   if (typeof runtime.lastError === 'string' && runtime.lastError.length > 0) {
     const line = el('p', 'hqpu-status hqpu-status--dot')
     line.setAttribute('role', 'status')
@@ -353,10 +428,11 @@ function renderRuntime(
   section: HTMLElement,
   report: PluginUpdateReport | null,
   copy: UpdateCopy,
+  actions: RuntimeActions,
 ): void {
   section.textContent = ''
   if (report === null) return
-  section.append(runtimeGroup(report, copy))
+  section.append(runtimeGroup(report, copy, actions))
 }
 
 /** Run the install transaction, then keep polling until the state settles. */
@@ -568,6 +644,68 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
 
   const disposers: Array<() => void> = []
 
+  // ── Runtime update: arm → confirm, then hand off to hq-edge ──
+  // Live in the panel's closure (not the report) because they are UI state, and
+  // a store refresh must not silently disarm a confirm the user just armed.
+  let runtimeArmed = false
+  let runtimeBusy = false
+  let runtimeAccepted = false
+
+  const runtimeActions: RuntimeActions = {
+    get busy() {
+      return runtimeBusy
+    },
+    get armed() {
+      return runtimeArmed
+    },
+    get accepted() {
+      return runtimeAccepted
+    },
+    onArm: () => {
+      runtimeArmed = true
+      render()
+    },
+    onCancel: () => {
+      runtimeArmed = false
+      render()
+    },
+    onConfirm: () => {
+      void requestRuntime()
+    },
+  }
+
+  async function requestRuntime(): Promise<void> {
+    const version = runtimeLatestVersion(store.report()?.runtime)
+    if (version === null) {
+      showToast(copy.checkFailed, 'error')
+      return
+    }
+    runtimeArmed = false
+    runtimeBusy = true
+    render()
+    try {
+      const result = await requestRuntimeUpdate(version)
+      if (result?.error !== undefined) {
+        showToast(`${copy.installError}: ${result.error}`, 'error')
+        return
+      }
+      // 202 Accepted: hq-edge exits to let the EDA host swap the runtime and
+      // relaunch. This panel is about to go away with the restart, so say so —
+      // and latch it, so a store refresh cannot re-offer the button for a
+      // server that is already gone.
+      runtimeAccepted = true
+      showToast(copy.runtime.updateAccepted, 'success')
+    } catch (err: unknown) {
+      showToast(
+        `${copy.installError}: ${err instanceof Error ? err.message : String(err)}`,
+        'error',
+      )
+    } finally {
+      runtimeBusy = false
+      render()
+    }
+  }
+
   const render = (): void => {
     const report = store.report()
     const installing = store.installing()
@@ -579,7 +717,7 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
     } else {
       renderList(listSection, report, copy, installing, store)
     }
-    renderRuntime(runtimeSection, report, copy)
+    renderRuntime(runtimeSection, report, copy, runtimeActions)
     renderActions(actionBar, report, copy, store, installing)
   }
 

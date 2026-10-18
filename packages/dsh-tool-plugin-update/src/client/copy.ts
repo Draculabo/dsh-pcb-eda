@@ -56,10 +56,17 @@ const zh = {
     unknown: '版本未知',
     notConfigured: '未配置更新源',
     note: '运行时更新由 EDA 安装器处理',
+    update: '安装运行时更新',
+    updateConfirm: (version: string) =>
+      `安装 HQ Edge 运行时 ${version}？HQ Edge 会先关闭并完成替换，然后重新启动。`,
+    updating: '正在下载并校验运行时包，可能需要一分钟…',
+    updateAccepted: '运行时更新已受理，HQ Edge 正在重启…',
   },
   lastError: '上次检查失败',
   installError: '安装失败',
   installSuccess: '更新已安装，正在重启 DSH…',
+  confirmInstall: '确认安装',
+  cancel: '取消',
 }
 
 export type UpdateCopy = typeof zh
@@ -111,10 +118,17 @@ const en: UpdateCopy = {
     unknown: 'Version unknown',
     notConfigured: 'No update source configured',
     note: 'Runtime updates are handled by the EDA installer',
+    update: 'Install runtime update',
+    updateConfirm: (version: string) =>
+      `Install HQ Edge runtime ${version}? HQ Edge shuts down to swap the runtime, then restarts.`,
+    updating: 'Downloading and verifying the runtime bundle — this can take a minute…',
+    updateAccepted: 'Runtime update accepted — HQ Edge is restarting…',
   },
   lastError: 'Last check failed',
   installError: 'Install failed',
   installSuccess: 'Update installed — restarting DSH…',
+  confirmInstall: 'Confirm install',
+  cancel: 'Cancel',
 }
 
 export const COPY = { zh, en } as const

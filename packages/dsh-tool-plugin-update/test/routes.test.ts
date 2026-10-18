@@ -165,6 +165,28 @@ describe('plugin-update forwarding routes', () => {
     expect(bad.status).toBe(405)
   })
 
+  it('forwards POST runtime-request → POST /api/v1/runtime-update/request', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest(
+      'POST',
+      `${UPDATE_ROUTE_PREFIX}/runtime-request`,
+      JSON.stringify({ targetVersion: '0.2.12' }),
+    )
+    expect(status).toBe(200)
+    expect(json).toMatchObject({
+      echoed: true,
+      method: 'POST',
+      url: '/api/v1/runtime-update/request',
+    })
+    // The target version must reach hq-edge verbatim — it is the whole request.
+    expect(seen[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/v1/runtime-update/request',
+      body: JSON.stringify({ targetVersion: '0.2.12' }),
+    })
+  })
+
   it('routes /check /ignore /unignore /runtime to the right upstream paths', async () => {
     const forwarder = createUpdateForwarder(() => baseUrl)
     await startDshSide(forwarder)

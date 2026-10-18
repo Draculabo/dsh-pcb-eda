@@ -17,6 +17,13 @@
  *   POST /plugin-update/ignore   → POST /api/v1/plugin-updates/ignore {setVersion}
  *   POST /plugin-update/unignore → POST /api/v1/plugin-updates/unignore {setVersion}
  *   GET  /plugin-update/runtime  → GET  /api/v1/runtime-update
+ *   POST /plugin-update/runtime-request
+ *                                → POST /api/v1/runtime-update/request {targetVersion}
+ *
+ * The runtime-update request is user-confirmed in this plugin's review panel:
+ * hq-edge validates the version against a fresh manifest, downloads and
+ * verifies the bundle, stages it, then hands it to the EDA host and answers
+ * `202 Accepted` before shutting itself down to be swapped and relaunched.
  *
  * @module
  */
@@ -26,6 +33,23 @@ export const UPDATE_ROUTE_PREFIX = '/api/v1/huaqiu/plugin-update'
 
 /** End-to-end budget for one forwarded request, in milliseconds. */
 export const DEFAULT_FORWARD_TIMEOUT_MS = 30_000
+
+/**
+ * Budget for `POST /runtime-update/request` — deliberately far larger than
+ * {@link DEFAULT_FORWARD_TIMEOUT_MS}.
+ *
+ * This route is not a quick RPC. Before it answers, hq-edge re-reads the
+ * update manifest, downloads the entire runtime bundle (hundreds of MB),
+ * verifies its SHA-512, extracts it into the shared staging root and validates
+ * the layout + version stamp. Measured end-to-end against a local update
+ * server: 56 s (16:49:49 → 16:50:45).
+ *
+ * Under the generic 30 s budget the forwarder aborts mid-flight and answers
+ * `504 hq-edge request timed out after 30000ms`, so the panel reports a failure
+ * for an update that is still running perfectly well — and which then goes on
+ * to complete, swap the runtime and restart HQ Edge underneath the error toast.
+ */
+export const RUNTIME_REQUEST_TIMEOUT_MS = 600_000
 
 export type BaseUrlResolver = () => string | undefined
 
@@ -66,13 +90,25 @@ function readBody(req: IncomingMessage): Promise<string> {
   })
 }
 
-/** Map a sub-path to { method, path } on the hq-edge API. */
-function routeFor(sub: string): { method: string; path: string } | null {
+/**
+ * Map a sub-path to { method, path } on the hq-edge API.
+ *
+ * `timeoutMs` overrides {@link DEFAULT_FORWARD_TIMEOUT_MS} for routes whose
+ * upstream work legitimately outlasts it (only `/runtime-request` today).
+ */
+function routeFor(sub: string): { method: string; path: string; timeoutMs?: number } | null {
   if (sub === '/report' || sub === '') {
     return { method: 'GET', path: '/api/v1/plugin-updates' }
   }
   if (sub === '/runtime') {
     return { method: 'GET', path: '/api/v1/runtime-update' }
+  }
+  if (sub === '/runtime-request') {
+    return {
+      method: 'POST',
+      path: '/api/v1/runtime-update/request',
+      timeoutMs: RUNTIME_REQUEST_TIMEOUT_MS,
+    }
   }
   if (sub === '/check') return { method: 'POST', path: '/api/v1/plugin-updates/check' }
   if (sub === '/install') return { method: 'POST', path: '/api/v1/plugin-updates/install' }
@@ -115,8 +151,9 @@ export function createUpdateForwarder(
         return
       }
     }
+    const budget = target.timeoutMs ?? timeoutMs
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const timer = setTimeout(() => controller.abort(), budget)
     try {
       const upstream = await fetch(`${base}${target.path}`, {
         method: target.method,
@@ -138,7 +175,7 @@ export function createUpdateForwarder(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (err instanceof Error && err.name === 'AbortError') {
-        sendJson(res, 504, { error: `hq-edge request timed out after ${timeoutMs}ms` })
+        sendJson(res, 504, { error: `hq-edge request timed out after ${budget}ms` })
         return
       }
       sendJson(res, 502, { error: `hq-edge request failed: ${message}` })

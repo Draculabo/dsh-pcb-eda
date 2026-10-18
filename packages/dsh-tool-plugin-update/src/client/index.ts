@@ -694,6 +694,15 @@ const VIEW_CSS_TEXT = `
   gap: 8px;
 }
 
+/* ── Runtime update action row (arm → confirm step) ───────────────────── */
+.hqpu-runtime-actions {
+  margin-top: 12px;
+}
+.hqpu-runtime-confirm {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
 /* ── Footer action row (ui-primitives Modal .footer) ───────────────────── */
 .hqpu-footer {
   display: flex;
