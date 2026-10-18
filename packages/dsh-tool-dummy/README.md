@@ -30,8 +30,8 @@ host and never blocked by the HQ Edge version check.
 ## Testing the discovery loop
 
 1. Publish the package (the release lane is lockstep: bump to the current
-   `pluginSetVersion` and add the entry to `release-manifest.json`, which the
-   pre-publish gate validates):
+   `pluginSetVersion` and add the entry to `plugins-release-manifest.json`,
+   which the pre-publish gate validates):
    ```bash
    pnpm check:publish
    ```

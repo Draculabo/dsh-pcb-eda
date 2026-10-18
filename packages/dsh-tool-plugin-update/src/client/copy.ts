@@ -69,7 +69,7 @@ const zh = {
     saved: '更新源已保存，正在重新检查更新…',
     saveFailed: '保存更新源失败',
     sourceInputLabel: '运行时更新清单地址',
-    sourcePlaceholder: 'https://example.com/edge-headless-manifest.json',
+    sourcePlaceholder: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/edge-headless-release-manifest.json',
   },
   // ── Plugin release-manifest source editor ──
   pluginSource: {
@@ -81,7 +81,7 @@ const zh = {
     saved: '更新源已保存，正在重新检查更新…',
     saveFailed: '保存更新源失败',
     inputLabel: '插件更新清单地址',
-    placeholder: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+    placeholder: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/plugins-release-manifest.json',
   },
   // Origin tags, shared by both source editors (hq-edge serves one type).
   originOverride: '自定义',
@@ -156,7 +156,7 @@ const en: UpdateCopy = {
     saved: 'Update source saved — re-checking for updates…',
     saveFailed: 'Failed to save the update source',
     sourceInputLabel: 'Runtime update manifest URL',
-    sourcePlaceholder: 'https://example.com/edge-headless-manifest.json',
+    sourcePlaceholder: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/edge-headless-release-manifest.json',
   },
   // ── Plugin release-manifest source editor ──
   pluginSource: {
@@ -169,7 +169,7 @@ const en: UpdateCopy = {
     saveFailed: 'Failed to save the update source',
     inputLabel: 'Plugin update manifest URL',
     placeholder:
-      'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+      'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/plugins-release-manifest.json',
   },
   // Origin tags, shared by both source editors (hq-edge serves one type).
   originOverride: 'Custom',

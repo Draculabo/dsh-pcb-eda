@@ -120,18 +120,21 @@ for (const pkg of pkgs) {
   ok(`@huaqiu/${rel} v${version} — entry/types/exports/patch/clean`)
 }
 
-// 3. Centralized release manifest — the machine-readable source of truth for
-//    HQ Edge's remote plugin discovery (docs/tasks/dsh-plugin-discovery-and-update-with-hq-edge-update-reporting.md §4.1).
+// 3. Centralized plugin release manifest — the machine-readable source of
+//    truth for HQ Edge's remote plugin discovery
+//    (docs/tasks/dsh-plugin-discovery-and-update-with-hq-edge-update-reporting.md §4.1).
 //    It must never drift from the actual publishable set, the lockstep version,
 //    or the plugin patch contracts (`requiresHqEdge` == inject contains
 //    `hqEdge`). Utility/app packages never belong here.
-const manifestPath = join(repoRoot, 'release-manifest.json')
+//    (The runtime manifest, `edge-headless-release-manifest.json`, is owned by
+//    the hq-edge release pipeline — it carries no plugin entries to validate.)
+const manifestPath = join(repoRoot, 'plugins-release-manifest.json')
 let manifest = null
 try {
   manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-  ok('release-manifest.json parsed')
+  ok('plugins-release-manifest.json parsed')
 } catch (e) {
-  fail(`release-manifest.json is missing or not valid JSON: ${String(e?.message || e)}`)
+  fail(`plugins-release-manifest.json is missing or not valid JSON: ${String(e?.message || e)}`)
 }
 
 if (manifest) {
@@ -141,7 +144,7 @@ if (manifest) {
   })
   for (const message of manifestFailures) fail(message)
   if (manifestFailures.length === 0) {
-    ok(`release-manifest.json: validated ${Object.keys(manifest.plugins ?? {}).length} plugin entrie(s)`)
+    ok(`plugins-release-manifest.json: validated ${Object.keys(manifest.plugins ?? {}).length} plugin entrie(s)`)
   }
 }
 

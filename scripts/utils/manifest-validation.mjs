@@ -46,7 +46,7 @@ const SEMVER_LIKE = /^\d+\.\d+\.\d+/
 /**
  * Validate a parsed release manifest against the real workspace.
  *
- * @param {object} manifest parsed `release-manifest.json`
+ * @param {object} manifest parsed `plugins-release-manifest.json`
  * @param {object} ctx
  * @param {{name:string, version:string}[]} ctx.dshPlugins real DSH plugins
  *        (packages declaring a `dsh` config)
@@ -57,15 +57,15 @@ const SEMVER_LIKE = /^\d+\.\d+\.\d+/
 export function validateReleaseManifest(manifest, ctx) {
   const failures = []
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
-    return ['release-manifest.json: not an object']
+    return ['plugins-release-manifest.json: not an object']
   }
   if (manifest.schemaVersion !== 1) {
-    failures.push(`release-manifest.json: schemaVersion must be 1 (got ${JSON.stringify(manifest.schemaVersion)})`)
+    failures.push(`plugins-release-manifest.json: schemaVersion must be 1 (got ${JSON.stringify(manifest.schemaVersion)})`)
   }
 
   const setVersion = manifest.pluginSetVersion
   if (typeof setVersion !== 'string' || !SEMVER_LIKE.test(setVersion)) {
-    failures.push(`release-manifest.json: pluginSetVersion must be a semver string (got ${JSON.stringify(setVersion)})`)
+    failures.push(`plugins-release-manifest.json: pluginSetVersion must be a semver string (got ${JSON.stringify(setVersion)})`)
   }
 
   const pluginSet = ctx.dshPlugins ?? []
@@ -75,42 +75,42 @@ export function validateReleaseManifest(manifest, ctx) {
   const notInManifest = [...pluginNames].filter((n) => !manifestNames.has(n)).sort()
   const notInRepo = [...manifestNames].filter((n) => !pluginNames.has(n)).sort()
   if (notInManifest.length > 0) {
-    failures.push(`release-manifest.json: real DSH plugins missing from manifest: ${notInManifest.join(', ')}`)
+    failures.push(`plugins-release-manifest.json: real DSH plugins missing from manifest: ${notInManifest.join(', ')}`)
   }
   if (notInRepo.length > 0) {
-    failures.push(`release-manifest.json: manifest lists packages that are not real DSH plugins (utility/app or unknown): ${notInRepo.join(', ')}`)
+    failures.push(`plugins-release-manifest.json: manifest lists packages that are not real DSH plugins (utility/app or unknown): ${notInRepo.join(', ')}`)
   }
 
   for (const name of manifestNames) {
     const entry = manifest.plugins?.[name]
     const pkg = pluginSet.find((p) => p.name === name)
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      failures.push(`release-manifest.json: ${name}: entry must be an object`)
+      failures.push(`plugins-release-manifest.json: ${name}: entry must be an object`)
       continue
     }
     if (pkg && entry.version !== pkg.version) {
-      failures.push(`release-manifest.json: ${name}: version ${entry.version} does not match package version ${pkg.version}`)
+      failures.push(`plugins-release-manifest.json: ${name}: version ${entry.version} does not match package version ${pkg.version}`)
     } else if (!pkg && typeof entry.version !== 'string') {
-      failures.push(`release-manifest.json: ${name}: version must be a string`)
+      failures.push(`plugins-release-manifest.json: ${name}: version must be a string`)
     }
     // if (setVersion && entry.version !== setVersion) {
-    //   failures.push(`release-manifest.json: ${name}: version ${entry.version} must equal pluginSetVersion ${setVersion} while lockstep is in effect`)
+    //   failures.push(`plugins-release-manifest.json: ${name}: version ${entry.version} must equal pluginSetVersion ${setVersion} while lockstep is in effect`)
     // }
 
     if (!Array.isArray(entry.hosts) || entry.hosts.length === 0) {
-      failures.push(`release-manifest.json: ${name}: hosts must be a non-empty array`)
+      failures.push(`plugins-release-manifest.json: ${name}: hosts must be a non-empty array`)
     } else {
       const badHost = entry.hosts.find((h) => !RELEASE_HOSTS.has(h))
-      if (badHost) failures.push(`release-manifest.json: ${name}: invalid host ${JSON.stringify(badHost)} (expected one of ${[...RELEASE_HOSTS].join(', ')})`)
+      if (badHost) failures.push(`plugins-release-manifest.json: ${name}: invalid host ${JSON.stringify(badHost)} (expected one of ${[...RELEASE_HOSTS].join(', ')})`)
     }
 
     if (typeof entry.requiresHqEdge !== 'boolean') {
-      failures.push(`release-manifest.json: ${name}: requiresHqEdge must be a boolean`)
+      failures.push(`plugins-release-manifest.json: ${name}: requiresHqEdge must be a boolean`)
     } else if (pkg) {
       const injectsHqEdge = ctx.pluginEntryInjects?.(pkg)?.includes('hqEdge') ?? false
       if (entry.requiresHqEdge !== injectsHqEdge) {
         failures.push(
-          `release-manifest.json: ${name}: requiresHqEdge ${entry.requiresHqEdge} does not match cordis.patch.yml inject ${injectsHqEdge ? 'containing' : 'without'} hqEdge`,
+          `plugins-release-manifest.json: ${name}: requiresHqEdge ${entry.requiresHqEdge} does not match cordis.patch.yml inject ${injectsHqEdge ? 'containing' : 'without'} hqEdge`,
         )
       }
     }
@@ -119,7 +119,7 @@ export function validateReleaseManifest(manifest, ctx) {
       const value = entry[key]
       if (value === null || value === undefined) continue
       if (!isValidSemverRange(value)) {
-        failures.push(`release-manifest.json: ${name}: ${key} is not a valid semver range (${JSON.stringify(value)})`)
+        failures.push(`plugins-release-manifest.json: ${name}: ${key} is not a valid semver range (${JSON.stringify(value)})`)
       }
     }
   }

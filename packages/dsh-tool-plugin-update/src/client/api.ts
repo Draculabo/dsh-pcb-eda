@@ -77,9 +77,10 @@ export interface RuntimeUpdateSource {
 }
 
 /**
- * The plugin release-manifest source (the gitee `release-manifest.json` by
- * default) — same shape and same edit flow as {@link RuntimeUpdateSource},
- * because hq-edge serves both from one shared type.
+ * The plugin release-manifest source (the gitee
+ * `plugins-release-manifest.json` by default) — same shape and same edit flow
+ * as {@link RuntimeUpdateSource}, because hq-edge serves both from one shared
+ * type.
  */
 export type PluginUpdateSource = RuntimeUpdateSource
 

@@ -35,7 +35,7 @@ const { requestRuntimeUpdate, setRuntimeUpdateSource, setPluginUpdateSource, che
     setPluginUpdateSource: vi.fn(async (url: string) => ({
       url,
       origin: url.length > 0 ? ('override' as const) : ('config' as const),
-      configuredUrl: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+      configuredUrl: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/plugins-release-manifest.json',
       override: url.length > 0,
     })),
     checkUpdates: vi.fn(async () => ({})),
@@ -325,9 +325,9 @@ describe('runtime update source editor', () => {
 
 describe('plugin update source editor', () => {
   const pluginConfigSource = {
-    url: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+    url: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/plugins-release-manifest.json',
     origin: 'config' as const,
-    configuredUrl: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/release-manifest.json',
+    configuredUrl: 'https://gitee.com/huaqiu-electronics/dsh-pcb-eda/raw/main/plugins-release-manifest.json',
     override: false,
   }
   const pluginEditButton = (): HTMLButtonElement | null =>
