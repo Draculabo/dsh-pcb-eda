@@ -92,16 +92,6 @@
       "maxHqEdge": null,
       "minDsh": null
     },
-    "@huaqiu/dsh-tool-dummy": {
-      "version": "0.6.3",
-      "hosts": [
-        "all"
-      ],
-      "requiresHqEdge": false,
-      "minHqEdge": null,
-      "maxHqEdge": null,
-      "minDsh": null
-    },
     "@huaqiu/dsh-tool-kicad-schematic-gen": {
       "version": "0.6.3",
       "hosts": [
