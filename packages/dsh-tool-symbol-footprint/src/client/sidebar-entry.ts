@@ -10,7 +10,7 @@
  * the overlay it toggles is the React workspace owned by `workspace.tsx`.
  *
  * The injection core now lives in `@huaqiu/dsh-sidebar-entry` so
- * `dsh-tool-schematic-gen` can mount a sibling row with identical placement,
+ * `dsh-tool-kicad-schematic-gen` can mount a sibling row with identical placement,
  * ordering and self-healing behaviour instead of forking it.
  */
 import {
@@ -170,7 +170,7 @@ export function mountComponentGenSidebarEntries(
   if (typeof document === 'undefined') return () => {}
   injectSidebarEntryStyles()
 
-  // Shared with dsh-tool-schematic-gen so the family block keeps one stable
+  // Shared with dsh-tool-kicad-schematic-gen so the family block keeps one stable
   // order whichever plugin mounts first.
   const familySelectors = HUAQIU_SIDEBAR_ENTRY_FAMILY
   const disposers = rows.map((row) =>

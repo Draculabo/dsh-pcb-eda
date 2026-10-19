@@ -1,6 +1,6 @@
 /**
  * Placement compatibility — shared by every generation tool that can produce
- * a placeable EDA artifact (`component-gen-app`, `dsh-tool-schematic-gen`,
+ * a placeable EDA artifact (`component-gen-app`, `dsh-tool-kicad-schematic-gen`,
  * `dsh-tool-symbol-footprint`).
  *
  * This is the **frontend** copy of the rule. It exists purely to decide whether

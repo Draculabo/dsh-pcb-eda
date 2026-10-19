@@ -17,7 +17,7 @@
  * The row is plain DOM (no React tree) so it can never disturb the shell's
  * reconciliation. What the row DOES on click is entirely the caller's: open a
  * `shell.overlay` workspace (component-gen) or act on the DSH composer
- * (schematic-gen).
+ * (kicad-schematic-gen).
  *
  * @module @huaqiu/dsh-sidebar-entry
  */

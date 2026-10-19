@@ -60,7 +60,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * Minimal structural client context (the DSH client runtime provides these
  * faces). Declared structurally, never imported, so the package stays
  * independently installable — the same pattern as
- * `@huaqiu/dsh-tool-schematic-gen` and `@huaqiu/dsh-huaqiu-about`.
+ * `@huaqiu/dsh-tool-kicad-schematic-gen` and `@huaqiu/dsh-huaqiu-about`.
  */
 export interface ClientContext {
   slots?: {

@@ -10,7 +10,7 @@
  *   the resolved snapshot (`packages/client/ui-layout/src/client/theme-presenter.ts`,
  *   `DARK_ATTRIBUTE`), so the attribute's presence IS the dark palette. Same
  *   signal the sibling packages already use
- *   (`dsh-tool-schematic-gen/src/client/theme.ts`). `prefers-color-scheme` is
+ *   (`@huaqiu/dsh-tool-kicad-schematic-gen`). `prefers-color-scheme` is
  *   deliberately NOT consulted: DSH resolves `system` itself, and an OS-dark /
  *   DSH-light combination would then be misdetected.
  * - LOCALE — `dsh-client-locale` writes `<html lang>` on every locale change

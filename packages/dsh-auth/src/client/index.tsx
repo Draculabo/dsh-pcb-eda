@@ -37,8 +37,8 @@ export const inject: string[] = ['slots']
  *
  * Currently EMPTY: all five Huaqiu tools now own their keyed HIT cards in
  * their own plugins (`@huaqiu/dsh-tool-symbol-footprint` for the three
- * symbol/footprint generators, `@huaqiu/dsh-tool-schematic-gen` for the two
- * schematic/system generators), and each renders its own inline login card for
+ * symbol/footprint generators, `@huaqiu/dsh-tool-kicad-schematic-gen` for the
+ * schematic design flow), and each renders its own inline login card for
  * `needs_auth`. Keeping the toolview keys here would double-register the same
  * `tool.call.toolview` slot with an ambiguous winner.
  *

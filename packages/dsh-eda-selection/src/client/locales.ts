@@ -7,7 +7,7 @@
  *
  * Kept in its own module (rather than inlined in the component) so the copy is
  * reviewable on its own and the test file can assert bilingual balance
- * directly, mirroring `@huaqiu/dsh-auth` / `@huaqiu/dsh-tool-schematic-gen`.
+ * directly, mirroring `@huaqiu/dsh-auth` / `@huaqiu/dsh-tool-kicad-schematic-gen`.
  */
 
 export const zh = {
