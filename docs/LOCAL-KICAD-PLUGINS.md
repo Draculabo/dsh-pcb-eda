@@ -1,14 +1,14 @@
 # 本地 KiCad 插件迁移
 
-两个私有插件从 D:/kicad/plugins/packages 复制到本仓库 packages/，保留 @local 包名；不参与 npm 发布。旧源码目录保留，实际安装链接切换到新目录。
+两个插件最初从 D:/kicad/plugins/packages 复制到本仓库 packages/，保留 @local 包名；dsh-tool-kicad-schematic-gen 现已转为公开 @huaqiu 插件参与 npm 发布。
 
 - dsh-plugin-manager：管理器统一扫描本仓库 packages，以单一列表管理所有 DSH 插件；普通辅助库不显示。选择保存在当前 profile/kicad-plugin-state.json，旧 builtin-state.json 停用选择迁入；更新保留开关。
-- dsh-tool-kicad-schematic-gen：保留 12 个工具、设计 skill、builder.js 和概览卡片。skill 的编程示例指向新目录。历史概览快照复制到新包 .overview-cache；不要提交缓存或开关状态。
+- dsh-tool-kicad-schematic-gen：已从 @local 私有包升级为公开的 @huaqiu/dsh-tool-kicad-schematic-gen，随 0.6.3 统一发布。保留设计 skill、builder.js 和概览卡片；不再作为本地私有插件管理。
 
 ```powershell
 cd D:/kicad/dsh-pcb-eda
-pnpm --filter @local/dsh-plugin-manager --filter @local/dsh-tool-kicad-schematic-gen build
-pnpm --filter @local/dsh-plugin-manager --filter @local/dsh-tool-kicad-schematic-gen typecheck
+pnpm --filter @huaqiu/dsh-tool-kicad-schematic-gen build
+pnpm --filter @huaqiu/dsh-tool-kicad-schematic-gen typecheck
 node packages/dsh-plugin-manager/scripts/test-local-kicad-plugins.mjs
 pnpm check:local-kicad-plugins
 ```

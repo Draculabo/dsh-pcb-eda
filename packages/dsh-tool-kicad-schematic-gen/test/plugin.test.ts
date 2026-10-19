@@ -15,7 +15,7 @@ function harness(host?:object){
 
 test('schematic plugin owns fourteen tools while component search is a separate plugin',async()=>{
   const h=harness()
-  assert.equal(name,'@local/dsh-tool-kicad-schematic-gen')
+  assert.equal(name,'@huaqiu/dsh-tool-kicad-schematic-gen')
   assert.deepEqual(inject,['tools','fs','sandboxPolicy','skills','webServer'])
   assert.equal(h.tools.size,14)
   assert.ok(h.tools.has('analyze_kicad_module'))

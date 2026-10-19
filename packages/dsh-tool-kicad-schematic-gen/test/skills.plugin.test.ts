@@ -11,7 +11,7 @@ test('migrated skill resolves resources and instructs the split component flow',
  await access(candidate.locator)
  const skill=await provider.get(candidate,{signal:new AbortController().signal})
  assert.match(skill.content,/search_hqsch_parts/)
- assert.match(skill.content,/@local\/dsh-tool-kicad-schematic-gen/)
+ assert.match(skill.content,/@huaqiu\/dsh-tool-kicad-schematic-gen/)
  assert.match(skill.content,/@huaqiu\/dsh-tool-part-search/)
  assert.match(skill.content,/manufacturer\.id/)
  assert.match(skill.content,/import_kicad_component/)

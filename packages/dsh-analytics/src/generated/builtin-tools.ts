@@ -2,9 +2,7 @@
 export const BUILTIN_TOOLS = [
   "generate_footprint_from_dimensions",
   "generate_footprint_from_image",
-  "generate_schematic_from_description",
   "generate_symbol_from_image",
-  "generate_system_module_graph",
   "get_active_page_netlist",
   "get_eda_bom",
   "get_eda_host_capabilities",

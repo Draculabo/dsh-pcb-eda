@@ -25,8 +25,14 @@ export interface Overview {
 }
 export async function createOverview(input:{workspace:string;projectDir:string;schematicPath:string;revision:string;pages:{exportedPageName:string;pngPath:string}[];sources?:{schematicPath:string;sha256:string}[]},store=overviewCacheDirectory()):Promise<Overview>{
  const workspace=await realpath(input.workspace),project=await realpath(input.projectDir)
+ // Resolve the schematic to the same canonical root as `project` before
+ // keying/archiving: on macOS tmpdir (/var) is a symlink to /private/var, so
+ // an unresolved caller path would key as an absolute path outside the archive
+ // map and fail the source-hash check. realpath() is idempotent for callers
+ // that already pass canonical paths.
+ const schematicPath=await realpath(input.schematicPath)
  function inside(root:string,path:string){const rel=relative(root,path);return rel===''||(!rel.startsWith('..')&&!isAbsolute(rel))}
- if(!inside(workspace,project)||!inside(project,await realpath(input.schematicPath)))throw new Error('Overview projectDir must contain the schematic and stay inside the workspace')
+ if(!inside(workspace,project)||!inside(project,schematicPath))throw new Error('Overview projectDir must contain the schematic and stay inside the workspace')
  const files:Record<string,Uint8Array>={};let total=0
  async function bounded(path:string){
   if(!inside(workspace,await realpath(path)))throw new Error('Overview file escapes workspace')
@@ -50,7 +56,7 @@ export async function createOverview(input:{workspace:string;projectDir:string;s
  }
  await collect(project)
  for(const source of input.sources??[]){
-  const key=relative(project,source.schematicPath).replaceAll('\\','/')
+  const key=relative(project,await realpath(source.schematicPath)).replaceAll('\\','/')
   if(!files[key]||createHash('sha256').update(files[key]!).digest('hex')!==source.sha256)throw new Error('Project changed or referenced sheet is outside projectDir; refresh the formal preview before delivery')
  }
  const images=await Promise.all(input.pages.map(async page=>({name:page.exportedPageName,bytes:await bounded(page.pngPath)})))
@@ -58,13 +64,13 @@ export async function createOverview(input:{workspace:string;projectDir:string;s
  const zip=zipSync(files,{level:6});await mkdir(pending,{recursive:true});
  try{
   await writeFile(join(pending,'project.zip'),zip,{flag:'wx'})
-  await writeFile(join(pending,'placement.json'),JSON.stringify({type:'schematic',artifactUri:pathToFileURL(join(directory,'project.zip')).href,filename:`${basename(input.schematicPath,'.kicad_sch')}.zip`,root:relative(project,input.schematicPath).replaceAll('\\','/')}),{flag:'wx'})
+  await writeFile(join(pending,'placement.json'),JSON.stringify({type:'schematic',artifactUri:pathToFileURL(join(directory,'project.zip')).href,filename:`${basename(schematicPath,'.kicad_sch')}.zip`,root:relative(project,schematicPath).replaceAll('\\','/')}),{flag:'wx'})
   for(let i=0;i<images.length;i++)await writeFile(join(pending,`page-${i}.png`),images[i]!.bytes,{flag:'wx'})
   await rename(pending,directory)
  }catch(error){await rm(pending,{recursive:true,force:true});throw error}
- return {projectKey:createHash('sha256').update(join(project,relative(project,input.schematicPath))).digest('hex'),createdAt:Date.now(),title:basename(input.schematicPath,'.kicad_sch'),revision:input.revision,
+ return {projectKey:createHash('sha256').update(join(project,relative(project,schematicPath))).digest('hex'),createdAt:Date.now(),title:basename(schematicPath,'.kicad_sch'),revision:input.revision,
   pages:images.map((page,i)=>({name:page.name,imageUrl:`${OVERVIEW_ROUTE}/${id}/page-${i}.png`})),
-  downloadUrl:`${OVERVIEW_ROUTE}/${id}/project.zip`,filename:`${basename(input.schematicPath,'.kicad_sch')}.zip`,fileCount:Object.keys(files).length,size:zip.length}
+  downloadUrl:`${OVERVIEW_ROUTE}/${id}/project.zip`,filename:`${basename(schematicPath,'.kicad_sch')}.zip`,fileCount:Object.keys(files).length,size:zip.length}
 }
 
 export function overviewHandler(store=overviewCacheDirectory(),legacyStore:string|undefined=store===overviewCacheDirectory()?legacyCache:undefined){return async(req:IncomingMessage,res:ServerResponse)=>{

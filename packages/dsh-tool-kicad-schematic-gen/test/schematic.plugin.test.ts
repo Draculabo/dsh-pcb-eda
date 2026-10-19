@@ -6,7 +6,7 @@ import { apply, type Config, readWorkspaceSchematic } from '../src/schematic/ind
 test('thin entry preserves all four schematic tools and the public read helper', () => {
   const names: string[] = []
   const config: Config = {
-    maxSchematicBytes: 10000000, kicadCliPath: 'D:/kicad/10.0.0/bin/kicad-cli.exe',
+    maxSchematicBytes: 10000000, kicadCliPath: '/usr/local/bin/kicad-cli',
     previewDensity: 288, previewMaxWidth: 2400, previewMaxPages: 4, previewPadding: 32,
     previewTimeoutMs: 30000, previewTrimThreshold: 10, flatListLimit: 120,
     flatTemplateDir: fileURLToPath(new URL('../skills/kicad-schematic-design/templates/', import.meta.url)),

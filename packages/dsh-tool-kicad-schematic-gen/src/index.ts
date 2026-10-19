@@ -8,7 +8,7 @@ import {apply as registerSkills} from './skills.ts'
 import {registerModuleAnalysis} from './schematic/analysis-tool.ts'
 
 export {Config,resolveConfig} from './config.ts'
-export const name='@local/dsh-tool-kicad-schematic-gen'
+export const name='@huaqiu/dsh-tool-kicad-schematic-gen'
 export const inject=['tools','fs','sandboxPolicy','skills','webServer'] as const
 
 export function apply(ctx:Context, input:ConfigInput={}):void {

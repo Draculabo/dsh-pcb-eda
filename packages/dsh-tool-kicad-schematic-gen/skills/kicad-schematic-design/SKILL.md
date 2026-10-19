@@ -5,7 +5,7 @@ description: Generate a hardware design document with hardware-design-brief befo
 
 # KiCad 统一原理图设计
 
-在当前 KiCad 项目交付可编辑的完整原理图。需要启用 `@huaqiu/dsh-tool-part-search` 和 `@local/dsh-tool-kicad-schematic-gen`；工具关闭时不绕过开关访问同一服务。确认会话工作目录与目标项目一致，处理编辑器中相关文件的未保存改动。
+在当前 KiCad 项目交付可编辑的完整原理图。需要启用 `@huaqiu/dsh-tool-part-search` 和 `@huaqiu/dsh-tool-kicad-schematic-gen`；工具关闭时不绕过开关访问同一服务。确认会话工作目录与目标项目一致，处理编辑器中相关文件的未保存改动。
 
 脚本使用本 skill 末尾运行时提供的安装目录设置 `DSH_SCHEMATIC_PLUGIN_DIR`、`KICAD_SYMBOL_DIR`；参考示例统一通过 assets/runtime.mjs 加载库和模板，不写死其他电脑的目录。复制 assets 示例时保留其相对结构。
 
@@ -47,7 +47,7 @@ description: Generate a hardware design document with hardware-design-brief befo
 
 进入实际原理图适配后，结构化局部编辑用 `edit_kicad_flat_schematic` 的 list/create，读取 UUID、引用和引脚信息，明确指定删除、数值、标签、导线和说明改动。先读 [编辑参考](references/editing.md)。首次 list 集中获取本次编辑实际需要的对象，复用返回对象与 UUID；只有具体缺少信息或分页被截断时再查询，不按每种对象类型反复读同一模块。该工具不新增或移动符号；需要新增器件时使用构建库的 importModule 保留修改后的电路，再用 addSymbol 添加实际符号并明确布线。禁止固定行号删改、全局字符串替换或重写符号解析器。
 
-修改缺少器件或 symbol、以及从零设计时，均优先 `@huaqiu/dsh-tool-part-search` 和 `@local/dsh-tool-kicad-schematic-gen`：`search_hqsch_parts` → 选定候选的 `get_kicad_component_models` → `import_kicad_component`。符号和封装成套导入最终 project/，便于两个库表与正式工程一致；导入本身不会放置器件。搜索 items 中的 manufacturer.id 映射为后续工具的 manufacturer_id（公开工具统一使用 manufacturer_id，不传旧别名），mpn 保持精确型号不变。搜索 hasSymbol/hasFootprint/has3dModel 是筛选推导标记，必须以实际模型解析结果为准。按需用同一 manufacturer_id/mpn 调用 `get_kicad_datasheet`。复用已有查询和导入结果。模型检查与导入按依赖执行，先确认各候选摘要再导入；同一失败 sourceUrl/符号结构不因换 MPN 而重复尝试，改选不同模型。先查看模型摘要/导入结果的 builderCompatibility：ready 表示支持列出的 availableUnits；normalization=common_only_to_unit_1 表示独立公共单元符号可自动规范为单元 1，直接导入并放置 unit 1，无需换器件或手改库。unsupported_units 时按照 nextAction 换候选，不先编写放置脚本再反复试 unit 1。正常生成按编程接口和范例调用，不读取 builder 实现或另写解析器来发现引脚；只有明确的库内部错误且调用参考不足时才查对应实现。使用 list 返回的 pins 或 sch.pinCatalog 一次读取实际引脚坐标，布线用 sch.pin；不要另写正则提取程序。模型摘要中 symbol/footprint 分别为 parsed、missing 或 invalid；invalid 按 code/sourceUrl/nextAction 更换该模型，不原样重试，也不丢弃另一个正常模型。格式兼容不代表器件型号、封装或物理引脚一致，不能仅改 Value 就把替代符号当作目标器件。
+修改缺少器件或 symbol、以及从零设计时，均优先 `@huaqiu/dsh-tool-part-search` 和 `@huaqiu/dsh-tool-kicad-schematic-gen`：`search_hqsch_parts` → 选定候选的 `get_kicad_component_models` → `import_kicad_component`。符号和封装成套导入最终 project/，便于两个库表与正式工程一致；导入本身不会放置器件。搜索 items 中的 manufacturer.id 映射为后续工具的 manufacturer_id（公开工具统一使用 manufacturer_id，不传旧别名），mpn 保持精确型号不变。搜索 hasSymbol/hasFootprint/has3dModel 是筛选推导标记，必须以实际模型解析结果为准。按需用同一 manufacturer_id/mpn 调用 `get_kicad_datasheet`。复用已有查询和导入结果。模型检查与导入按依赖执行，先确认各候选摘要再导入；同一失败 sourceUrl/符号结构不因换 MPN 而重复尝试，改选不同模型。先查看模型摘要/导入结果的 builderCompatibility：ready 表示支持列出的 availableUnits；normalization=common_only_to_unit_1 表示独立公共单元符号可自动规范为单元 1，直接导入并放置 unit 1，无需换器件或手改库。unsupported_units 时按照 nextAction 换候选，不先编写放置脚本再反复试 unit 1。正常生成按编程接口和范例调用，不读取 builder 实现或另写解析器来发现引脚；只有明确的库内部错误且调用参考不足时才查对应实现。使用 list 返回的 pins 或 sch.pinCatalog 一次读取实际引脚坐标，布线用 sch.pin；不要另写正则提取程序。模型摘要中 symbol/footprint 分别为 parsed、missing 或 invalid；invalid 按 code/sourceUrl/nextAction 更换该模型，不原样重试，也不丢弃另一个正常模型。格式兼容不代表器件型号、封装或物理引脚一致，不能仅改 Value 就把替代符号当作目标器件。
 
 用于后续 PCB 的实际器件默认执行成套导入 `import_kicad_component({manufacturer_id, mpn, projectDir})`，具体用法见 [器件与封装交付](references/component-pcb.md)。只有成功返回的 `hasSymbol: true`、`hasFootprint: true` 和 `validation.pinPadMatch: number_sets_match` 才表示实际双模型已下载并通过编号集合核对；搜索标记不是这个保证。缺模型、模型无效或编号不匹配时换候选，不能退回只导入符号并声称 PCB 已就绪。用户明确只做原理图或使用经过核实的本地封装时才用旧 `import_kicad_symbol`，并说明封装来源或未完成部分。电源标记、GND 等绘图符号不要求实体封装。生成 `addSymbol` 时必须显式传 `footprint: imported.footprintId`，保留 `.pretty/`、`fp-lib-table`、`.kicad_sym`、`sym-lib-table` 一起交付。编号集合相同不等于尺寸、引脚功能和电气兼容，仍按精确型号与手册确认；已有复用模块也检查实体器件的 Footprint 属性与项目可用封装，不自动把模块都标为已验证。
 

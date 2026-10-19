@@ -1,4 +1,4 @@
-# @local/dsh-tool-kicad-schematic-gen
+# @huaqiu/dsh-tool-kicad-schematic-gen
 
 [中文](README.zh.md)
 

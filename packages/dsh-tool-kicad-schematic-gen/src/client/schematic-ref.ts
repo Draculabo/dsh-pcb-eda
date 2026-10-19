@@ -1,5 +1,14 @@
 /**
- * `@huaqiu/dsh-tool-schematic-gen` — the `@schematic-gen` reference source.
+ * `@huaqiu/dsh-tool-kicad-schematic-gen` — the `@schematic-gen` reference source.
+ *
+ * Migrated from the retired `@huaqiu/dsh-tool-schematic-gen` plugin (its online
+ * SSE agents were removed with the package). The chip identity, the `@`
+ * trigger, the clipboard projection and the menu row are preserved verbatim so
+ * existing drafts and the composer UX keep working. The one deliberate change:
+ * the chip's model text now pins the bundled `kicad-schematic-design` skill
+ * instead of the deleted online tools (`generate_schematic_from_description` /
+ * `generate_system_module_graph`), because the design skill is the new local
+ * entry point the agent must follow.
  *
  * One module owns the identity of the chip, its menu row, and the model text
  * the chip expands to at submit time. Registering the source is MANDATORY, not
@@ -14,10 +23,10 @@
  * *Files & folders* / *Sessions*.
  *
  * Everything the pipeline needs is declared STRUCTURALLY — no DSH package is
- * imported, so the client bundle stays pure (see `test/client-bundle-purity`).
- * The one import, `@huaqiu/dsh-sidebar-entry`, is our own plain library and is
- * covered by `alwaysBundle`; it is read for the host `<html lang>`, which is
- * how the chip label follows the UI language.
+ * imported, so the client bundle stays pure. The one import,
+ * `@huaqiu/dsh-sidebar-entry`, is our own plain library and is covered by
+ * `alwaysBundle`; it is read for the host `<html lang>`, which is how the chip
+ * label follows the UI language.
  *
  * @module
  */
@@ -111,14 +120,22 @@ export function schematicGenDescription(lang: HostLocale | undefined = detectHos
  * Deliberately an *intent*, never a fabricated design description — the user's
  * own words stay the only source of requirements, and the plugin being loaded
  * is never by itself a reason to generate.
+ *
+ * The retired plugin pinned the online tools here
+ * (`generate_schematic_from_description` / `generate_system_module_graph`).
+ * The migrated chip pins the bundled `kicad-schematic-design` skill instead:
+ * the skill owns the module search / part import / editable-project flow, and
+ * starts from the hardware design brief when no plan exists yet. Hand-written
+ * KiCad files stay forbidden in both worlds.
  */
 export const SCHEMATIC_GEN_SERIALIZED =
-  '<schematic-gen intent="generate_schematic_from_description">\n' +
+  '<schematic-gen intent="kicad-schematic-design">\n' +
   'The user explicitly chose Schematic Gen for this request. Produce the design ' +
-  'with the `generate_schematic_from_description` tool; for a multi-module or ' +
-  'system-level design use `generate_system_module_graph` instead.\n' +
+  'with the `kicad-schematic-design` skill; when the hardware design brief is ' +
+  'missing or incomplete, the skill starts by preparing it before the schematic ' +
+  'work.\n' +
   'Never hand-write .kicad_sch files or KiCad project files yourself — always go ' +
-  'through the tools.\n' +
+  'through the skill and its tools.\n' +
   "Use the user's own words as the design description. If they have not described " +
   'the circuit yet, ask for the requirements instead of assuming them.\n' +
   '</schematic-gen>'

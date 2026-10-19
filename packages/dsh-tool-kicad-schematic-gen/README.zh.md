@@ -1,4 +1,4 @@
-# @local/dsh-tool-kicad-schematic-gen
+# @huaqiu/dsh-tool-kicad-schematic-gen
 
 将四个原理图插件统一安装为一个插件，内部继续分为 components、modules、schematic 与设计技能。
 
@@ -26,7 +26,7 @@ KiCad CLI 自动从当前运行时安装位置或 PATH 查找，也可通过 KIC
 
 正式概览快照保存到当前 DSH_HOME/plugin-data/dsh-tool-kicad-schematic-gen/overview-cache；没有 DSH_HOME 时使用用户数据目录，不要求插件安装目录可写。快照完整写入后才发布，旧会话仍可读取插件目录中原有的 .overview-cache。不会自动删除历史快照；手动清理对应快照后，旧会话中的下载和放置操作将失效。
 
-在工作区根目录执行 pnpm --filter @local/dsh-tool-kicad-schematic-gen build、typecheck 或 test。使用配套 DSH CLI 注册本目录，替换旧四个插件，并重新打开 KiCad AI 助手。历史备份和旧脚本兼容见 [合并说明](../../docs/SCHEMATIC-MERGE.md)。
+在工作区根目录执行 pnpm --filter @huaqiu/dsh-tool-kicad-schematic-gen build、typecheck 或 test。使用配套 DSH CLI 注册本目录，替换旧四个插件，并重新打开 KiCad AI 助手。历史备份和旧脚本兼容见 [合并说明](../../docs/SCHEMATIC-MERGE.md)。
 
 成套器件导入：`import_kicad_component({manufacturer_id, mpn, projectDir})` 同时下载符号与封装，登记两个项目库表，返回 `footprintId`。放置时传 `footprint: imported.footprintId`。两种实际模型可用且引脚/焊盘编号集合匹配才成功；仍需手册核对尺寸与功能。公开调用只使用 `manufacturer_id`，旧 `mfgId` 仅在内部解析层为历史直接调用保留。
 

@@ -3,6 +3,7 @@ import type * as ReactTypes from 'react'
 import {parseCard} from './overview-result.ts'
 import {placementHost,placeOverview,type PlacementHost} from './place.ts'
 import {supersededOverviews} from './latest-overview.ts'
+import {registerSchematicGenSource} from './schematic-ref.ts'
 
 interface ClientContext {
  get?:(name:string)=>PlacementHost|undefined
@@ -27,7 +28,7 @@ function keepDeliveryVisible(){
  reveal();return()=>{disposed=true;observer.disconnect();if(frame)cancelAnimationFrame(frame)}
 }
 const loader=(window as unknown as {__ModuleLoader__:{load:(options:unknown)=>void}}).__ModuleLoader__
-loader.load({id:'@local/dsh-tool-kicad-schematic-gen',factory:(require:(name:string)=>typeof ReactTypes)=>{
+loader.load({id:'@huaqiu/dsh-tool-kicad-schematic-gen',factory:(require:(name:string)=>typeof ReactTypes)=>{
  const React=require('react'),{createElement:h,useState,useEffect}=React
  let getHost:(()=>PlacementHost|undefined)|undefined
  function Card(props:{block?:unknown;sessionId?:string}){
@@ -71,7 +72,8 @@ loader.load({id:'@local/dsh-tool-kicad-schematic-gen',factory:(require:(name:str
  return {inject:['slots'],apply:(ctx:ClientContext)=>{
   getHost=()=>ctx.get?.('hqEdge')
   const stopVisibility=keepDeliveryVisible()
+  const stopRefs=registerSchematicGenSource(ctx.get?.('inputTriggers'))
   const dispose=ctx.slots.inject('tool.call.toolview',()=>ctx.slots.register({name:'tool.call.toolview',key:'render_kicad_module_preview'},Card))
-  ctx.effect?.(()=>()=>{stopVisibility();if(typeof dispose==='function')dispose()})
+  ctx.effect?.(()=>()=>{stopVisibility();stopRefs();if(typeof dispose==='function')dispose()})
  }}
 }})
