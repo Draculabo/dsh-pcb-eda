@@ -1,6 +1,6 @@
 {
   "name": "@huaqiu/dsh-huaqiu-about",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "HuaQiu About section in the DSH settings page: original DSH mark, bundled DSH version and the Powered-by-DSH claim.",
   "type": "module",
   "main": "./lib/index.mjs",
@@ -31,7 +31,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.0"
+    "@deepseek-ai/dsh-host-webserver": "^0.2.1-rc.2"
   },
   "files": [
     "lib",

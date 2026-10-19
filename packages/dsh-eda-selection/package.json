@@ -1,6 +1,6 @@
 {
   "name": "@huaqiu/dsh-eda-selection",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Ambient 'Current Selection' chip above the DSH composer plus a dynamic system-prompt section describing the focused EDA editor's selection.",
   "type": "module",
   "main": "./lib/index.mjs",
@@ -30,7 +30,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.0"
+    "@deepseek-ai/dsh-host-webserver": "^0.2.1-rc.2"
   },
   "files": [
     "lib",

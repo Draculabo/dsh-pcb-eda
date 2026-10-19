@@ -1,6 +1,6 @@
 {
   "name": "@huaqiu/dsh-kicad-drc",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "KiCad DRC tool for DeepSeek Harness — run kicad-cli pcb drc, return structured results, and render the report as a paginated card in the Web GUI.",
   "type": "module",
   "main": "lib/index.js",
@@ -53,7 +53,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.7"
+    "@deepseek-ai/dsh-tools": "^0.2.1-rc.2"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
