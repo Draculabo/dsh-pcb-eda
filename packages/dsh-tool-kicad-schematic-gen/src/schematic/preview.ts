@@ -3,8 +3,48 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import sharp from 'sharp'
 import { previewExportError, PreviewError } from './preview-diagnostics.ts'
+
+/**
+ * `sharp` is an OPTIONAL native module and is loaded LAZILY, never imported at
+ * module scope.
+ *
+ * A static `import sharp from 'sharp'` makes plugin activation depend on a
+ * native binary and on every transitive dependency it pulls in (`detect-libc`,
+ * `@img/sharp-<platform>`, …). HQ Edge bundles only the unscoped top-level
+ * runtime deps into the plugin tree, so one missing transitive package makes
+ * `sharp` unresolvable — and a failed node import takes the whole entry down:
+ * DSH reports "N entries did not activate", the client half is never
+ * registered, and neither the sidebar row nor the `@` trigger appear. That is
+ * a packaging detail of the host, and it must never be able to remove the
+ * plugin's UI. Rasterization is one preview step; everything else works
+ * without it.
+ */
+type SharpFactory = (typeof import('sharp'))['default']
+
+let sharpFactory: SharpFactory | undefined
+let sharpError: string | undefined
+
+/**
+ * Resolve the `sharp` factory on first use.
+ * @returns the sharp callable.
+ * @throws when the optional native module is not loadable in this install.
+ */
+export async function loadSharp(): Promise<SharpFactory> {
+  if (sharpFactory !== undefined) return sharpFactory
+  if (sharpError !== undefined) throw new Error(sharpError)
+  try {
+    const loaded = (await import('sharp')) as unknown as { default?: SharpFactory } & SharpFactory
+    const factory = loaded.default ?? loaded
+    if (typeof factory !== 'function') throw new Error('sharp did not export a callable default')
+    sharpFactory = factory
+    return factory
+  } catch (error) {
+    sharpError = 'preview rasterization requires the optional `sharp` native module: '
+      + String((error as Error)?.message ?? error)
+    throw new Error(sharpError)
+  }
+}
 
 /** Deployment-owned rendering limits and executable path. */
 export interface PreviewConfig {
@@ -212,7 +252,7 @@ export async function rasterizePage(svgPath: string, config: PreviewConfig, view
   const boundedTag = tag.replace(/\s(?:width|height)="[^"]*"/gu, '')
     .replace(/>$/u, ` width="${box[2]! * scale}px" height="${box[3]! * scale}px">`)
   svg = svg.replace(tag, boundedTag)
-  const image = sharp(Buffer.from(svg), { density: config.previewDensity })
+  const image = (await loadSharp())(Buffer.from(svg), { density: config.previewDensity })
   if (!viewBox) image.trim({ background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: config.previewTrimThreshold })
   return await image
     .resize({ width: innerWidth, withoutEnlargement: true })
