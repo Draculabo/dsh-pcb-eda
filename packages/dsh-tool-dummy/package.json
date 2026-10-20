@@ -1,6 +1,6 @@
 {
   "name": "@huaqiu/dsh-tool-dummy",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Dummy Huaqiu DSH plugin for exercising remote plugin discovery (install/update/current states) end to end.",
   "type": "module",
   "main": "./lib/index.mjs",
