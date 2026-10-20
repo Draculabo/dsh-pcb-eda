@@ -1,9 +1,0 @@
-# DSH bundle patch: inserts the dummy discovery-test plugin.
-# The entry inject must match the node-half module contract
-# (`src/index.ts` — export const inject). The dummy needs nothing but the
-# webServer surface that hosts its probe route, so the loader never has to
-# hold the entry back.
-- insert:
-    - id: dsh-tool-dummy
-      name: '@huaqiu/dsh-tool-dummy'
-      inject: ['webServer']
