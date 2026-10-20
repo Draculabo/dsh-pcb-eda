@@ -18,6 +18,12 @@
  * source"). A chip inserted without a registered source would therefore block
  * the user's message instead of degrading quietly.
  *
+ * The registration is also ORDER-sensitive: the trigger service is provided by
+ * a plugin whose own dependency chain is longer than ours, so reading it once
+ * at `apply()` time can find nothing. The entry therefore declares
+ * `inputTriggers` in its `inject` (cordis parks the plugin until the provider
+ * exists) and retries briefly if it still arrives late.
+ *
  * Registering it also buys the typed path for free: the user can type `@` and
  * pick *Generate schematic* (生成原理图 under a Chinese UI) from a group beside
  * *Files & folders* / *Sessions*.
@@ -127,18 +133,23 @@ export function schematicGenDescription(lang: HostLocale | undefined = detectHos
  * the skill owns the module search / part import / editable-project flow, and
  * starts from the hardware design brief when no plan exists yet. Hand-written
  * KiCad files stay forbidden in both worlds.
+ *
+ * Shape: the clipboard token first, so the sent message (and the transcript
+ * the user reads back) stays recognizable, then three lines — each buying one
+ * behavior and each mapping to an observed failure mode:
+ * 1. pin the skill — the old online tools are gone, so an unpinned agent may
+ *    reach for a dead entry point or improvise;
+ * 2. forbid hand-written `.kicad_sch` files — asked for "an ESP32 mini", an
+ *    LLM will otherwise author KiCad files itself, which KiCad cannot open;
+ * 3. defer to the user's words — a gesture is not a spec, so the agent must
+ *    ask for requirements rather than invent them.
+ * The first chip shipped this as a `<schematic-gen intent=…>` block; the
+ * trimmed form below is the same contract with less noise.
  */
 export const SCHEMATIC_GEN_SERIALIZED =
-  '<schematic-gen intent="kicad-schematic-design">\n' +
-  'The user explicitly chose Schematic Gen for this request. Produce the design ' +
-  'with the `kicad-schematic-design` skill; when the hardware design brief is ' +
-  'missing or incomplete, the skill starts by preparing it before the schematic ' +
-  'work.\n' +
-  'Never hand-write .kicad_sch files or KiCad project files yourself — always go ' +
-  'through the skill and its tools.\n' +
-  "Use the user's own words as the design description. If they have not described " +
-  'the circuit yet, ask for the requirements instead of assuming them.\n' +
-  '</schematic-gen>'
+  '@schematic-gen — use the kicad-schematic-design skill for this request.\n' +
+  'Never hand-write .kicad_sch files; go through the skill and its tools.\n' +
+  "Use the user's own words; ask for the requirements if the brief is missing."
 
 /** Menu/group candidate description. */
 /**
@@ -255,18 +266,167 @@ export function createSchematicGenSource(
  * @returns disposer (a no-op when registration did not happen).
  */
 export function registerSchematicGenSource(registry: unknown): () => void {
+  return registerSchematicGenSourceTracked(registry).dispose
+}
+
+/** Outcome of one registration attempt. */
+export interface SchematicGenRegistration {
+  /** Whether the source is now live in the trigger roster. */
+  readonly registered: boolean
+  /** Unregister (a no-op when the attempt did not register). */
+  readonly dispose: () => void
+}
+
+/**
+ * One registration attempt, reported instead of swallowed.
+ *
+ * {@link registerSchematicGenSource} is the disposer-only view for callers that
+ * do not care; this is the same attempt with the outcome visible, which is what
+ * a caller needs to decide whether a chip may be inserted at all — an
+ * unregistered source makes every send fail (see the module header).
+ *
+ * @param registry - `ctx.get('inputTriggers')`, or undefined.
+ * @returns whether the registration landed, plus its disposer.
+ */
+export function registerSchematicGenSourceTracked(registry: unknown): SchematicGenRegistration {
   if (
     registry === undefined || registry === null ||
     typeof (registry as InputTriggerRegistryLike).registerSource !== 'function'
   ) {
-    return () => {}
+    return { registered: false, dispose: () => {} }
   }
   try {
     const dispose = (registry as InputTriggerRegistryLike).registerSource(createSchematicGenSource())
-    return typeof dispose === 'function' ? dispose : () => {}
+    return {
+      registered: true,
+      dispose: typeof dispose === 'function' ? dispose : () => {},
+    }
   } catch {
     // Already registered (duplicate trigger/name) — the existing owner keeps
     // serving our chips, which is the correct outcome.
-    return () => {}
+    return { registered: true, dispose: () => {} }
+  }
+}
+
+/** Scheduler seam for {@link registerSchematicGenSourceWhenReady} (tests inject fakes). */
+export interface RegistrationRetryHooks {
+  /** Poll interval while the trigger service is still absent. */
+  intervalMs?: number
+  /** Give up after this many polls; default 80 (≈20 s at 250 ms). */
+  maxAttempts?: number
+  /** Timer constructor; defaults to the host `setInterval`. */
+  setTimer?: (fn: () => void, ms: number) => unknown
+  /** Timer destructor; defaults to the host `clearInterval`. */
+  clearTimer?: (handle: unknown) => void
+  /** Trace sink; defaults to this module's {@link trace}. */
+  trace?: (event: string, payload?: unknown) => void
+}
+
+/** Live registration handle returned by {@link registerSchematicGenSourceWhenReady}. */
+export interface SchematicGenSourceBinding {
+  /** Whether the source is registered RIGHT NOW (re-read on every call). */
+  registered(): boolean
+  /** Stop retrying and unregister. */
+  dispose(): void
+}
+
+/**
+ * Host timer, or undefined where there is none.
+ *
+ * The retry is browser-only machinery, and the built bundle is also evaluated
+ * in bare hosts (the vm-based card test, a non-DOM worker) where `setInterval`
+ * does not exist. Those must degrade to "not registered yet" — a throw here
+ * would take the whole client half down, which is the failure mode this module
+ * exists to prevent.
+ */
+function hostTimer(): { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void } | undefined {
+  if (typeof setInterval !== 'function' || typeof clearInterval !== 'function') return undefined
+  return {
+    set: (fn, ms) => setInterval(fn, ms),
+    clear: (handle) => clearInterval(handle as never),
+  }
+}
+
+/**
+ * Register the source, polling while the trigger service has not activated yet.
+ *
+ * Why this exists: activation is service-availability driven, and
+ * `inputTriggers` is provided by a plugin (`dsh-client-ui-input-trigger`) whose
+ * own dependency chain is far longer than ours. A plugin that reads the service
+ * exactly once at `apply()` time and finds it absent registers NOTHING —
+ * silently. The chip then lands in the composer (insertion only needs
+ * `conversation`) and the send dies on
+ * `slash: no serializer for reference source "schematic-gen"`, because the
+ * controller routes every chip to its owner's codec. Declaring `inputTriggers`
+ * in the plugin's `inject` is the primary fix (cordis then parks this plugin
+ * until the provider exists); this poll is the belt-and-braces path for a
+ * provider that arrives later than that declaration could promise.
+ *
+ * @param getRegistry - returns the current `ctx.get('inputTriggers')` value.
+ * @param hooks - scheduler/trace seams.
+ * @returns a live binding whose `registered()` the caller may consult.
+ */
+export function registerSchematicGenSourceWhenReady(
+  getRegistry: () => unknown,
+  hooks: RegistrationRetryHooks = {},
+): SchematicGenSourceBinding {
+  const intervalMs = hooks.intervalMs ?? 250
+  const maxAttempts = hooks.maxAttempts ?? 80
+  const traceFn = hooks.trace ?? trace
+  const timer = hooks.setTimer !== undefined && hooks.clearTimer !== undefined
+    ? { set: hooks.setTimer, clear: hooks.clearTimer }
+    : hostTimer()
+
+  let current: SchematicGenRegistration = registerSchematicGenSourceTracked(getRegistry())
+  let handle: unknown
+  let attempts = 0
+  let stopped = false
+
+  const stopTimer = (): void => {
+    if (handle === undefined || timer === undefined) return
+    timer.clear(handle)
+    handle = undefined
+  }
+
+  const dispose = (): void => {
+    stopped = true
+    stopTimer()
+    current.dispose()
+  }
+
+  if (current.registered) {
+    return { registered: () => true, dispose }
+  }
+
+  if (timer === undefined) {
+    // No timer host: the caller's `registered()` stays false and the sidebar
+    // click declines to insert, which is the honest outcome — a chip that
+    // cannot be submitted is worse than no chip.
+    traceFn('no timer host — source registration not retried')
+    return { registered: () => false, dispose }
+  }
+
+  traceFn('waiting for inputTriggers', { intervalMs, maxAttempts })
+  handle = timer.set(() => {
+    if (stopped) return
+    attempts += 1
+    const next = registerSchematicGenSourceTracked(getRegistry())
+    if (next.registered) {
+      // The earlier attempt registered nothing, so it carries no disposer of
+      // its own — only the winning registration needs unregistering.
+      current = next
+      stopTimer()
+      traceFn('registered (late)', { attempts })
+      return
+    }
+    if (attempts >= maxAttempts) {
+      stopTimer()
+      traceFn('source registration gave up', { attempts })
+    }
+  }, intervalMs)
+
+  return {
+    registered: () => current.registered,
+    dispose,
   }
 }

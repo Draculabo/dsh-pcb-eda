@@ -7,6 +7,7 @@
  *
  * @module
  */
+import { normalizePluginUpdateReport } from './version.js'
 
 export const UPDATE_BASE = '/api/v1/huaqiu/plugin-update'
 
@@ -15,6 +16,12 @@ export interface PluginUpdateItem {
   /** Version installed in the active bundle; null when the plugin is absent. */
   currentVersion: string | null
   availableVersion: string
+  /**
+   * Server state. `update` is re-checked on arrival against the SemVer
+   * direction rule (`version.ts`): an offer that is not strictly newer than
+   * `currentVersion` is demoted to `current`, so the panel and the badge can
+   * never offer a downgrade even against an older hq-edge.
+   */
   state: 'current' | 'update' | 'install' | 'blocked' | 'ignored'
   /** The block reason, or null when the item is not blocked. The server sends a
    *  single code (`"runtime-unknown"`), so it is normalized before use. */
@@ -137,12 +144,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** GET the cached (or empty-shell) plugin-update report. */
 export function fetchReport(): Promise<PluginUpdateReport> {
-  return request<PluginUpdateReport>('/report')
+  return request<PluginUpdateReport>('/report').then(normalizePluginUpdateReport)
 }
 
 /** POST an explicit refresh; returns the freshly computed report. */
 export function checkUpdates(): Promise<PluginUpdateReport> {
-  return request<PluginUpdateReport>('/check', { method: 'POST' })
+  return request<PluginUpdateReport>('/check', { method: 'POST' }).then(normalizePluginUpdateReport)
 }
 
 export interface InstallResult {

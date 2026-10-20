@@ -13,9 +13,10 @@
  * override shadows the configured URL.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runtimeLatestVersion, type PluginUpdateReport } from '../src/client/api.js'
+import { runtimeLatestVersion, type PluginUpdateItem, type PluginUpdateReport } from '../src/client/api.js'
 import { COPY } from '../src/client/copy.js'
 import { openUpdateView, type UpdateStoreLike } from '../src/client/update-view.js'
+import { normalizePluginUpdateReport } from '../src/client/version.js'
 
 // The view calls the API directly, so stub the calls it makes. Everything
 // else (facts rows, install bar) is exercised for real.
@@ -470,5 +471,152 @@ describe('plugin update source editor', () => {
     pluginEditButton()?.click()
     expect(pluginInput()).not.toBeNull()
     expect(runtimeInput()).toBeNull()
+  })
+})
+
+// ── Version direction gate (the reported corner case) ───────────────────────
+//
+// The panel once rendered `analytics 可更新 0.6.4 → 0.6.2` with a live 安装
+// button for the whole 16-plugin set: the manifest published 0.6.2 while the
+// active bundle already held 0.6.4. "Update available" must exist only when
+// the remote SemVer is strictly greater than the local one — an older
+// hq-edge still reports the wrong state, so every report is normalized at
+// the fetch boundary (fetchReport/checkUpdates) before it reaches the view.
+describe('plugin item version direction (UI)', () => {
+  const analyticsCard = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('.hqpu-card[data-plugin-name="@huaqiu/dsh-analytics"]')
+
+  function item(overrides: Partial<PluginUpdateItem>): PluginUpdateItem {
+    return {
+      name: '@huaqiu/dsh-analytics',
+      currentVersion: null,
+      availableVersion: '0.6.4',
+      state: 'install',
+      ...overrides,
+    }
+  }
+
+  function reportWithItems(items: PluginUpdateItem[]): PluginUpdateReport {
+    return normalizePluginUpdateReport({
+      ...reportWith(runtimeEntry()),
+      items,
+    })
+  }
+
+  it('a lagging manifest offer is not 可更新 and carries no install button', () => {
+    // Exactly what the shell reported: installed 0.6.4, manifest 0.6.2.
+    const raw = item({ currentVersion: '0.6.4', availableVersion: '0.6.2', state: 'update' })
+    openUpdateView(fakeStore(reportWithItems([raw])), COPY.zh)
+
+    const card = analyticsCard()
+    expect(card).not.toBeNull()
+    expect(card?.dataset.state).toBe('current')
+    // Reads as up-to-date, not as an update.
+    expect(card?.querySelector('.hqpu-tag')?.textContent).toBe(COPY.zh.state.current)
+    expect(card?.textContent).toContain('0.6.4')
+    // No install control anywhere on the card.
+    expect(card?.querySelector('button')).toBeNull()
+    // It lands in the settled group, not in 待处理.
+    const groups = [...document.querySelectorAll<HTMLElement>('.hqpu-group')]
+    const inActionable = groups.some(
+      (g) => g.dataset.group === COPY.zh.group.actionable && g.contains(card as Node),
+    )
+    expect(inActionable).toBe(false)
+    const inCurrent = groups.some(
+      (g) => g.dataset.group === COPY.zh.group.current && g.contains(card as Node),
+    )
+    expect(inCurrent).toBe(true)
+    // And the footer agrees: nothing to install at all.
+    expect(document.body.textContent).toContain(COPY.zh.nothingToInstall)
+  })
+
+  it('a genuinely newer remote version stays 可更新 with its install button', () => {
+    const raw = item({ currentVersion: '0.6.2', availableVersion: '0.6.4', state: 'update' })
+    openUpdateView(fakeStore(reportWithItems([raw])), COPY.zh)
+
+    const card = analyticsCard()
+    expect(card?.dataset.state).toBe('update')
+    expect(card?.querySelector('.hqpu-tag')?.textContent).toBe(COPY.zh.state.update)
+    expect(card?.textContent).toContain('0.6.2 → 0.6.4')
+    expect(card?.querySelector('button')?.textContent).toContain(COPY.zh.installOne)
+    const groups = [...document.querySelectorAll<HTMLElement>('.hqpu-group')]
+    expect(
+      groups.some((g) => g.dataset.group === COPY.zh.group.actionable && g.contains(card as Node)),
+    ).toBe(true)
+  })
+
+  it('the reported 16-plugin lagging manifest leaves nothing actionable', () => {
+    // analytics, artifacts, auth, … — 16 plugins at 0.6.4 against a 0.6.2
+    // manifest: every card demoted, badge and footer both at zero.
+    const names = [
+      'analytics',
+      'artifacts',
+      'auth',
+      'eda-host',
+      'eda-selection',
+      'huaqiu-about',
+      'kicad',
+      'kicad-drc',
+      'tool-part-search',
+      'tool-pcb-viewer',
+      'tool-plugin-update',
+      'tool-quote',
+      'tool-symbol-footprint',
+      'ui-theme-huaqiu',
+      'dsh-plugin-log',
+      'dsh-sidebar-entry',
+    ]
+    openUpdateView(
+      fakeStore(
+        reportWithItems(
+          names.map((name) =>
+            item({
+              name: `@huaqiu/dsh-${name}`,
+              currentVersion: '0.6.4',
+              availableVersion: '0.6.2',
+              state: 'update',
+            }),
+          ),
+        ),
+      ),
+      COPY.zh,
+    )
+
+    const cards = [...document.querySelectorAll<HTMLElement>('.hqpu-card')]
+    expect(cards).toHaveLength(16)
+    expect(cards.every((c) => c.dataset.state === 'current')).toBe(true)
+    // No install button anywhere, in any group.
+    expect(document.querySelector('.hqpu-cards button')).toBeNull()
+    expect(document.body.textContent).toContain(COPY.zh.nothingToInstall)
+  })
+
+  it('keeps a mixed report honest: only the genuine upgrade is actionable', () => {
+    openUpdateView(
+      fakeStore(
+        reportWithItems([
+          item({ currentVersion: '0.6.4', availableVersion: '0.6.2', state: 'update' }), // lagging
+          item({
+            name: '@huaqiu/dsh-kicad',
+            currentVersion: '0.6.1',
+            availableVersion: '0.6.2',
+            state: 'update',
+          }), // genuine
+          item({ name: '@huaqiu/dsh-auth', currentVersion: null, availableVersion: '0.6.2' }), // absent
+        ]),
+      ),
+      COPY.zh,
+    )
+
+    expect(analyticsCard()?.dataset.state).toBe('current')
+    expect(
+      document.querySelector<HTMLElement>('.hqpu-card[data-plugin-name="@huaqiu/dsh-kicad"]')
+        ?.dataset.state,
+    ).toBe('update')
+    expect(
+      document.querySelector<HTMLElement>('.hqpu-card[data-plugin-name="@huaqiu/dsh-auth"]')
+        ?.dataset.state,
+    ).toBe('install')
+    // Footer offers exactly the two actionable installs.
+    expect(document.body.textContent).toContain(COPY.zh.installAll(2))
   })
 })

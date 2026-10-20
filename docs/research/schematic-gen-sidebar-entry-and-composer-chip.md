@@ -6,7 +6,10 @@
 > **user-gestured** — it appears because someone clicked a sidebar toolbutton,
 > not because the host changed state.
 >
-> **Deliverable:** research + plan. **No production files were modified.**
+> **Deliverable:** research + plan, **implemented and verified** —
+> §4.3.1 records the `no serializer` incident that the first implementation
+> hit and the three-layer fix now shipped in
+> `dsh-tool-kicad-schematic-gen`.
 >
 > Goal: `@huaqiu/dsh-tool-schematic-gen` contributes a sidebar toolbutton like
 > `component-gen-app` does; clicking **“Schematic Gen”** puts a chip reading
@@ -314,6 +317,65 @@ ctx.effect(() => inputTriggers.registerSource({
 Registering the source also buys the typed path for free: the user can type
 `@` and pick **Generate schematic** from a group beside *Files & folders*.
 
+#### 4.3.1 Post-implementation: the `no serializer` incident
+
+**Symptom.** After implementing the plan above, clicking **Schematic Gen**
+inserted the chip, but pressing *Send* failed with
+`no serializer for reference source "schematic-gen"`.
+
+**Root cause — activation ordering, not registration logic.** The original
+code read the trigger service once, at `apply()` time:
+
+```ts
+const triggers = ctx.get('inputTriggers')   // undefined here!
+if (triggers) triggers.registerSource({ … })
+```
+
+Cordis activation is *service-availability* driven: `Fiber._refresh()` computes
+an epoch from the declared `inject` names, and any missing service parks the
+plugin. `ui-input-trigger`'s own dependency chain is much longer than ours, so
+at the moment our `apply()` ran the service simply did not exist yet — the
+lookup returned `undefined`, the registration was silently skipped, and
+`insertReference` still worked because it only needs `conversation`. The chip
+sat in the draft with no owner; the send died at `serializeReference`.
+
+The live boot manifest made it visible:
+`@huaqiu/dsh-tool-kicad-schematic-gen → ['@deepseek-ai/dsh-client-runtime']`
+— `inputTriggers` was never declared, so nothing ever waited for it.
+
+**Fix — three layers, in `src/client/schematic-ref.ts`:**
+
+1. **Declare it.** `dsh.client.inject` now carries `inputTriggers`
+   (`package.json` + `src/client/index.ts`), so cordis parks the plugin until
+   the provider exists instead of activating it into a half-wired world. The
+   manifest now reads `['@deepseek-ai/dsh-client-runtime', 'inputTriggers']`.
+2. **Self-heal.** `registerSchematicGenSourceWhenReady(getRegistry, hooks)`
+   registers immediately if the service is present, otherwise polls
+   (250 ms, 80 attempts ≈ 20 s) and stops on registration or cap. Timer-less
+   hosts (bare vm test contexts) are detected via `hostTimer()` and skip the
+   poll instead of throwing. Duplicate `(trigger, name)` registration counts as
+   registered — the first owner serves.
+3. **Never insert an unsubmittable chip.** The sidebar click handler checks
+   `source.registered()` first; when false it traces
+   `{ok:false, reason:'source-unregistered'}`, shows a
+   *“Schematic Gen is still starting up — click again in a moment.”* notice and
+   returns. The failure moved from *send* (blocked, data lost) to *click*
+   (retryable, nothing lost).
+
+**Verification.** 120 unit/integration tests (new:
+`test/schematic-ref.test.ts` +7, `test/client-entry.test.ts` +3);
+`tsc --noEmit` clean; a throwaway DSH instance (port 63999, temp `DSH_HOME`,
+symlinked fixed plugin) booted with the corrected manifest and activated
+cleanly; headless Chrome via CDP confirmed
+`[schematic-gen:client] apply {inputTriggers=true, slots:true}` (was `false`),
+chip insertion on click, and `serializedInPage: true` after *Send* with
+`bodyHasSerializerError: false`.
+
+> Generalization: **any** plugin that inserts chips must declare
+> `inputTriggers` in `inject` — the registration is not idempotent w.r.t. boot
+> order, and the resulting failure is a blocked send, the loudest possible
+> symptom of a silent `undefined`.
+
 ### 4.4 Fallback if `insertReference` proves too brittle
 
 `InputActions` (what every session-scope slot component receives as
@@ -493,6 +555,8 @@ present.
    skipped or disposed while a chip is in the draft, the send fails with
    `no serializer for reference source "schematic-gen"`. Dispose order matters:
    never dispose the source while `ctx.effect` still holds chips.
+   **Materialized** during implementation as an activation-ordering bug, not a
+   dispose-order bug — see §4.3.1.
 5. **`sidebar.panellist` stays unused by design here.** Registering it without a
    `main` panel makes the shipped `selectPanel` throw. If the HQ Edge
    deployment ever wants a Schematic Gen central panel, revisit — the button

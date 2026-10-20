@@ -3,7 +3,7 @@ import type * as ReactTypes from 'react'
 import {parseCard} from './overview-result.ts'
 import {placementHost,placeOverview,type PlacementHost} from './place.ts'
 import {supersededOverviews} from './latest-overview.ts'
-import {registerSchematicGenSource} from './schematic-ref.ts'
+import {registerSchematicGenSourceWhenReady} from './schematic-ref.ts'
 import {mountSchematicGenSidebarEntry} from './sidebar-entry.ts'
 import {insertSchematicChip,currentSessionId,resolveSessionScope,type ChipInserterDeps,type ConversationLike,type SessionsLike} from './composer-chip.ts'
 
@@ -71,17 +71,21 @@ loader.load({id:'@huaqiu/dsh-tool-kicad-schematic-gen',factory:(require:(name:st
    result.status!=='ok'?h('p',null,'存在未渲染页面或预览警告，请结合工具结果检查。'):null,
    message?h('p',{role:'alert'},message):null)
  }
- return {inject:['slots'],apply:(ctx:ClientContext)=>{
+ return {inject:['slots','inputTriggers'],apply:(ctx:ClientContext)=>{
   getHost=()=>ctx.get?.('hqEdge') as PlacementHost|undefined
   const stopVisibility=keepDeliveryVisible()
   // Trace the two things that decide whether the plugin is visible at all:
   // the trigger registry (the `@` menu) and the mounted sidebar row. When the
   // node half fails to import, DSH never loads this file — so silence here
   // means "the entry did not activate", not "the row failed to mount".
-  const triggers=ctx.get?.('inputTriggers')
-  try{console.debug('[schematic-gen:client] apply',{inputTriggers:triggers!==undefined&&triggers!==null,
+  // `inputTriggers` is declared in `inject`, so cordis parks this plugin until
+  // the provider exists; `registerSchematicGenSourceWhenReady` still polls, so
+  // a provider that arrives later than that promise still gets our source —
+  // an unregistered source makes every send fail with
+  // `slash: no serializer for reference source "schematic-gen"`.
+  const source=registerSchematicGenSourceWhenReady(()=>ctx.get?.('inputTriggers'))
+  try{console.debug('[schematic-gen:client] apply',{inputTriggers:source.registered(),
     slots:typeof ctx.slots?.inject==='function'})}catch{}
-  const stopRefs=registerSchematicGenSource(triggers)
   // The sidebar toolbutton. Clicking it inserts the chip; it never opens a
   // workspace. Both services are read lazily — they may materialize after this
   // plugin, and a missing one must not take the client half down.
@@ -90,6 +94,15 @@ loader.load({id:'@huaqiu/dsh-tool-kicad-schematic-gen',factory:(require:(name:st
    getSessions:()=>ctx.get?.('sessions') as SessionsLike|undefined,
   }
   const stopEntry=mountSchematicGenSidebarEntry({onToggle:()=>{
+   // Never insert a chip DSH cannot submit: the controller routes every chip to
+   // its owner's codec, so a source that never registered blocks the whole send
+   // instead of degrading. While the trigger pipeline is still warming up, say
+   // so and leave the draft clean.
+   if(!source.registered()){
+    try{console.debug('[schematic-gen:chip] click',{ok:false,reason:'source-unregistered'})}catch{}
+    notifyComposer(ctx,'source-unregistered')
+    return
+   }
    const result=insertSchematicChip(chipDeps)
    // The one line that answers "I clicked and nothing happened": every failure
    // path in the inserter is traced, so the browser console names the reason.
@@ -101,7 +114,7 @@ loader.load({id:'@huaqiu/dsh-tool-kicad-schematic-gen',factory:(require:(name:st
   },position:'after'})
   try{console.debug('[schematic-gen:client] sidebar row',{rows:document.querySelectorAll('[data-hqcg-schematic-entry]').length})}catch{}
   const dispose=ctx.slots.inject('tool.call.toolview',()=>ctx.slots.register({name:'tool.call.toolview',key:'render_kicad_module_preview'},Card))
-  ctx.effect?.(()=>()=>{stopVisibility();stopRefs();stopEntry();if(typeof dispose==='function')dispose()})
+  ctx.effect?.(()=>()=>{stopVisibility();source.dispose();stopEntry();if(typeof dispose==='function')dispose()})
  }}
  /** Surface why a chip insertion did not happen, through the composer's own notice channel. Best-effort by design. */
  function notifyComposer(context:ClientContext,reason:string){
@@ -119,13 +132,16 @@ loader.load({id:'@huaqiu/dsh-tool-kicad-schematic-gen',factory:(require:(name:st
    input?.notify?.('info',noticeFor(reason))
   }catch{/* notice delivery is strictly optional */}
  }
- /** Human-readable notice text for one insertion failure reason. */
- function noticeFor(reason:string):string{
-  switch(reason){
-   case 'no-session':return 'Open a conversation first, then click Schematic Gen again.'
-   case 'busy':return 'The composer is busy — try again once the current message settles.'
-   case 'conflict':return 'The composer changed while inserting — click Schematic Gen again.'
-   default:return 'Schematic Gen is unavailable in this session.'
-  }
+/** Human-readable notice text for one insertion failure reason. */
+function noticeFor(reason:string):string{
+ switch(reason){
+  case 'no-session':return 'Open a conversation first, then click Schematic Gen again.'
+  case 'busy':return 'The composer is busy — try again once the current message settles.'
+  case 'conflict':return 'The composer changed while inserting — click Schematic Gen again.'
+  // The trigger pipeline has not registered our source yet. Inserting anyway
+  // would produce a chip DSH refuses to submit, so the click is declined.
+  case 'source-unregistered':return 'Schematic Gen is still starting up — click again in a moment.'
+  default:return 'Schematic Gen is unavailable in this session.'
  }
+}
 }})

@@ -22,6 +22,8 @@ import {
   SCHEMATIC_GEN_TRIGGER,
   createSchematicGenSource,
   registerSchematicGenSource,
+  registerSchematicGenSourceTracked,
+  registerSchematicGenSourceWhenReady,
   schematicGenDescription,
   schematicGenInsert,
   schematicGenLabel,
@@ -61,9 +63,9 @@ test('localizes the candidate row against the host language', async () => {
 test('re-reads the language on every candidates() call, so a preference change lands', async () => {
   let lang: 'zh' | 'en' = 'en'
   const source = createSchematicGenSource([], () => lang)
-  assert.equal((await source.candidates())[0].name, 'Generate schematic')
+  assert.equal((await source.candidates())[0]?.name, 'Generate schematic')
   lang = 'zh'
-  assert.equal((await source.candidates())[0].name, '生成原理图')
+  assert.equal((await source.candidates())[0]?.name, '生成原理图')
 })
 
 test('merges extra candidates ahead of the built-in row', async () => {
@@ -86,7 +88,9 @@ test('serializes to an intent that pins the kicad-schematic-design skill', async
   const text = await source.codec.serialize(SCHEMATIC_GEN_REF, undefined)
   assert.equal(text, SCHEMATIC_GEN_SERIALIZED)
   assert.match(text, /kicad-schematic-design/)
-  assert.match(text, /<schematic-gen intent="kicad-schematic-design">/)
+  // Trimmed form: the clipboard token leads, so the sent message stays
+  // recognizable, and the skill pin rides on the same first line.
+  assert.match(text, /^@schematic-gen — use the kicad-schematic-design skill/)
   // The retired online tools must not be named by the migrated chip.
   assert.doesNotMatch(text, /generate_schematic_from_description/)
   assert.doesNotMatch(text, /generate_system_module_graph/)
@@ -111,4 +115,134 @@ test('registration forwards the disposer from the registry', () => {
 test('registration swallows duplicate-source failures', () => {
   const registry = { registerSource: () => { throw new Error('duplicate') } }
   assert.equal(typeof registerSchematicGenSource(registry), 'function')
+})
+
+// ── registration outcome (the "no serializer for reference source" guard) ────
+// A chip whose source never registered is not a cosmetic problem: DSH's
+// `serializeReference` routes every chip to its owner's codec and rejects the
+// whole send when the owner is missing. These tests pin that the caller can
+// SEE the outcome, and that a late-arriving trigger service still gets our
+// source instead of silently producing an unsubmittable chip.
+
+test('tracked registration reports the outcome of one attempt', () => {
+  const missing = registerSchematicGenSourceTracked(undefined)
+  assert.equal(missing.registered, false)
+  missing.dispose() // no-op, must not throw
+
+  let disposed = 0
+  const registry = { registerSource: () => () => { disposed += 1 } }
+  const live = registerSchematicGenSourceTracked(registry)
+  assert.equal(live.registered, true)
+  live.dispose()
+  assert.equal(disposed, 1)
+})
+
+test('a duplicate registration counts as registered (the first owner serves)', () => {
+  const registry = { registerSource: () => { throw new Error('duplicate') } }
+  assert.equal(registerSchematicGenSourceTracked(registry).registered, true)
+})
+
+/** Deterministic fake scheduler: ticks only when the test says so. */
+function fakeScheduler() {
+  const jobs = new Map<number, () => void>()
+  let next = 0
+  return {
+    setTimer: (fn: () => void) => { next += 1; jobs.set(next, fn); return next },
+    clearTimer: (handle: unknown) => { jobs.delete(Number(handle)) },
+    tick: (count = 1) => {
+      for (let i = 0; i < count; i += 1) {
+        // Snapshot first: a job that schedules or cancels during this tick is
+        // settled by the NEXT tick, never by the one already running.
+        for (const job of [...jobs.values()]) job()
+      }
+    },
+    pending: () => jobs.size,
+  }
+}
+
+test('when-ready registers immediately and schedules no retry', () => {
+  const scheduler = fakeScheduler()
+  let disposed = 0
+  const registry = { registerSource: () => () => { disposed += 1 } }
+  const binding = registerSchematicGenSourceWhenReady(() => registry, {
+    setTimer: scheduler.setTimer,
+    clearTimer: scheduler.clearTimer,
+  })
+  assert.equal(binding.registered(), true)
+  assert.equal(scheduler.pending(), 0)
+  binding.dispose()
+  assert.equal(disposed, 1)
+})
+
+test('when-ready registers a trigger service that activates after apply()', () => {
+  const scheduler = fakeScheduler()
+  let disposed = 0
+  let registry: { registerSource: () => () => void } | undefined
+  const binding = registerSchematicGenSourceWhenReady(() => registry, {
+    setTimer: scheduler.setTimer,
+    clearTimer: scheduler.clearTimer,
+  })
+  // The service was absent at apply() time — the state that produced
+  // `slash: no serializer for reference source "schematic-gen"` on send.
+  assert.equal(binding.registered(), false)
+  assert.equal(scheduler.pending(), 1)
+
+  registry = { registerSource: () => () => { disposed += 1 } }
+  scheduler.tick()
+  assert.equal(binding.registered(), true)
+  assert.equal(scheduler.pending(), 0, 'the retry timer stops once registered')
+
+  binding.dispose()
+  assert.equal(disposed, 1)
+})
+
+test('when-ready keeps polling until maxAttempts, then reports unregistered', () => {
+  const scheduler = fakeScheduler()
+  const events: string[] = []
+  const binding = registerSchematicGenSourceWhenReady(() => undefined, {
+    maxAttempts: 3,
+    setTimer: scheduler.setTimer,
+    clearTimer: scheduler.clearTimer,
+    trace: (event) => events.push(event),
+  })
+  assert.equal(binding.registered(), false)
+  scheduler.tick(2)
+  assert.equal(binding.registered(), false)
+  assert.equal(scheduler.pending(), 1, 'still polling below the cap')
+  scheduler.tick()
+  assert.equal(binding.registered(), false)
+  assert.equal(scheduler.pending(), 0, 'the retry timer stops at the cap')
+  assert.deepEqual(events, ['waiting for inputTriggers', 'source registration gave up'])
+  binding.dispose() // must be safe with nothing registered
+})
+
+test('when-ready stops polling once disposed', () => {
+  const scheduler = fakeScheduler()
+  let registered = 0
+  const binding = registerSchematicGenSourceWhenReady(() => (
+    { registerSource: () => { registered += 1; return () => {} } }
+  ), {
+    setTimer: scheduler.setTimer,
+    clearTimer: scheduler.clearTimer,
+  })
+  // First attempt succeeded (service present at apply) — no poll scheduled.
+  assert.equal(registered, 1)
+  assert.equal(scheduler.pending(), 0)
+  binding.dispose()
+
+  // The pending case: dispose must cancel the poll so a provider that appears
+  // later is never registered into a fiber that is already gone.
+  let late = 0
+  let registry: { registerSource: () => () => void } | undefined
+  const pending = registerSchematicGenSourceWhenReady(() => registry, {
+    setTimer: scheduler.setTimer,
+    clearTimer: scheduler.clearTimer,
+  })
+  assert.equal(scheduler.pending(), 1)
+  pending.dispose()
+  assert.equal(scheduler.pending(), 0)
+  registry = { registerSource: () => { late += 1; return () => {} } }
+  scheduler.tick(5)
+  assert.equal(late, 0, 'a disposed binding never registers')
+  assert.equal(pending.registered(), false)
 })
