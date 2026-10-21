@@ -3,11 +3,11 @@
   "channel": "stable",
   "releases": [
     {
-      "version": "0.3.1",
-      "sha256": "3c9029edec37a54827ce0ff306e8174f2b833872cc0169d86039602b5e95dc45",
+      "version": "0.3.2",
+      "sha256": "b82b7fef9ca35d64481ce3ff8b2e1b5be1d0bad8433227d616249f8e965219ef",
       "platform": "win",
       "arch": "x64",
-      "url": "https://down.eda.cn/data/kicad-release/edge-headless-0.3.1-win-x64.zip"
+      "url": "https://down.eda.cn/data/kicad-release/edge-headless-0.3.2-win-x64.zip"
     }
   ]
 }
