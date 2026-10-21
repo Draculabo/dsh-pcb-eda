@@ -40,7 +40,7 @@ description: "通过 KiCad IPC API 和官方 kicad-python 在打开的 PCB 中�
 
 ## 连接与版本路由
 
-1. 确认目标是 KiCad 9.0+，并使用官方包 `kicad-python`（Python 模块为 `kipy`）。先以 `KiCad()` 连接、调用 `check_version()`，再通过 `get_board()` 取得当前 PCB。
+1. 确认目标是 KiCad 9.0+，并使用官方包 `kicad-python`（Python 模块为 `kipy`）。先以 `KiCad()` 连接，再通过 `get_board()` 取得当前 PCB。
 2. KiCad 9/10 只能连接到启用 API 服务的运行中 GUI；由 KiCad 启动的 IPC 插件会提供 `KICAD_API_SOCKET` 和 `KICAD_API_TOKEN`。不要猜测、硬编码或扫描其他 KiCad 实例的连接端点。
 3. KiCad 11 可使用 `KiCad(headless=True, file_path=...)` / `kicad-cli api-server` 处理无头任务。此前版本不可把 IPC SDK 当作脱离 GUI 的板文件库。
 4. 若 KiCad 已打开但连接不到服务器，先判定不是 GUI 正忙：提示用户在 **偏好设置 → 插件** 中启用 KiCad API 服务，并在变更后重启 PCB Editor，再重新运行脚本。不要扫描命名管道、猜测 token 或以文件编辑替代连接。

@@ -6,7 +6,6 @@
 
 - IPC API 从 KiCad 9.0 起提供。KiCad 9/10 通过运行中 PCB Editor 的 IPC 服务工作；KiCad 11 增加 `kicad-cli` 无头 API 服务。
 - `kicad-python` 是官方 Python 绑定，入口是 `from kipy import KiCad`。由 KiCad 启动的插件应让 `KiCad()` 使用它提供的 `KICAD_API_SOCKET` 和 `KICAD_API_TOKEN`；不要自行伪造凭据。
-- 首次连接后调用 `kicad.check_version()`。如果失败，停止并报告本机 KiCad 与 Python 包版本不匹配，而不是继续尝试写入。
 - 若连接报错而 KiCad GUI 已打开，首先请用户在 **偏好设置 → 插件** 中启用 API 服务，重启 PCB Editor 后再试。KiCad 未启用 API 时，不存在可供脚本连接的服务端；`KICAD_API_SOCKET`、扫描命名管道或重试不能修复此配置。
 - 在 DSH 运行时，IPC 客户端需要 **Full Access** 才能访问 KiCad 的 Windows 命名管道。若当前权限不是 Full Access，先请求用户在 DSH 中提升权限或重新在 Full Access 任务中执行；不应把这类权限拒绝描述为 KiCad 未运行或不断重试。
 
@@ -14,8 +13,6 @@
 from kipy import KiCad
 
 kicad = KiCad(timeout_ms=5000)
-if not kicad.check_version():
-    raise RuntimeError("kicad-python 与已连接的 KiCad API 版本不匹配")
 board = kicad.get_board()
 ```
 

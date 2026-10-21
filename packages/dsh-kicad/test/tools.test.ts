@@ -237,7 +237,6 @@ describe('tool execution — semantic error mapping', () => {
     const cases: Array<[number, string]> = [
       [1, 'UNAVAILABLE'],
       [2, 'FAILED_PRECONDITION'],
-      [3, 'FAILED_PRECONDITION'],
       [4, 'FAILED_PRECONDITION'],
     ]
     for (const [code, kind] of cases) {

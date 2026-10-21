@@ -76,8 +76,8 @@ export interface ToolExecLike {
  */
 const ERROR_SEMANTICS =
   `IMPORTANT SEMANTICS: on ok:false, error.kind distinguishes the cause: ` +
-  `"FAILED_PRECONDITION" (KiCad IPC cannot run at all — no kipy, API version ` +
-  `mismatch, or no .kicad_pcb open; ask the user to fix the environment, do NOT ` +
+  `"FAILED_PRECONDITION" (KiCad IPC cannot run at all — no kipy, or no ` +
+  `.kicad_pcb open; ask the user to fix the environment, do NOT ` +
   `retry), "UNAVAILABLE" (KiCad is installed but unreachable — retry once after ` +
   `checking PCB Editor is open, the KiCad API service is enabled, and DSH has ` +
   `Full Access), "DEADLINE_EXCEEDED" (KiCad did not answer in time — retry a ` +

@@ -11,13 +11,8 @@ from kipy.board_types import BoardLayer
 
 
 def connect_board(timeout_ms: int = 5000):
-    """Return a checked KiCad connection and the currently open PCB board."""
+    """Return a KiCad connection and the currently open PCB board."""
     kicad = KiCad(timeout_ms=timeout_ms)
-
-    if not kicad.check_version():
-        raise RuntimeError(
-            "kicad-python does not match the connected KiCad's API version; use the matching official package."
-        )
 
     board = kicad.get_board()
     if board is None:

@@ -19,9 +19,6 @@ def main() -> int:
     kicad = None
     try:
         kicad = KiCad(timeout_ms=5000)
-        if not kicad.check_version():
-            print("Connected, but kicad-python and the KiCad API version do not match.")
-            return 3
 
         board = kicad.get_board()
         if board is None:

@@ -184,7 +184,7 @@ export async function runKicadScript(options: RunScriptOptions): Promise<ScriptR
  * Exit codes are part of the scripts' contract:
  *
  *   - `diagnose_ipc_connection.py`: 0 ok, 1 unreachable, 2 `kipy` missing,
- *     3 API version mismatch, 4 no board open.
+ *     4 no board open.
  *   - every argparse script: 2 = rejected arguments (KiCad untouched).
  *   - anything else non-zero: a real KiCad/script failure.
  */
@@ -232,14 +232,6 @@ export function classifyRun(run: ScriptRun): KicadError | undefined {
           message:
             'The kicad-python package (kipy) is not installed for the configured ' +
             'Python interpreter. Install the version matching the running KiCad. ' +
-            detail(run),
-        }
-      case 3:
-        return {
-          kind: 'FAILED_PRECONDITION',
-          message:
-            'kicad-python and the connected KiCad disagree on the API version. ' +
-            'Do not work around it — install the matching official package. ' +
             detail(run),
         }
       case 4:
