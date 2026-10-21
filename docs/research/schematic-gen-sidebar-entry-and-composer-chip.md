@@ -484,11 +484,51 @@ ctx.systemPrompt.section({
 })
 ```
 
-Put this in the **node half** of `dsh-tool-schematic-gen`, next to
-`ctx.tools.register(tool)` (`src/index.ts:108`). It is the right vehicle for
+Put this in the **node half** of `dsh-tool-kicad-schematic-gen`, next to
+`ctx.tools.register(tool)` (`src/index.ts`). It is the right vehicle for
 *“here is when to prefer schematic-gen over hand-writing a schematic”* —
 always-on policy. It is the **wrong** vehicle for *“the user clicked the button
 just now”*, because the system prompt cannot express per-turn intent.
+
+**Shipped (implementation round 2).** The split is exactly that line, and the
+user's persistence argument decided it: *once the user explicitly chose
+Schematic Gen, the rest of the conversation is schematic work* — which history
+already carries, because the token sits in every later turn's context. So:
+
+| Concern | Carrier | Why |
+|---|---|---|
+| What the `@schematic-gen` token **means** | `huaqiu:schematic-gen` section (`src/prompt.ts`, order 590 beside `eda:selection`) | policy text belongs in the system prompt; re-read on every assembly |
+| That the user chose it **now** | the chip's model form — the bare token `@schematic-gen` (`SCHEMATIC_GEN_SERIALIZED === SCHEMATIC_GEN_CLIPBOARD`) | whatever `serialize` returns lands in the user message; a payload there is noise the user reads back on every send |
+| That the conversation **stays** schematic work | the token in history + the section | no per-session state needed |
+
+The section is **static text gated on the token**, not a per-session provider.
+The API *can* express per-session (`plan-mode`'s provider reads
+`context.agent.session`, `packages/plan/plan-mode/src/index.ts:479-483`), but
+the state source is the problem: “this session requested schematic gen” is
+learnable only from message-history I/O or a client→node signal, and prompt
+assembly is on the agent's hot path — `dsh-eda-selection`'s module header
+documents the same no-I/O rule for exactly this reason. History is the free
+session state; the section only has to define the token.
+
+Section text (four jobs: define the token, pin the skill, forbid hand-written
+files, defer to the user's words):
+
+```
+Schematic Gen: the @schematic-gen token in a user message is the Schematic
+Gen chip — the user explicitly chose it for that request. Produce the design
+with the `kicad-schematic-design` skill, which starts from the hardware design
+brief when none exists yet.
+Never hand-write .kicad_sch files or KiCad project files yourself; go through
+the skill and its tools.
+Use the user's own words as the design description — if they have not
+described the circuit yet, ask for the requirements instead of assuming them.
+Follow-up messages in the same conversation continue that work without
+repeating the token.
+```
+
+If a future product decision wants plain “design me a schematic” messages
+(no token) routed to the skill too, that is one sentence in this section —
+the gate is the only thing keeping the chip the sole entry point.
 
 ### 5.3 Why this differs from the “Current Selection” design
 
@@ -498,11 +538,18 @@ just now”*, because the system prompt cannot express per-turn intent.
 | Lifetime | Appears/disappears with host state | Lives in the draft until sent or deleted |
 | Chip placement | `conversation.input.dock` (ambient, above the composer) | inside the Lexical draft (a real chip) |
 | New RPC | yes — `SubscribeSelection` | none |
-| Prompt carrier | `systemPrompt.section` (evaluated per step) | `codec.serialize` (spliced into the user turn) |
+| Prompt carrier | `systemPrompt.section` (evaluated per step) | **both**: `systemPrompt.section` defines the token, `codec.serialize` carries the bare token into the user turn |
 | Removal | provider returns `''` | user deletes the chip |
 
 Same UI grammar, opposite plumbing. If both ship, the dock chip and the inline
 chip can coexist without collision — different slots, different lifetimes.
+
+The two-plugin table above was written when “prompt carrier” was an
+either/or; the shipped design uses both halves on purpose (§5.2). The gesture
+needs the message channel (the model must see *this* request chose Schematic
+Gen) and the semantics need the policy channel (the token means nothing
+without them) — putting both in the message made every send carry a lecture,
+putting both in the system prompt made the gesture invisible.
 
 ### 5.4 Optional: `matchEnter` / `matchSpace`
 
@@ -515,19 +562,32 @@ Skip for v1 — the chip + typed-pick path already covers it.
 
 ## 6. Implementation plan
 
-| # | Change | File(s) |
-|---|---|---|
-| 1 | New shared package `@huaqiu/dsh-sidebar-entry` (moved verbatim from `dsh-tool-symbol-footprint/src/client/sidebar-entry-core.ts`); both plugins depend on it | `packages/dsh-sidebar-entry/**` |
-| 2 | `dsh-tool-schematic-gen` client half: mount one row, `data-hqcg-schematic-entry`, label `原理图生成` / `Schematic Gen`, localized like the symbol/footprint rows (`translateFor(currentLang)` + `<html lang>` observer) | `src/client/sidebar-entry.ts`, `src/client/index.ts` |
-| 3 | `onToggle` → insert the chip (§4.2) instead of opening an overlay; no `shell.overlay` entry at all | `src/client/index.ts` |
-| 4 | Register the `@` / `schematic-gen` source with `candidates` + `onPick` + `codec` (§4.3) | `src/client/index.ts` |
-| 5 | `inject` grows to `['slots','sessions','huaqiuAuth','conversation','inputTriggers','locale']` | `src/client/index.ts` |
-| 6 | Node half: `ctx.systemPrompt.section({ name: 'huaqiu:schematic-gen', … })` for standing tool guidance | `src/index.ts` |
-| 7 | Guard both halves when `conversation` / `inputTriggers` are absent (standalone DSH, HQ Edge host) — degrade to “no chip”, never throw | both |
-| 8 | Tests: client-bundle purity (`inputTriggers` is structural-only), span-CAS retry, codec-present-or-send-blocks | `test/**` |
+Shipped as two rounds in `@huaqiu/dsh-tool-kicad-schematic-gen` (the package
+was renamed from `dsh-tool-schematic-gen` after the online agents were
+retired). Round 1 = the plan below; round 2 = the `no serializer` incident
+fix (§4.3.1) and the token/section split (§5.2).
+
+| # | Change | File(s) | Status |
+|---|---|---|---|
+| 1 | New shared package `@huaqiu/dsh-sidebar-entry` (moved verbatim from `dsh-tool-symbol-footprint/src/client/sidebar-entry-core.ts`); both plugins depend on it | `packages/dsh-sidebar-entry/**` | shipped |
+| 2 | `dsh-tool-schematic-gen` client half: mount one row, `data-hqcg-schematic-entry`, label `原理图生成` / `Schematic Gen`, localized like the symbol/footprint rows (`translateFor(currentLang)` + `<html lang>` observer) | `src/client/sidebar-entry.ts`, `src/client/index.ts` | shipped |
+| 3 | `onToggle` → insert the chip (§4.2) instead of opening an overlay; no `shell.overlay` entry at all | `src/client/index.ts` | shipped |
+| 4 | Register the `@` / `schematic-gen` source with `candidates` + `onPick` + `codec` (§4.3) | `src/client/index.ts` | shipped |
+| 5 | `inject` grows to `['slots','sessions','huaqiuAuth','conversation','inputTriggers','locale']` | `src/client/index.ts` | shipped |
+| 6 | Node half: `ctx.systemPrompt.section({ name: 'huaqiu:schematic-gen', … })` for standing tool guidance | `src/index.ts` | shipped (round 2 — now the token's semantics carrier; `src/prompt.ts`, order 590) |
+| 7 | Guard both halves when `conversation` / `inputTriggers` are absent (standalone DSH, HQ Edge host) — degrade to “no chip”, never throw | both | shipped |
+| 8 | Tests: client-bundle purity (`inputTriggers` is structural-only), span-CAS retry, codec-present-or-send-blocks | `test/**` | shipped (125 tests) |
+
+Round 2 also shrank the chip's model form to the bare `@schematic-gen` token
+(`SCHEMATIC_GEN_SERIALIZED === SCHEMATIC_GEN_CLIPBOARD`): the 6-line
+`<schematic-gen intent=…>` block and its 3-line trim both moved into the §5.2
+section, so the user message carries the gesture and the system prompt carries
+the meaning.
 
 `cordis.patch.yml` needs no change for the client half (the node-half `inject`
-is untouched); the client entry is declared by
+gained `systemPrompt` — a core service present in every deployment, declared
+so cordis parks the plugin rather than activating it half-wired); the client
+entry is declared by
 `package.json → dsh.client.inject: ['@deepseek-ai/dsh-client-runtime']`, already
 present.
 

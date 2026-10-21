@@ -5,10 +5,13 @@
  * SSE agents were removed with the package). The chip identity, the `@`
  * trigger, the clipboard projection and the menu row are preserved verbatim so
  * existing drafts and the composer UX keep working. The one deliberate change:
- * the chip's model text now pins the bundled `kicad-schematic-design` skill
- * instead of the deleted online tools (`generate_schematic_from_description` /
- * `generate_system_module_graph`), because the design skill is the new local
- * entry point the agent must follow.
+ * the chip's model text is now the bare clipboard token — the semantics that
+ * used to ride in the payload (pin the `kicad-schematic-design` skill instead
+ * of the deleted online tools `generate_schematic_from_description` /
+ * `generate_system_module_graph`, forbid hand-written KiCad files, defer to
+ * the user's words) moved to the node half's `huaqiu:schematic-gen`
+ * system-prompt section; see {@link SCHEMATIC_GEN_SERIALIZED} and
+ * `src/prompt.ts`.
  *
  * One module owns the identity of the chip, its menu row, and the model text
  * the chip expands to at submit time. Registering the source is MANDATORY, not
@@ -121,35 +124,27 @@ export function schematicGenDescription(lang: HostLocale | undefined = detectHos
 
 /**
  * Model form of the chip: what the agent actually reads at the chip's position
- * in the user message.
+ * in the user message — the clipboard token itself, nothing more.
  *
- * Deliberately an *intent*, never a fabricated design description — the user's
- * own words stay the only source of requirements, and the plugin being loaded
- * is never by itself a reason to generate.
+ * This is the idiomatic mention pattern (DSH's own draft tests serialize a
+ * reference to its ref), and it is deliberate on two counts:
  *
- * The retired plugin pinned the online tools here
- * (`generate_schematic_from_description` / `generate_system_module_graph`).
- * The migrated chip pins the bundled `kicad-schematic-design` skill instead:
- * the skill owns the module search / part import / editable-project flow, and
- * starts from the hardware design brief when no plan exists yet. Hand-written
- * KiCad files stay forbidden in both worlds.
+ * 1. **Whatever `serialize` returns lands in the USER message** — the submit
+ *    plane splices it over the chip's clipboard range — so a long payload is
+ *    noise the user reads back in their own transcript on every send.
+ * 2. **The token has no semantics of its own**, so the semantics cannot live
+ *    here; they live in the node half's `huaqiu:schematic-gen` system-prompt
+ *    section (see `src/prompt.ts`), which defines the token, pins the
+ *    `kicad-schematic-design` skill, and carries the guardrails.
  *
- * Shape: the clipboard token first, so the sent message (and the transcript
- * the user reads back) stays recognizable, then three lines — each buying one
- * behavior and each mapping to an observed failure mode:
- * 1. pin the skill — the old online tools are gone, so an unpinned agent may
- *    reach for a dead entry point or improvise;
- * 2. forbid hand-written `.kicad_sch` files — asked for "an ESP32 mini", an
- *    LLM will otherwise author KiCad files itself, which KiCad cannot open;
- * 3. defer to the user's words — a gesture is not a spec, so the agent must
- *    ask for requirements rather than invent them.
- * The first chip shipped this as a `<schematic-gen intent=…>` block; the
- * trimmed form below is the same contract with less noise.
+ * History: the chip first shipped a 6-line `<schematic-gen intent=…>` block,
+ * then a 3-line trimmed form, and now delegates entirely to the section. The
+ * retired plugin pinned deleted online tools here
+ * (`generate_schematic_from_description` / `generate_system_module_graph`);
+ * nothing in this constant may ever name a tool again — the skill pin is the
+ * section's job.
  */
-export const SCHEMATIC_GEN_SERIALIZED =
-  '@schematic-gen — use the kicad-schematic-design skill for this request.\n' +
-  'Never hand-write .kicad_sch files; go through the skill and its tools.\n' +
-  "Use the user's own words; ask for the requirements if the brief is missing."
+export const SCHEMATIC_GEN_SERIALIZED = SCHEMATIC_GEN_CLIPBOARD
 
 /** Menu/group candidate description. */
 /**

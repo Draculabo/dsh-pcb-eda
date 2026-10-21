@@ -8,10 +8,11 @@ import {apply as registerSchematic} from './schematic/index.ts'
 import {apply as registerSkills} from './skills.ts'
 import {registerModuleAnalysis} from './schematic/analysis-tool.ts'
 import {getKiCadPaths} from './runtime-paths.ts'
+import {registerSchematicGenSection} from './prompt.ts'
 
 export {Config,resolveConfig} from './config.ts'
 export const name='@huaqiu/dsh-tool-kicad-schematic-gen'
-export const inject=['tools','fs','sandboxPolicy','skills','webServer'] as const
+export const inject=['tools','fs','sandboxPolicy','skills','webServer','systemPrompt'] as const
 
 /** Shared component name for the unified DSH-plugin log (`~/.hq-edge/logs/dsh-plugins`). */
 const log = getLogger('dsh-schematic-gen')
@@ -20,7 +21,7 @@ const log = getLogger('dsh-schematic-gen')
 // ready" means the entry is parked on an unprovided service (or that another
 // entry's failure stopped the boot), which is a different problem from a
 // failure inside apply().
-log.info('schematic-gen: module loaded (waiting for the tools, fs, sandboxPolicy, skills and webServer services)')
+log.info('schematic-gen: module loaded (waiting for the tools, fs, sandboxPolicy, skills, webServer and systemPrompt services)')
 
 export function apply(ctx:Context, input:ConfigInput={}):void {
   const config=resolveConfig(input)
@@ -36,6 +37,14 @@ export function apply(ctx:Context, input:ConfigInput={}):void {
     registerModules(ctx,config.modules,analyze)
     registerSchematic(ctx,config.schematic)
     registerSkills(ctx,config.schematic.kicadCliPath)
+    // The `@schematic-gen` chip serializes to its bare token; this section is
+    // what gives that token meaning (see prompt.ts for why it is static).
+    const disposeSection = registerSchematicGenSection((ctx as {systemPrompt?:unknown}).systemPrompt)
+    if (disposeSection === undefined) {
+      log.warn('systemPrompt service unavailable — the huaqiu:schematic-gen section was not registered')
+    } else {
+      ctx.effect(() => disposeSection)
+    }
   } catch (error) {
     log.error('schematic-gen node half failed',{error:String((error as Error)?.message??error)})
     throw error

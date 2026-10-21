@@ -6,8 +6,9 @@
  * The codec is not cosmetic — DSH's `serializeReference` rejects a chip whose
  * owner (or codec) is missing and blocks the whole send, so these assertions
  * guard a hard submission failure rather than a cosmetic label. The migrated
- * chip pins the `kicad-schematic-design` skill instead of the deleted online
- * tools; the serialized-text tests pin that contract.
+ * chip serializes to the bare clipboard token; the semantics that used to ride
+ * in the payload live in the node half's `huaqiu:schematic-gen` section (see
+ * `prompt.test.ts` for that contract).
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -83,18 +84,24 @@ test('produces a stable insert with the clipboard projection', () => {
   assert.equal(SCHEMATIC_GEN_REF, 'generate')
 })
 
-test('serializes to an intent that pins the kicad-schematic-design skill', async () => {
+test('serializes to the bare clipboard token — semantics live in the section', async () => {
   const source = createSchematicGenSource()
   const text = await source.codec.serialize(SCHEMATIC_GEN_REF, undefined)
+  // The idiomatic mention pattern (DSH's own draft tests serialize a
+  // reference to its ref): the model form IS the clipboard token.
   assert.equal(text, SCHEMATIC_GEN_SERIALIZED)
-  assert.match(text, /kicad-schematic-design/)
-  // Trimmed form: the clipboard token leads, so the sent message stays
-  // recognizable, and the skill pin rides on the same first line.
-  assert.match(text, /^@schematic-gen — use the kicad-schematic-design skill/)
+  assert.equal(text, SCHEMATIC_GEN_CLIPBOARD)
+  assert.equal(text, '@schematic-gen')
+  // Nothing else may ride in the USER message: whatever serialize() returns
+  // is spliced over the chip's clipboard range, so a long payload is noise
+  // the user reads back on every send. The skill pin and the guardrails are
+  // the node half's `huaqiu:schematic-gen` section (see prompt.test.ts).
+  assert.doesNotMatch(text, /kicad-schematic-design/)
+  assert.doesNotMatch(text, /Never hand-write/)
+  assert.doesNotMatch(text, /hardware design brief/)
   // The retired online tools must not be named by the migrated chip.
   assert.doesNotMatch(text, /generate_schematic_from_description/)
   assert.doesNotMatch(text, /generate_system_module_graph/)
-  assert.match(text, /Never hand-write \.kicad_sch files/)
 })
 
 test('registration is defensive: missing or hostile registries never throw', () => {
