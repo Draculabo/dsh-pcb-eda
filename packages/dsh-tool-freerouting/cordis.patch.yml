@@ -1,0 +1,6 @@
+# Required services match src/index.ts. Runtime defaults live in src/config.ts;
+# machine-specific KiCad paths belong in the user's profile overrides.
+- insert:
+    - id: huaqiu-dsh-tool-freerouting
+      name: '@huaqiu/dsh-tool-freerouting'
+      inject: ['tools', 'systemPrompt', 'webServer', 'jobs']
