@@ -105,7 +105,7 @@ pnpm --filter @huaqiu/dsh-tool-freerouting package:plugin
 
 This prepares locked dependencies, builds and tests the engine, checks and builds the plugin, packs it, and verifies a fresh installation. The tarball is written to this package's `dist/`. The initial build requires access to Python wheel, Temurin, Gradle and Maven downloads.
 
-`prepack` copies the engine license and builds the TypeScript entries. The engine itself is not packaged: `DSH_PREPARE_ENGINE=1` (with `DSH_ENGINE_TEST_JDK`) rebuilds the JAR and JRE for `scripts/package-windows-exe.ps1`, which produces the `bin\freerouting.exe` that ships with KiCad. On macOS/Linux, packing still requires the Python vendor tree prepared on Windows at the same source revision.
+`prepack` copies the repository-root MIT license and the engine license, then builds the TypeScript entries. The engine itself is not packaged: `DSH_PREPARE_ENGINE=1` (with `DSH_ENGINE_TEST_JDK`) rebuilds the JAR and JRE for `scripts/package-windows-exe.ps1`, which produces the `bin\freerouting.exe` that ships with KiCad. On macOS/Linux, packing still requires the Python vendor tree prepared on Windows at the same source revision.
 
 The installed package contains compiled plugin entries, Python helpers and their libraries, configuration and license notices. The FreeRouting engine and its JRE arrive with KiCad (`bin\freerouting.exe`) or through `DSH_FREEROUTING_EXE`, so the plugin archive stays small. Expanded Java source projects, development scripts, tests, internal documents and build caches are excluded. Generated runtime files are not committed to Git.
 
@@ -113,6 +113,6 @@ Run `pnpm --filter @huaqiu/dsh-tool-freerouting check` before submitting changes
 
 ## License
 
-This package declares `UNLICENSED` and grants no license to its first-party code. The repository-root MIT license is excluded from this package. The modified FreeRouting engine retains GPL-3.0. The npm package includes the precompiled JAR, `bundled/freerouting.LICENSE` and build provenance; corresponding source and build instructions are available in the [engine source directory](https://github.com/Huaqiu-Electronics/dsh-pcb-eda/tree/main/packages/dsh-tool-freerouting/engine). Java sources and source archives are excluded from the npm package. See [third-party notices](THIRD_PARTY_NOTICES.md) for matching the source to the distributed JAR.
+The first-party plugin code follows the repository-root MIT license, included in the npm package as `LICENSE`. The modified FreeRouting engine retains GPL-3.0 and is distributed with KiCad, not in this plugin package. Its license notice is included as `bundled/freerouting.LICENSE`; corresponding source and build instructions are available in the [engine source directory](https://github.com/Huaqiu-Electronics/dsh-pcb-eda/tree/main/packages/dsh-tool-freerouting/engine).
 
 Third-party components retain their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Thanks to [FreeRouting](https://github.com/freerouting/freerouting), [KiCad](https://www.kicad.org/) and [Eclipse Temurin](https://adoptium.net/).

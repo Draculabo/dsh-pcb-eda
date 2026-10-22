@@ -2,7 +2,7 @@
 
 ## Plugin code
 
-This package declares `UNLICENSED` and grants no license to its first-party TypeScript and Python code. The repository-root MIT license is excluded from this package. Third-party components retain their own licenses.
+The first-party TypeScript and Python code follows the repository-root MIT license, included in this package as `LICENSE`. Third-party components retain their own licenses.
 
 ## FreeRouting engine
 

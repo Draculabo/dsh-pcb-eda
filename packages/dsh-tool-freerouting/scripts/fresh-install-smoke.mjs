@@ -60,17 +60,13 @@ try {
       throw new Error('Plugin package must not ship the engine: ' + enginePath);
     }
   }
-  if (manifest.license !== 'UNLICENSED') {
-    throw new Error('Installed plugin must declare UNLICENSED');
+  if (manifest.license !== 'MIT') {
+    throw new Error('Installed plugin must declare the repository MIT license');
   }
-  const firstPartyLicense = await stat(join(installedRoot, 'LICENSE')).catch((error) => {
-    if (error.code === 'ENOENT') {
-      return undefined;
-    }
-    throw error;
-  });
-  if (firstPartyLicense) {
-    throw new Error('UNLICENSED plugin package must not include the repository-root MIT license');
+  const firstPartyLicense = await readFile(join(installedRoot, 'LICENSE'));
+  const repositoryLicense = await readFile(resolve(packageRoot, '..', '..', 'LICENSE'));
+  if (!firstPartyLicense.equals(repositoryLicense)) {
+    throw new Error('Installed plugin license differs from the repository-root license');
   }
   for (const directory of ['docs', 'engine', 'src', 'tests', 'scripts', 'bundled/freerouting-source.tar.gz']) {
     const developmentDirectory = await stat(join(installedRoot, directory)).catch((error) => {

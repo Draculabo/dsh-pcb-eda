@@ -105,7 +105,7 @@ pnpm --filter @huaqiu/dsh-tool-freerouting package:plugin
 
 该命令准备锁定依赖、检查并构建插件，打包后验证全新安装。产物位于本包 `dist/`。只有设 `DSH_PREPARE_ENGINE=1`（并配合 `DSH_ENGINE_TEST_JDK`）时才会额外构建引擎 JAR 与 JRE，供 `package-windows-exe.ps1` 出 KiCad 用的产物；插件包本身不再包含它们。首次构建需要访问 Python wheel 下载源。
 
-`prepack` 复制引擎许可证并构建 TypeScript 入口。引擎不进入插件包：它由 `scripts/package-windows-exe.ps1` 产出，随 KiCad 安装器以 `bin\freerouting.exe` 分发。macOS/Linux 打包机仍需要同一源码版本在 Windows 上准备过的 Python 依赖树。
+`prepack` 复制仓库根目录的 MIT 许可证和引擎许可证，再构建 TypeScript 入口。引擎不进入插件包：它由 `scripts/package-windows-exe.ps1` 产出，随 KiCad 安装器以 `bin\freerouting.exe` 分发。macOS/Linux 打包机仍需要同一源码版本在 Windows 上准备过的 Python 依赖树。
 
 最终安装包只展开编译后的插件、Python 脚本和依赖、配置与许可证；FreeRouting 引擎和 JRE 由 KiCad 安装器提供（`bin\freerouting.exe`），或用 `DSH_FREEROUTING_EXE` 指定，插件包不再重复携带。展开的 Java 工程、开发脚本、测试、内部文档和构建缓存不会进入安装目录。生成的运行产物不提交 Git。
 
@@ -113,6 +113,6 @@ pnpm --filter @huaqiu/dsh-tool-freerouting package:plugin
 
 ## 许可证
 
-本插件包声明为 `UNLICENSED`，不向使用者授予插件自有代码的使用许可。仓库根目录的 MIT 许可证不随此包分发。修改后的 FreeRouting 引擎保留 GPL-3.0。npm 包包含已构建的 JAR、`bundled/freerouting.LICENSE` 和构建来源记录；对应源码及构建说明见[仓库中的引擎目录](https://github.com/Huaqiu-Electronics/dsh-pcb-eda/tree/main/packages/dsh-tool-freerouting/engine)。Java 源码和源码压缩包不进入 npm 包。源码与 JAR 的版本核对方法见[第三方说明](THIRD_PARTY_NOTICES.md)。
+插件自有代码遵循仓库根目录的 MIT 许可证，npm 包包含对应的 `LICENSE` 文件。修改后的 FreeRouting 引擎保留 GPL-3.0，随 KiCad 分发，不进入插件包。插件包中的 `bundled/freerouting.LICENSE` 保留其许可声明；对应源码及构建说明见[仓库中的引擎目录](https://github.com/Huaqiu-Electronics/dsh-pcb-eda/tree/main/packages/dsh-tool-freerouting/engine)。
 
 第三方组件保留各自许可证，详见[第三方说明](THIRD_PARTY_NOTICES.md)。感谢 [FreeRouting](https://github.com/freerouting/freerouting)、[KiCad](https://www.kicad.org/) 和 [Eclipse Temurin](https://adoptium.net/)。

@@ -1,6 +1,6 @@
 {
   "name": "@huaqiu/dsh-tool-freerouting",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "description": "Windows KiCad 10 IPC FreeRouting adapter with live editor preview and transactional final import",
   "keywords": [
     "deepseek-harness",
@@ -10,7 +10,7 @@
     "kicad",
     "autorouting"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {
@@ -27,6 +27,7 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "files": [
+    "LICENSE",
     "lib/index.js",
     "lib/client.js",
     "lib/client.js.map",

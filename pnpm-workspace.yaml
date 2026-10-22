@@ -8,9 +8,12 @@ minimumReleaseAgeExclude:
   - '@huaqiu/dsh-auth@0.3.3'
   - '@hqedge/paths@0.1.2'
 
-# rc.2's public Job Registry types import dsh-session without declaring its peer.
-# Bind it to the consumer's SDK instead of an unrelated hoisted Cordis 4.0.2 copy.
+# dsh-jobs-local's public LocalJobRegistry types import dsh-session without
+# declaring it as a peer, so TypeScript falls back to whichever copy pnpm hoisted
+# and the branded SessionId stops matching the consumer's own SDK copy. Bind the
+# missing peer to the consumer's SDK; keep this range on the pinned @deepseek-ai/dsh-*
+# baseline and drop the entry once upstream declares the peer.
 packageExtensions:
-  '@deepseek-ai/dsh-jobs-local@0.1.7-rc.2':
+  '@deepseek-ai/dsh-jobs-local@>=0.2.1-rc.2':
     peerDependencies:
-      '@deepseek-ai/dsh-session': '0.1.7-rc.2'
+      '@deepseek-ai/dsh-session': '^0.2.1-rc.2'
