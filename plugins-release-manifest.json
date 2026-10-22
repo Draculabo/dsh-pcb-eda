@@ -93,7 +93,7 @@
       "minDsh": null
     },
     "@huaqiu/dsh-tool-freerouting": {
-      "version": "0.5.22",
+      "version": "0.5.23",
       "hosts": [
         "all"
       ],
@@ -171,6 +171,16 @@
       "minHqEdge": null,
       "maxHqEdge": null,
       "minDsh": null
-    }
+    },    
+    "@huaqiu/dsh-tool-dummy": {
+      "version": "0.6.3",
+      "hosts": [
+        "all"
+      ],
+      "requiresHqEdge": false,
+      "minHqEdge": null,
+      "maxHqEdge": null,
+      "minDsh": null
+    },
   }
 }
