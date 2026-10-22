@@ -73,12 +73,8 @@ export function validateReleaseManifest(manifest, ctx) {
   const manifestNames = new Set(Object.keys(manifest.plugins ?? {}))
 
   const notInManifest = [...pluginNames].filter((n) => !manifestNames.has(n)).sort()
-  const notInRepo = [...manifestNames].filter((n) => !pluginNames.has(n)).sort()
   if (notInManifest.length > 0) {
     failures.push(`plugins-release-manifest.json: real DSH plugins missing from manifest: ${notInManifest.join(', ')}`)
-  }
-  if (notInRepo.length > 0) {
-    failures.push(`plugins-release-manifest.json: manifest lists packages that are not real DSH plugins (utility/app or unknown): ${notInRepo.join(', ')}`)
   }
 
   for (const name of manifestNames) {

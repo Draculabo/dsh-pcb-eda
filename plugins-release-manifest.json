@@ -97,7 +97,7 @@
       "hosts": [
         "all"
       ],
-      "requiresHqEdge": true,
+      "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
       "minDsh": null
