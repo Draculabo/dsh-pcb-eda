@@ -32,9 +32,12 @@ const tagIndex = argv.indexOf('--tag')
 const tagArg = argv.find((a) => a.startsWith('--tag='))?.split('=')[1]
   ?? (tagIndex >= 0 ? argv[tagIndex + 1] : undefined)
 
+// On Windows, npm/pnpm are installed as `.cmd`/`.ps1` shims (no `.exe`), which
+// `execFileSync` cannot launch without a shell — it throws `spawnSync ... ENOENT`.
+// Running through the shell fixes that; Node quotes any args containing spaces.
 const run = (cmd, args, opts = {}) => {
   console.log(`\n$ ${cmd} ${args.join(' ')}`)
-  execFileSync(cmd, args, { stdio: 'inherit', cwd: opts.cwd ?? repoRoot, ...opts })
+  execFileSync(cmd, args, { stdio: 'inherit', cwd: opts.cwd ?? repoRoot, shell: process.platform === 'win32', ...opts })
 }
 
 /**
@@ -108,6 +111,7 @@ for (const pkg of topoOrder(pkgs)) {
       const existing = execFileSync('npm', ['view', `${pkg.name}@${version}`, 'version'], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
+        shell: process.platform === 'win32',
       }).trim()
       if (existing.length > 0) {
         console.log(`\nskip ${pkg.name}@${version} — already published`)
