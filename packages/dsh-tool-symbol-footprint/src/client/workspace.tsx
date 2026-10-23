@@ -13,7 +13,11 @@
  * app's copy pack (`app.footprintTitle` / `app.symbolTitle` / tooltips) and
  * re-apply whenever `<html lang>` changes (`dsh-client-locale` rewrites the
  * attribute), so both dsh web and the HQ Edge host stay in sync without a
- * `locale` service dependency.
+ * `locale` service dependency. The language is resolved when the rows are
+ * mounted and re-read on every re-application — never captured when this
+ * bundle is evaluated, which happens before dsh resolves the preference and
+ * can otherwise pin the copy to the served markup's `en` until the user
+ * switches languages by hand.
  *
  * Auth is the `huaqiuAuth` CLIENT service (structural, never imported): the
  * same sanctioned source the GenHit card uses. The ports adapter only
@@ -91,20 +95,51 @@ function detectLocale(): string | undefined {
   return undefined
 }
 
-/** Latest resolved UI language (zh/en/undefined) driving the sidebar copy. */
+/**
+ * Last language the rows were announced for — change detection only, never
+ * the copy source (see {@link resolveLang}).
+ */
 let currentLang: string | undefined = detectLocale()
 
+/**
+ * Resolve the UI language the sidebar copy is rendered in.
+ *
+ * Read live from `<html lang>` on every call instead of returning the
+ * `currentLang` snapshot: this module is evaluated when its bundle script
+ * loads, which — for a plugin that waits on injected services before `apply()`
+ * mounts anything — can be long before dsh resolves the stored language
+ * preference and rewrites the attribute (the served markup declares `en`).
+ * A snapshot taken at evaluation time keeps the wrong language even after an
+ * observer is running, because the rewrite it missed is already over by then.
+ */
+function resolveLang(): string | undefined {
+  return detectLocale()
+}
+
 let localeObserver: MutationObserver | null = null
+/** Live `startLocaleObserver` callers: the observer is shared, so it dies with the LAST one. */
+let localeObserverUsers = 0
+
 /**
  * Watch `<html lang>` — `dsh-client-locale` rewrites it on every language
  * change (dsh web) and HQ Edge mirrors it too. On change, re-resolve the
  * language and announce so the sidebar rows re-apply their localized labels
  * and the open overlay re-renders with the new language.
+ *
+ * @returns disposer for THIS caller; the shared observer is only disconnected
+ *   once every caller has disposed (a reload applies the new instance before
+ *   disposing the old one, and the old disposer must not silence the new one).
  */
 function startLocaleObserver(): () => void {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined' || !document.documentElement) {
     return () => {}
   }
+  // Re-read before observing: a rewrite that landed between module evaluation
+  // and this call happened while nothing was watching, and no later mutation
+  // is guaranteed (dsh writes the resolved language once at activation).
+  // Reading here and observing here closes the window from both sides — an
+  // earlier rewrite is picked up by the read, a later one by the observer.
+  currentLang = detectLocale()
   if (localeObserver === null) {
     localeObserver = new MutationObserver(() => {
       const next = detectLocale()
@@ -115,8 +150,11 @@ function startLocaleObserver(): () => void {
     })
     localeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] })
   }
+  localeObserverUsers += 1
   return () => {
-    if (localeObserver !== null) {
+    localeObserverUsers -= 1
+    if (localeObserverUsers <= 0 && localeObserver !== null) {
+      localeObserverUsers = 0
       localeObserver.disconnect()
       localeObserver = null
     }
@@ -265,8 +303,8 @@ export function installWorkspace(
       selector: FOOTPRINT_ENTRY_SELECTOR,
       attribute: 'data-hqcg-footprint-entry',
       icon: FOOTPRINT_ICON,
-      label: () => translateFor(currentLang)('app.footprintTitle'),
-      tooltip: () => translateFor(currentLang)('app.footprintTooltip'),
+      label: () => translateFor(resolveLang())('app.footprintTitle'),
+      tooltip: () => translateFor(resolveLang())('app.footprintTooltip'),
       position: 'before',
       onToggle: () => {
         togglePage('footprint')
@@ -279,8 +317,8 @@ export function installWorkspace(
       selector: SYMBOL_ENTRY_SELECTOR,
       attribute: 'data-hqcg-symbol-entry',
       icon: SYMBOL_ICON,
-      label: () => translateFor(currentLang)('app.symbolTitle'),
-      tooltip: () => translateFor(currentLang)('app.symbolTooltip'),
+      label: () => translateFor(resolveLang())('app.symbolTitle'),
+      tooltip: () => translateFor(resolveLang())('app.symbolTooltip'),
       position: 'after',
       onToggle: () => {
         togglePage('symbol')
