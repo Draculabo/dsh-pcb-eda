@@ -168,8 +168,7 @@
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
-      "maxHqEdge": null
-    },
+      "maxHqEdge": null,
       "minDsh": null,
       "displayName": "智能布线",
       "description": "Freerouting 自动布线集成",
@@ -293,3 +292,4 @@
       ]
     }
   }
+}
