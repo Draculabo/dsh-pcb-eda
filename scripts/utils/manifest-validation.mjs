@@ -41,7 +41,70 @@ export function isValidSemverRange(range) {
 /** Valid host enum values for a plugin entry's `hosts` field. */
 export const RELEASE_HOSTS = new Set(['hq-eda', 'kicad', 'generic', 'all'])
 
+/**
+ * Release channels allowed in a v2 top-level `release.channel`.
+ */
+export const RELEASE_CHANNELS = new Set(['stable', 'beta', 'rc'])
+
 const SEMVER_LIKE = /^\d+\.\d+\.\d+/
+
+/**
+ * True when `value` is a parseable ISO-8601 timestamp (e.g. 2026-10-21T09:00:00Z).
+ */
+function isIsoTimestamp(value) {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+}
+
+/**
+ * Validate the v2 top-level `release` metadata block. All fields are optional
+ * at the manifest level, but when present they must have the declared types.
+ */
+function validateReleaseBlock(release, failures, where) {
+  if (release === null || release === undefined) return
+  if (typeof release !== 'object' || Array.isArray(release)) {
+    failures.push(`${where}: release must be an object when present`)
+    return
+  }
+  if (release.publishedAt !== undefined && !isIsoTimestamp(release.publishedAt)) {
+    failures.push(`${where}: release.publishedAt must be an ISO-8601 timestamp (got ${JSON.stringify(release.publishedAt)})`)
+  }
+  if (release.channel !== undefined && !RELEASE_CHANNELS.has(release.channel)) {
+    failures.push(`${where}: release.channel must be one of ${[...RELEASE_CHANNELS].join(', ')} (got ${JSON.stringify(release.channel)})`)
+  }
+  if (release.requiresRestart !== undefined && typeof release.requiresRestart !== 'boolean') {
+    failures.push(`${where}: release.requiresRestart must be a boolean`)
+  }
+  for (const key of ['summary', 'notesUrl']) {
+    if (release[key] !== undefined && typeof release[key] !== 'string') {
+      failures.push(`${where}: release.${key} must be a string`)
+    }
+  }
+  for (const key of ['notes', 'breaking']) {
+    if (release[key] === undefined) continue
+    if (!Array.isArray(release[key]) || release[key].some((n) => typeof n !== 'string')) {
+      failures.push(`${where}: release.${key} must be an array of strings`)
+    }
+  }
+}
+
+/**
+ * Validate v2 per-entry display metadata (optional, but typed when present).
+ */
+function validateEntryDisplayMetadata(entry, failures, where) {
+  for (const key of ['displayName', 'description']) {
+    if (entry[key] !== undefined && typeof entry[key] !== 'string') {
+      failures.push(`${where}: ${key} must be a string`)
+    }
+  }
+  if (entry.sizeBytes !== undefined) {
+    if (typeof entry.sizeBytes !== 'number' || !Number.isInteger(entry.sizeBytes) || entry.sizeBytes < 0) {
+      failures.push(`${where}: sizeBytes must be a non-negative integer`)
+    }
+  }
+  if (entry.changes !== undefined && (!Array.isArray(entry.changes) || entry.changes.some((c) => typeof c !== 'string'))) {
+    failures.push(`${where}: changes must be an array of strings`)
+  }
+}
 
 /**
  * Validate a parsed release manifest against the real workspace.
@@ -59,8 +122,12 @@ export function validateReleaseManifest(manifest, ctx) {
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
     return ['plugins-release-manifest.json: not an object']
   }
-  if (manifest.schemaVersion !== 1) {
-    failures.push(`plugins-release-manifest.json: schemaVersion must be 1 (got ${JSON.stringify(manifest.schemaVersion)})`)
+  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) {
+    failures.push(`plugins-release-manifest.json: schemaVersion must be 1 or 2 (got ${JSON.stringify(manifest.schemaVersion)})`)
+  }
+  // v2 carries optional release-level display metadata; validate its shape.
+  if (manifest.schemaVersion === 2) {
+    validateReleaseBlock(manifest.release, failures, 'plugins-release-manifest.json')
   }
 
   const setVersion = manifest.pluginSetVersion
@@ -109,6 +176,10 @@ export function validateReleaseManifest(manifest, ctx) {
           `plugins-release-manifest.json: ${name}: requiresHqEdge ${entry.requiresHqEdge} does not match cordis.patch.yml inject ${injectsHqEdge ? 'containing' : 'without'} hqEdge`,
         )
       }
+    }
+
+    if (manifest.schemaVersion === 2) {
+      validateEntryDisplayMetadata(entry, failures, `plugins-release-manifest.json: ${name}`)
     }
 
     for (const key of ['minHqEdge', 'maxHqEdge', 'minDsh']) {

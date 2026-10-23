@@ -57,13 +57,55 @@ describe('validateReleaseManifest', () => {
     assert.deepEqual(failures, [])
   })
 
-  it('rejects missing/invalid schemaVersion', () => {
-    const failures = validateReleaseManifest({ ...validManifest(), schemaVersion: 2 }, ctx())
+  it('accepts schemaVersion 1 and 2', () => {
+    assert.deepEqual(validateReleaseManifest(validManifest(), ctx()), [])
+    assert.deepEqual(validateReleaseManifest({ ...validManifest(), schemaVersion: 2 }, ctx()), [])
+  })
+
+  it('rejects an unknown schemaVersion', () => {
+    const failures = validateReleaseManifest({ ...validManifest(), schemaVersion: 7 }, ctx())
     assert.ok(failures.some((f) => f.includes('schemaVersion')))
   })
 
-  it('rejects pluginSetVersion mismatch', () => {
-    const failures = validateReleaseManifest({ ...validManifest(), pluginSetVersion: '0.5.22' }, ctx())
+  it('validates the v2 release block when present', () => {
+    const base = { ...validManifest(), schemaVersion: 2 }
+    // Well-formed block passes.
+    const good = {
+      ...base,
+      release: {
+        publishedAt: '2026-10-21T09:00:00Z',
+        channel: 'stable',
+        requiresRestart: true,
+        summary: 's',
+        notesUrl: 'https://example.invalid/r',
+        notes: ['n1'],
+        breaking: [],
+      },
+    }
+    assert.deepEqual(validateReleaseManifest(good, ctx()), [])
+    // Malformed fields are reported.
+    const bad = {
+      ...base,
+      release: { publishedAt: 'not-a-date', channel: 'atari', requiresRestart: 'yes', notes: 'nope' },
+    }
+    const failures = validateReleaseManifest(bad, ctx())
+    assert.ok(failures.some((f) => f.includes('publishedAt')))
+    assert.ok(failures.some((f) => f.includes('channel')))
+    assert.ok(failures.some((f) => f.includes('requiresRestart')))
+    assert.ok(failures.some((f) => f.includes('notes')))
+  })
+
+  it('validates v2 per-entry display metadata when present', () => {
+    const manifest = { ...validManifest(), schemaVersion: 2 }
+    manifest.plugins['@huaqiu/dsh-kicad'].sizeBytes = -5
+    manifest.plugins['@huaqiu/dsh-kicad'].changes = 'nope'
+    const failures = validateReleaseManifest(manifest, ctx())
+    assert.ok(failures.some((f) => f.includes('sizeBytes')))
+    assert.ok(failures.some((f) => f.includes('changes')))
+  })
+
+  it('rejects a non-semver pluginSetVersion', () => {
+    const failures = validateReleaseManifest({ ...validManifest(), pluginSetVersion: 'not-a-version' }, ctx())
     assert.ok(failures.some((f) => f.includes('pluginSetVersion')))
   })
 
@@ -73,22 +115,23 @@ describe('validateReleaseManifest', () => {
     assert.ok(failures.some((f) => f.includes('missing from manifest')))
   })
 
-  it('rejects a utility/app package wrongly listed as a plugin', () => {
+  it('allows manifest entries that are not real DSH plugins (cleanup per 29002ab)', () => {
+    // The notInRepo rejection was deliberately removed in 29002ab; entries listed
+    // without a matching dsh-config package are checked for shape only.
     const failures = validateReleaseManifest(
       validManifest({ '@huaqiu/component-gen-server': {
         version: '0.5.21', hosts: ['all'], requiresHqEdge: false, minHqEdge: null, maxHqEdge: null, minDsh: null,
       } }),
       ctx([validPlugin()]),
     )
-    assert.ok(failures.some((f) => f.includes('not real DSH plugins')))
+    assert.ok(!failures.some((f) => f.includes('not real DSH plugins')))
   })
 
-  it('rejects version drift from package version and lockstep', () => {
+  it('rejects version drift from package version (lockstep check intentionally off, per a944540)', () => {
     const manifest = validManifest()
     manifest.plugins['@huaqiu/dsh-kicad'].version = '0.5.22'
     const failures = validateReleaseManifest(manifest, ctx())
     assert.ok(failures.some((f) => f.includes('does not match package version')))
-    assert.ok(failures.some((f) => f.includes('must equal pluginSetVersion')))
   })
 
   it('rejects an invalid hosts enum value', () => {
@@ -120,12 +163,12 @@ describe('validateReleaseManifest', () => {
     assert.deepEqual(failures, [])
   })
 
-  it('rejects a duplicate/unknown package entry', () => {
+  it('accepts an unknown-but-shapely manifest entry (cleanup per 29002ab)', () => {
     const manifest = validManifest()
     manifest.plugins['@huaqiu/does-not-exist'] = {
       version: '0.5.21', hosts: ['all'], requiresHqEdge: false, minHqEdge: null, maxHqEdge: null, minDsh: null,
     }
     const failures = validateReleaseManifest(manifest, ctx())
-    assert.ok(failures.some((f) => f.includes('not real DSH plugins')))
+    assert.ok(!failures.some((f) => f.includes('not real DSH plugins')))
   })
 })
