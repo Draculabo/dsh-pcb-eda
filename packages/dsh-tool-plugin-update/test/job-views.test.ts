@@ -154,6 +154,55 @@ describe('active-job view', () => {
   })
 })
 
+describe('active-job banner 4-step indicator', () => {
+  /** step classes per phase: done=emerald, active=pulsing brand, upcoming=muted. */
+  function stepClasses(phase: UpdateJob['phase']): string[] {
+    openUpdateView(storeFor(report(), job({ phase, progress: { percent: 30 } }), []), zh)
+    const view = document.querySelector<HTMLElement>('[data-hq-plugin-update-view]')!
+    return [...view.querySelectorAll('.hqpu-job-steps4 > *')].map((n) => n.className)
+  }
+
+  afterEach(() => {
+    document.querySelector('[data-hq-plugin-update-view]')?.remove()
+  })
+
+  it('downloading marks step 0 active and the rest upcoming', () => {
+    expect(stepClasses('downloading')).toEqual([
+      'hqpu-job-step--active',
+      'hqpu-job-step--todo',
+      'hqpu-job-step--todo',
+      'hqpu-job-step--todo',
+    ])
+  })
+
+  it('verifying marks step 0 done and step 1 active', () => {
+    expect(stepClasses('verifying')).toEqual([
+      'hqpu-job-step--done',
+      'hqpu-job-step--active',
+      'hqpu-job-step--todo',
+      'hqpu-job-step--todo',
+    ])
+  })
+
+  it('restarting marks steps 0-2 done and step 3 active', () => {
+    expect(stepClasses('restarting')).toEqual([
+      'hqpu-job-step--done',
+      'hqpu-job-step--done',
+      'hqpu-job-step--done',
+      'hqpu-job-step--active',
+    ])
+  })
+
+  it('queued leaves every step upcoming (no step has started)', () => {
+    expect(stepClasses('queued')).toEqual([
+      'hqpu-job-step--todo',
+      'hqpu-job-step--todo',
+      'hqpu-job-step--todo',
+      'hqpu-job-step--todo',
+    ])
+  })
+})
+
 describe('check-status banner', () => {
   it('shows an error row with Retry and hides the empty "no updates" state on a failed check', () => {
     const failed = report({ lastError: 'manifest fetch timed out', items: [] })

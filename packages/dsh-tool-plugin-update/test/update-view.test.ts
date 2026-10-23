@@ -113,6 +113,18 @@ function factsText(): string {
   return document.querySelector('.hqpu-facts')?.textContent ?? ''
 }
 
+/** The advanced source editors live in the gear-toggled settings panel. */
+function openSettings(): void {
+  const gear = [...document.querySelectorAll<HTMLButtonElement>('.hqpu-icon-btn')].find(
+    (b) => b.title === COPY.zh.ui.gearTooltip,
+  )
+  gear?.click()
+}
+
+function settingsText(): string {
+  return document.querySelector('.hqpu-settings')?.textContent ?? ''
+}
+
 afterEach(() => {
   document.body.innerHTML = ''
   requestRuntimeUpdate.mockClear()
@@ -141,22 +153,20 @@ describe('runtimeLatestVersion', () => {
   })
 })
 
-describe('update view runtime facts', () => {
-  it('renders the latest version, not "[object Object]"', () => {
+describe('update view runtime engine card', () => {
+  it('renders the current chip and the new version, never "[object Object]"', () => {
     openUpdateView(fakeStore(reportWith(runtimeEntry())), COPY.zh)
 
-    const facts = factsText()
-    expect(facts).toContain('当前版本')
-    expect(facts).toContain('0.2.11')
-    expect(facts).toContain('最新版本')
-    expect(facts).toContain('0.2.12')
-    expect(facts).not.toContain('[object Object]')
+    const engine = document.querySelector('.hqpu-engine')
+    expect(engine?.textContent).toContain('v0.2.11 (当前)')
+    expect(engine?.textContent).toContain('新版本 v0.2.12 可用')
+    expect(engine?.textContent).not.toContain('[object Object]')
   })
 
-  it('omits the latest row when no update is available', () => {
+  it('omits the update row when no update is available', () => {
     openUpdateView(fakeStore(reportWith(runtimeEntry(), false)), COPY.zh)
 
-    expect(factsText()).not.toContain('最新版本')
+    expect(document.querySelector('.hqpu-engine-update-row')).toBeNull()
   })
 })
 
@@ -218,16 +228,18 @@ describe('runtime update source editor', () => {
 
   it('shows the source URL in effect with its origin tag', () => {
     openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+    openSettings()
 
-    const facts = factsText()
-    expect(facts).toContain('更新源')
-    expect(facts).toContain(configSource.url)
-    expect(facts).toContain('默认配置')
-    // The other fact rows still render — the source row is additive.
-    expect(facts).toContain('0.2.12')
+    const settings = settingsText()
+    expect(settings).toContain('运行时 Manifest URL')
+    expect(settings).toContain(configSource.url)
+    // Default source origin badge (green).
+    const badge = document.querySelector<HTMLElement>('.hqpu-origin-badge')
+    expect(badge?.textContent).toContain(COPY.zh.ui.originDefault)
+    expect(badge?.dataset.origin).toBe('config')
   })
 
-  it('labels a user override as 自定义', () => {
+  it('labels a user override as 自定义源', () => {
     const overrideSource = {
       ...configSource,
       url: 'https://staging.example.invalid/manifest.json',
@@ -235,18 +247,23 @@ describe('runtime update source editor', () => {
       override: true,
     }
     openUpdateView(fakeStore(reportWith(runtimeEntry(), true, overrideSource)), COPY.zh)
+    openSettings()
 
-    expect(factsText()).toContain('自定义')
-    expect(factsText()).toContain(overrideSource.url)
+    const badge = document.querySelector<HTMLElement>('.hqpu-origin-badge')
+    expect(badge?.textContent).toContain(COPY.zh.ui.originCustom)
+    expect(badge?.dataset.origin).toBe('override')
+    expect(settingsText()).toContain(overrideSource.url)
   })
 
   it('offers no editor when the server sends no source (older hq-edge)', () => {
     openUpdateView(fakeStore(reportWith(runtimeEntry())), COPY.zh)
+    openSettings()
     expect(editButton()).toBeNull()
   })
 
   it('prefills the field with the URL in effect and saves the edit', async () => {
     openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+    openSettings()
 
     editButton()?.click()
     expect(sourceInput()?.value).toBe(configSource.url)
@@ -277,6 +294,7 @@ describe('runtime update source editor', () => {
       override: true,
     }
     openUpdateView(fakeStore(reportWith(runtimeEntry(), true, overrideSource)), COPY.zh)
+    openSettings()
 
     editButton()?.click()
     document.querySelector<HTMLButtonElement>('[data-runtime-source-reset]')?.click()
@@ -286,6 +304,7 @@ describe('runtime update source editor', () => {
     document.body.innerHTML = ''
     setRuntimeUpdateSource.mockClear()
     openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+    openSettings()
     editButton()?.click()
     expect(document.querySelector('[data-runtime-source-reset]')).toBeNull()
   })
@@ -295,6 +314,7 @@ describe('runtime update source editor', () => {
       new Error('http:// is only accepted for a loopback host (localhost / 127.0.0.1)'),
     )
     openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+    openSettings()
 
     editButton()?.click()
     const input = sourceInput()
@@ -318,6 +338,7 @@ describe('runtime update source editor', () => {
 
   it('cancel discards the draft without saving', () => {
     openUpdateView(fakeStore(reportWith(runtimeEntry(), true, configSource)), COPY.zh)
+    openSettings()
 
     editButton()?.click()
     const input = sourceInput()
@@ -328,8 +349,8 @@ describe('runtime update source editor', () => {
 
     expect(sourceInput()).toBeNull()
     expect(setRuntimeUpdateSource).not.toHaveBeenCalled()
-    // Back to read mode with the URL in effect untouched.
-    expect(factsText()).toContain(configSource.url)
+    // Back to read mode — the edit button is offered again.
+    expect(editButton()).not.toBeNull()
   })
 })
 
@@ -352,30 +373,26 @@ describe('plugin update source editor', () => {
   ): PluginUpdateReport =>
     reportWith(runtimeEntry(), true, runtimeSource, pluginSource)
 
-  it('renders the plugin source group with the URL in effect and its origin', () => {
+  it('renders the plugin source editor inside the advanced settings panel', () => {
     openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+    // Collapsed by default — the editor is hidden until the gear is opened.
+    expect(pluginEditButton()).toBeNull()
+    openSettings()
 
-    const group = document.querySelector('[data-group="plugin-source"]')
-    expect(group).not.toBeNull()
-    expect(group?.textContent).toContain('插件更新源')
-    expect(group?.textContent).toContain(pluginConfigSource.url)
-    expect(group?.textContent).toContain('默认配置')
-    // The group sits ABOVE the plugin groups, not inside the runtime block.
-    const column = document.querySelector('.hqpu-column')
-    const kids = [...(column?.children ?? [])].map((n) => n.className)
-    expect(kids.indexOf('hqpu-stack')).toBeLessThan(
-      kids.lastIndexOf('hqpu-stack'),
-    )
+    const settings = settingsText()
+    expect(settings).toContain('插件 Manifest URL')
+    expect(settings).toContain(pluginConfigSource.url)
   })
 
   it('renders nothing when the server sends no pluginSource (older hq-edge)', () => {
     openUpdateView(fakeStore(reportWith(runtimeEntry())), COPY.zh)
-    expect(document.querySelector('[data-group="plugin-source"]')).toBeNull()
+    openSettings()
     expect(pluginEditButton()).toBeNull()
   })
 
   it('prefills with the URL in effect and saves the edit, then re-checks', async () => {
     openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+    openSettings()
 
     pluginEditButton()?.click()
     expect(pluginInput()?.value).toBe(pluginConfigSource.url)
@@ -405,6 +422,7 @@ describe('plugin update source editor', () => {
       override: true,
     }
     openUpdateView(fakeStore(reportWithPlugin(overrideSource)), COPY.zh)
+    openSettings()
 
     pluginEditButton()?.click()
     document.querySelector<HTMLButtonElement>('[data-plugin-source-reset]')?.click()
@@ -414,6 +432,7 @@ describe('plugin update source editor', () => {
     document.body.innerHTML = ''
     setPluginUpdateSource.mockClear()
     openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+    openSettings()
     pluginEditButton()?.click()
     expect(document.querySelector('[data-plugin-source-reset]')).toBeNull()
   })
@@ -423,6 +442,7 @@ describe('plugin update source editor', () => {
       new Error('http:// is only accepted for a loopback host (localhost / 127.0.0.1)'),
     )
     openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+    openSettings()
 
     pluginEditButton()?.click()
     const input = pluginInput()
@@ -445,6 +465,7 @@ describe('plugin update source editor', () => {
 
   it('cancel discards the plugin draft without saving', () => {
     openUpdateView(fakeStore(reportWithPlugin(pluginConfigSource)), COPY.zh)
+    openSettings()
 
     pluginEditButton()?.click()
     const input = pluginInput()
@@ -455,9 +476,8 @@ describe('plugin update source editor', () => {
 
     expect(pluginInput()).toBeNull()
     expect(setPluginUpdateSource).not.toHaveBeenCalled()
-    expect(
-      document.querySelector('[data-group="plugin-source"]')?.textContent,
-    ).toContain(pluginConfigSource.url)
+    // Back to read mode — the edit button is offered again.
+    expect(pluginEditButton()).not.toBeNull()
   })
 
   it('the two editors keep independent state', () => {
@@ -470,6 +490,7 @@ describe('plugin update source editor', () => {
       }, pluginConfigSource)),
       COPY.zh,
     )
+    openSettings()
 
     // Open the runtime editor only: the plugin editor must stay in read mode.
     document.querySelector<HTMLButtonElement>('[data-runtime-source-edit]')?.click()
@@ -520,11 +541,7 @@ describe('plugin item version direction (UI)', () => {
     const card = analyticsCard()
     expect(card).not.toBeNull()
     expect(card?.dataset.state).toBe('current')
-    // Reads as up-to-date, not as an update.
-    expect(card?.querySelector('.hqpu-tag')?.textContent).toBe(COPY.zh.state.current)
     expect(card?.textContent).toContain('0.6.4')
-    // No install control anywhere on the card.
-    expect(card?.querySelector('button')).toBeNull()
     // It lands in the settled group, not in 待处理.
     const groups = [...document.querySelectorAll<HTMLElement>('.hqpu-group')]
     const inActionable = groups.some(
@@ -535,23 +552,34 @@ describe('plugin item version direction (UI)', () => {
       (g) => g.dataset.group === COPY.zh.group.current && g.contains(card as Node),
     )
     expect(inCurrent).toBe(true)
-    // And the footer agrees: nothing to install at all.
-    expect(document.body.textContent).toContain(COPY.zh.nothingToInstall)
+    // Footer agrees: zero compatible plugins, install-all disabled.
+    expect(document.querySelector('.hqpu-foot-meta')?.textContent).toContain(
+      COPY.zh.ui.footerCount(0),
+    )
+    expect(
+      document.querySelector<HTMLButtonElement>('.hqpu-btn--block')?.disabled,
+    ).toBe(true)
   })
 
-  it('a genuinely newer remote version stays 可更新 with its install button', () => {
+  it('a genuinely newer remote version stays 可更新 and the footer enables install-all', () => {
     const raw = item({ currentVersion: '0.6.2', availableVersion: '0.6.4', state: 'update' })
     openUpdateView(fakeStore(reportWithItems([raw])), COPY.zh)
 
     const card = analyticsCard()
     expect(card?.dataset.state).toBe('update')
-    expect(card?.querySelector('.hqpu-tag')?.textContent).toBe(COPY.zh.state.update)
-    expect(card?.textContent).toContain('0.6.2 → 0.6.4')
-    expect(card?.querySelector('button')?.textContent).toContain(COPY.zh.installOne)
+    expect(card?.textContent).toContain('0.6.2')
+    expect(card?.querySelector('.hqpu-ver-new')?.textContent).toContain('0.6.4')
     const groups = [...document.querySelectorAll<HTMLElement>('.hqpu-group')]
     expect(
       groups.some((g) => g.dataset.group === COPY.zh.group.actionable && g.contains(card as Node)),
     ).toBe(true)
+    // Footer: exactly one compatible plugin, install-all enabled.
+    expect(document.querySelector('.hqpu-foot-meta')?.textContent).toContain(
+      COPY.zh.ui.footerCount(1),
+    )
+    expect(
+      document.querySelector<HTMLButtonElement>('.hqpu-btn--block')?.disabled,
+    ).toBe(false)
   })
 
   it('the reported 16-plugin lagging manifest leaves nothing actionable', () => {
@@ -594,9 +622,12 @@ describe('plugin item version direction (UI)', () => {
     const cards = [...document.querySelectorAll<HTMLElement>('.hqpu-card')]
     expect(cards).toHaveLength(16)
     expect(cards.every((c) => c.dataset.state === 'current')).toBe(true)
-    // No install button anywhere, in any group.
+    // No install button anywhere, in any group (cards carry no install buttons;
+    // install-all lives in the footer).
     expect(document.querySelector('.hqpu-cards button')).toBeNull()
-    expect(document.body.textContent).toContain(COPY.zh.nothingToInstall)
+    expect(document.querySelector('.hqpu-foot-meta')?.textContent).toContain(
+      COPY.zh.ui.footerCount(0),
+    )
   })
 
   it('keeps a mixed report honest: only the genuine upgrade is actionable', () => {
@@ -625,7 +656,139 @@ describe('plugin item version direction (UI)', () => {
       document.querySelector<HTMLElement>('.hqpu-card[data-plugin-name="@huaqiu/dsh-auth"]')
         ?.dataset.state,
     ).toBe('install')
-    // Footer offers exactly the two actionable installs.
-    expect(document.body.textContent).toContain(COPY.zh.installAll(2))
+    // Footer counts exactly the two actionable installs.
+    expect(document.querySelector('.hqpu-foot-meta')?.textContent).toContain(
+      COPY.zh.ui.footerCount(2),
+    )
+  })
+})
+
+// ── Blocked / incompatible cards + footer counting ──────────────────────────
+describe('blocked plugin cards', () => {
+  function blockedItem(overrides: Partial<PluginUpdateItem> = {}): PluginUpdateItem {
+    return {
+      name: '@huaqiu/dsh-bad',
+      currentVersion: null,
+      availableVersion: '0.6.4',
+      state: 'blocked',
+      reasons: ['requiresDsh>=0.7.0'],
+      notes: ['当前 DSH 版本过低'],
+      ...overrides,
+    }
+  }
+
+  function reportItems(items: PluginUpdateItem[]): PluginUpdateReport {
+    return normalizePluginUpdateReport({ ...reportWith(runtimeEntry()), items })
+  }
+
+  it('renders dimmed with a rose 无法安装 badge, a reason line, and NO install button', () => {
+    openUpdateView(fakeStore(reportItems([blockedItem()])), COPY.zh)
+    const card = document.querySelector<HTMLElement>('.hqpu-card[data-plugin-name="@huaqiu/dsh-bad"]')
+    expect(card).not.toBeNull()
+    expect(card?.classList.contains('hqpu-card--blocked')).toBe(true)
+    expect(card?.querySelector('.hqpu-blocked-badge')?.textContent).toBe(COPY.zh.ui.blockedBadge)
+    expect(card?.textContent).toContain('当前 DSH 版本过低')
+    // No install affordance on the card (and none on the footer either).
+    expect(card?.querySelector('button')).toBeNull()
+    expect(document.querySelector<HTMLButtonElement>('.hqpu-btn--block')?.disabled).toBe(true)
+  })
+
+  it('footer N excludes blocked and ignored items', () => {
+    openUpdateView(
+      fakeStore(
+        reportItems([
+          blockedItem(),
+          // One genuine actionable item.
+          {
+            name: '@huaqiu/dsh-kicad',
+            currentVersion: '0.6.1',
+            availableVersion: '0.6.2',
+            state: 'update',
+          },
+          // One ignored item — must not count.
+          { ...blockedItem(), name: '@huaqiu/dsh-muted', state: 'ignored' as const },
+        ]),
+      ),
+      COPY.zh,
+    )
+    expect(document.querySelector('.hqpu-foot-meta')?.textContent).toContain(
+      COPY.zh.ui.footerCount(1),
+    )
+  })
+})
+
+// ── Runtime last-result alerts: amber rollback/failed vs green success ───────
+describe('runtime last-result alerts', () => {
+  function reportWithLastResult(lastResult: Record<string, unknown>): PluginUpdateReport {
+    const base = reportWith(runtimeEntry())
+    return {
+      ...base,
+      runtime: { ...base.runtime, lastResult } as unknown as PluginUpdateReport['runtime'],
+    }
+  }
+
+  it('rolls back to an amber alert with title, old→new body, code chip and dismiss', () => {
+    openUpdateView(
+      fakeStore(
+        reportWithLastResult({
+          state: 'rolled_back',
+          targetVersion: '0.2.12',
+          installedVersion: '0.2.11',
+          at: '2026-10-23T01:00:00.000Z',
+          errorCode: 'POSTINSTALL_FAILED',
+          message: 'service refused to start',
+        }),
+      ),
+      COPY.zh,
+    )
+    const alert = document.querySelector('[data-group="runtime-alert"]')
+    expect(alert).not.toBeNull()
+    expect(alert?.querySelector('.hqpu-alert--amber')).not.toBeNull()
+    expect(alert?.textContent).toContain(COPY.zh.ui.rollbackTitle)
+    expect(alert?.querySelector('code')?.textContent).toBe('POSTINSTALL_FAILED')
+    // No diagnostic-log button — the plugin has no log-open affordance.
+    expect(alert?.textContent).not.toContain('诊断日志')
+    // Dismiss hides the alert.
+    const dismiss = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === COPY.zh.ui.dismiss,
+    )
+    dismiss?.click()
+    expect(document.querySelector('[data-group="runtime-alert"]')).toBeNull()
+  })
+
+  it('failed result also renders as the amber alert', () => {
+    openUpdateView(
+      fakeStore(
+        reportWithLastResult({
+          state: 'failed',
+          targetVersion: '0.2.12',
+          installedVersion: null,
+          at: '2026-10-23T01:00:00.000Z',
+          errorCode: 'CHECKSUM_MISMATCH',
+        }),
+      ),
+      COPY.zh,
+    )
+    const alert = document.querySelector('[data-group="runtime-alert"]')
+    expect(alert?.textContent).toContain(COPY.zh.ui.failedTitle)
+    expect(alert?.querySelector('code')?.textContent).toBe('CHECKSUM_MISMATCH')
+  })
+
+  it('succeeded result renders as a quiet green line, never a loud banner', () => {
+    openUpdateView(
+      fakeStore(
+        reportWithLastResult({
+          state: 'succeeded',
+          targetVersion: '0.2.12',
+          installedVersion: '0.2.12',
+          at: '2026-10-23T01:00:00.000Z',
+        }),
+      ),
+      COPY.zh,
+    )
+    const success = document.querySelector('[data-role="runtime-success"]')
+    expect(success).not.toBeNull()
+    expect(success?.textContent).toContain(COPY.zh.ui.successInline)
+    expect(document.querySelector('[data-group="runtime-alert"]')).toBeNull()
   })
 })

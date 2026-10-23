@@ -162,122 +162,142 @@ function blockedReason(item: PluginUpdateItem, copy: UpdateCopy): string | undef
   return by.length > 0 ? by.join(', ') : undefined
 }
 
-/** One package card: glyph, name with its state tag, version line, end actions. */
+/** Two-letter avatar initials for a card (CJK-safe). */
+function avatarInitials(item: PluginUpdateItem): string {
+  const src =
+    typeof item.displayName === 'string' && item.displayName.trim().length > 0
+      ? item.displayName.trim()
+      : shortName(item.name)
+  if (/[⺀-鿿]/.test(src)) return src.slice(0, 2)
+  const words = src.split(/[\s_\-./@]+/).filter(Boolean)
+  if (words.length >= 2) return (words[0]![0]! + words[1]![0]!).toUpperCase()
+  return src.replace(/^@/, '').slice(0, 2).toUpperCase()
+}
+
+/** Shared per-card changelog toggle drawer (the per-plugin changes[] list). */
+function changelogDrawer(item: PluginUpdateItem, copy: UpdateCopy, open: boolean): HTMLElement {
+  const drawer = el('div', 'hqpu-changelog-drawer')
+  drawer.style.display = open ? '' : 'none'
+  drawer.append(el('div', 'hqpu-changelog-drawer-title', copy.ui.changelogTitle))
+  const ul = el('ul')
+  for (const change of item.changes ?? []) {
+    if (typeof change === 'string' && change.length > 0) ul.append(el('li', '', change))
+  }
+  drawer.append(ul)
+  return drawer
+}
+
+/** One package card per the mockup: avatar initials, display name + package
+ *  subtitle, old→new version row (new in emerald), a 日志 toggle expanding the
+ *  inline changelog. Blocked/incompatible cards are dimmed with a rose
+ *  无法安装 badge and a reason line, and carry NO install button. */
 function packageCard(
   item: PluginUpdateItem,
   copy: UpdateCopy,
-  installing: boolean,
-  store: UpdateStoreLike,
+  open: boolean,
+  onToggle: () => void,
 ): HTMLLIElement {
-  const card = el('li', 'hqpu-card')
+  const blocked = item.state === 'blocked'
+  const card = el('li', blocked ? 'hqpu-card hqpu-card--blocked' : 'hqpu-card')
   card.dataset.pluginName = item.name
   card.dataset.state = item.state
-  // The full package name is the card's tooltip; the row shows the display name.
-  card.title = `${item.name} · ${versionLine(item)}`
 
   const head = el('div', 'hqpu-card-head')
-
-  const glyph = el('span', 'hqpu-card-icon')
-  glyph.setAttribute('aria-hidden', 'true')
-  glyph.innerHTML = PLUGIN_ICON(24)
+  const left = el('div')
+  const avatar = el('span', 'hqpu-avatar', avatarInitials(item))
+  avatar.setAttribute('aria-hidden', 'true')
 
   const main = el('div', 'hqpu-card-main')
-  const titleRow = el('div', 'hqpu-title-row')
-  // Prefer the user-facing display name from a v2 manifest; fall back to the
-  // shortened package id (the shell's own naming rule).
   const titleText =
     typeof item.displayName === 'string' && item.displayName.trim().length > 0
       ? item.displayName.trim()
       : shortName(item.name)
-  const title = el('span', 'hqpu-card-title', titleText)
-  const tag = el('span', 'hqpu-tag')
-  tag.dataset.tone = stateTone(item)
-  tag.textContent = stateLabel(item, copy)
-  titleRow.append(title, tag)
+  main.append(el('span', 'hqpu-card-title', titleText))
+  main.append(el('span', 'hqpu-card-sub', shortName(item.name)))
 
-  // Version line, with the download size appended when the manifest knows it.
+  // old → new version row; the NEW version renders in emerald.
+  const ver = el('div', 'hqpu-version-row')
+  if (item.currentVersion !== null && item.currentVersion !== undefined) {
+    ver.append(el('span', 'hqpu-ver-old', item.currentVersion))
+    ver.append(el('span', 'hqpu-ver-arrow', '→'))
+  }
   const size = formatMb(item.sizeBytes ?? 0)
-  const descText = size.length > 0 ? `${versionLine(item)} · ${size}` : versionLine(item)
-  const desc = el('span', 'hqpu-card-desc', descText)
-  main.append(titleRow, desc)
+  ver.append(
+    el('span', 'hqpu-ver-new', size.length > 0 ? `${item.availableVersion} (${size})` : item.availableVersion),
+  )
+  main.append(ver)
+  left.append(avatar, main)
 
-  // Optional one-line description from a v2 manifest.
-  if (typeof item.description === 'string' && item.description.trim().length > 0) {
-    main.append(el('span', 'hqpu-card-desc', item.description.trim()))
+  const right = el('div', 'hqpu-card-end')
+  if (blocked) {
+    right.append(el('span', 'hqpu-blocked-badge', copy.ui.blockedBadge))
+  } else if (Array.isArray(item.changes) && item.changes.length > 0) {
+    const toggle = el('button', 'hqpu-log-toggle')
+    toggle.type = 'button'
+    toggle.dataset.open = open ? 'true' : 'false'
+    toggle.innerHTML = `${copy.ui.changelogBtn}<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6"/></svg>`
+    toggle.addEventListener('click', onToggle)
+    right.append(toggle)
   }
-
-  head.append(glyph, main)
-
-  const end = el('div', 'hqpu-card-end')
-  if (item.state === 'update' || item.state === 'install') {
-    const button = el('button', 'hqpu-btn hqpu-btn--sm hqpu-btn--primary')
-    button.type = 'button'
-    button.disabled = installing
-    // Honest label: this installs the WHOLE offered set, not just one card.
-    button.innerHTML = `${DOWNLOAD_ICON(13)}<span>${copy.installOne}</span>`
-    button.title = copy.installOneTip
-    button.addEventListener('click', () => {
-      void runInstall(store, copy)
-    })
-    end.append(button)
-  }
-  head.append(end)
+  head.append(left, right)
   card.append(head)
 
-  // Per-plugin change list (v2 manifest), behind a small expander.
-  if (Array.isArray(item.changes) && item.changes.length > 0) {
-    const expander = el('div', 'hqpu-changes')
-    const toggle = el('button', 'hqpu-btn hqpu-btn--ghost hqpu-btn--sm', copy.release.changesTitle)
-    toggle.type = 'button'
-    const list = el('ul', 'hqpu-changes-list')
-    list.style.display = 'none'
-    for (const change of item.changes) {
-      if (typeof change === 'string' && change.length > 0) {
-        list.append(el('li', '', change))
-      }
-    }
-    toggle.addEventListener('click', () => {
-      list.style.display = list.style.display === 'none' ? '' : 'none'
-    })
-    expander.append(toggle, list)
-    card.append(expander)
+  // Inline changelog drawer (actionable items only).
+  if (!blocked && Array.isArray(item.changes) && item.changes.length > 0) {
+    card.append(changelogDrawer(item, copy, open))
   }
 
-  // A block reason belongs to a blocked offer only — render BOTH the mapped
-  // code copy and the server's full reasons[]/notes[] (computed but, before
-  // now, never shown).
-  if (item.state === 'blocked') {
+  // Blocked reason line(s): mapped copy plus the server's full reasons/notes.
+  if (blocked) {
     const reason = blockedReason(item, copy)
-    if (reason !== undefined) {
-      card.append(el('p', 'hqpu-card-reason', reason))
-    }
-    for (const entry of [...(item.reasons ?? []), ...(item.notes ?? [])]) {
-      if (typeof entry === 'string' && entry.length > 0) {
-        card.append(el('p', 'hqpu-card-reason', entry))
-      }
+    const entries = [
+      ...(reason !== undefined ? [reason] : []),
+      ...[...(item.reasons ?? []), ...(item.notes ?? [])].filter(
+        (e): e is string => typeof e === 'string' && e.length > 0,
+      ),
+    ]
+    for (const entry of entries) {
+      const line = el('p', 'hqpu-reason-line')
+      line.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5V8.5M8 11.25h.01M14.5 8a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0Z"/></svg>`
+      line.append(document.createTextNode(entry))
+      card.append(line)
     }
   }
   return card
 }
 
-/** A section: group head with its count, then the cards. */
+/** A section: head (title + count pill + expand-all toggle) then its cards. */
 function group(
   heading: string,
   items: PluginUpdateItem[],
   copy: UpdateCopy,
-  installing: boolean,
-  store: UpdateStoreLike,
+  changelogOpen: Set<string>,
+  allOpen: boolean,
+  onToggle: (name: string) => void,
+  onToggleAll: () => void,
 ): HTMLElement | null {
   if (items.length === 0) return null
   const section = el('section', 'hqpu-group')
   section.dataset.group = heading
 
-  const head = el('div', 'hqpu-group-head')
-  head.append(el('h3', 'hqpu-group-title', heading))
-  head.append(el('span', 'hqpu-group-count', copy.groupCount(items.length)))
+  const head = el('div', 'hqpu-section-head')
+  const titleWrap = el('div', 'hqpu-section-title')
+  titleWrap.append(el('span', '', heading))
+  titleWrap.append(el('span', 'hqpu-count-pill', String(items.length)))
+  head.append(titleWrap)
+  // Expand-all only makes sense over actionable, changelog-bearing cards.
+  const actionable = items.some((i) => i.state !== 'blocked' && Array.isArray(i.changes) && i.changes.length > 0)
+  if (actionable) {
+    const all = el('button', 'hqpu-all-changelog', copy.ui.allChangelog)
+    all.type = 'button'
+    all.addEventListener('click', onToggleAll)
+    head.append(all)
+  }
 
   const list = el('ul', 'hqpu-cards')
-  for (const item of items) list.append(packageCard(item, copy, installing, store))
+  for (const item of items) {
+    list.append(packageCard(item, copy, allOpen || changelogOpen.has(item.name), () => onToggle(item.name)))
+  }
 
   section.append(head, list)
   return section
@@ -342,6 +362,19 @@ function formatEta(seconds: number | undefined): string | null {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
+/** "上次检查: N 分钟前" — relative time from an ISO timestamp. */
+function relativeAgo(iso: string | null | undefined, copy: UpdateCopy): string | null {
+  if (typeof iso !== 'string' || iso.length === 0) return null
+  const then = new Date(iso).getTime()
+  if (!Number.isFinite(then)) return null
+  const diffMin = Math.round((Date.now() - then) / 60_000)
+  if (diffMin < 1) return copy.ui.agoJust
+  if (diffMin < 60) return copy.ui.agoMinutes(diffMin)
+  const hours = Math.round(diffMin / 60)
+  if (hours < 24) return copy.ui.agoHours(hours)
+  return copy.ui.agoDays(Math.round(hours / 24))
+}
+
 function jobKindLabel(job: UpdateJob, copy: UpdateCopy): string {
   return job.kind === 'runtime' ? copy.job.kindRuntime : copy.job.kindPluginSet
 }
@@ -377,41 +410,57 @@ function stepsList(job: UpdateJob, copy: UpdateCopy): HTMLElement | null {
   return wrap
 }
 
+/** Map a job phase onto the 4-step indicator index (下载/校验/替换/重启). */
+function stepIndex(phase: UpdateJob['phase']): number {
+  switch (phase) {
+    case 'downloading':
+      return 0
+    case 'verifying':
+    case 'resolving':
+      return 1
+    case 'staging':
+    case 'activating':
+    case 'awaiting-host':
+      return 2
+    case 'restarting':
+    case 'verifying-after-restart':
+      return 3
+    case 'queued':
+      return -1
+    default:
+      return -1
+  }
+}
+
 /**
- * The ACTIVE-JOB view: type + target, previous→target, current phase, a
- * determinate bar only when a real percentage exists, bytes/speed/ETA when the
- * server publishes them, and what happens next. Closing the panel never
- * cancels the job — say so.
+ * The ACTIVE-JOB banner per the mockup: pulsing brand dot + job title with the
+ * target version, mono percentage, a gradient bar only when `percent != null`,
+ * phase + speed line ("3.1 MB/s (286MB / 450MB)"), and a 4-step indicator row
+ * (done=emerald, active=pulsing brand, upcoming=muted).
  */
 function activeJobView(job: UpdateJob, copy: UpdateCopy): HTMLElement {
   const section = el('section', 'hqpu-group')
   section.dataset.group = 'active-job'
 
-  const head = el('div', 'hqpu-group-head')
-  const tag = el('span', 'hqpu-tag')
-  tag.dataset.tone = 'info'
-  tag.textContent = jobKindLabel(job, copy)
-  head.append(el('h3', 'hqpu-group-title', `${jobKindLabel(job, copy)} → ${job.targetVersion}`), tag)
-  section.append(head)
+  const card = el('div', 'hqpu-active')
 
-  const card = el('div', 'hqpu-job')
-
-  const phaseLine = el('p', 'hqpu-status hqpu-status--dot')
-  phaseLine.append(el('span', 'hqpu-spinner'))
-  const transition =
-    job.previousVersion !== null && job.previousVersion.length > 0
-      ? `${job.previousVersion} → ${job.targetVersion} · ${phaseLabel(job, copy)}`
-      : `${job.targetVersion} · ${phaseLabel(job, copy)}`
-  phaseLine.append(el('span', '', transition))
-  card.append(phaseLine)
-
-  if (typeof job.message === 'string' && job.message.length > 0) {
-    card.append(el('p', 'hqpu-status', job.message))
-  }
-
-  // Determinate bar only when the server gives a real percentage — never show
-  // 100% before the job is terminal.
+  // Top row: pulse dot + title, mono percent.
+  const top = el('div', 'hqpu-active-top')
+  const titleWrap = el('div', 'hqpu-active-title')
+  const pulse = el('span', 'hqpu-pulse-dot')
+  pulse.append(el('span', 'hqpu-pulse-ring'))
+  const title =
+    job.kind === 'runtime'
+      ? copy.ui.jobRuntimeTitle(job.targetVersion)
+      : copy.ui.jobPluginTitle(job.targetVersion)
+  titleWrap.append(pulse, el('span', '', title))
   const pct = job.progress.percent
+  if (pct !== null) {
+    top.append(el('span', 'hqpu-active-percent', `${Math.round(pct)}%`))
+  }
+  card.append(top)
+
+  // Gradient bar — only when the server publishes a real percentage.
   if (pct !== null) {
     const bar = el('div', 'hqpu-progress')
     const fill = el('div', 'hqpu-progress-fill')
@@ -420,23 +469,59 @@ function activeJobView(job: UpdateJob, copy: UpdateCopy): HTMLElement {
     card.append(bar)
   }
 
-  const bits: string[] = []
-  if (pct !== null) bits.push(`${Math.round(pct)}%`)
+  // Phase text + telemetry line: "3.1 MB/s (286MB / 450MB)".
+  const meta = el('div', 'hqpu-active-meta')
+  const phaseText =
+    typeof job.message === 'string' && job.message.length > 0 ? job.message : phaseLabel(job, copy)
+  meta.append(el('span', '', phaseText))
+  const speed = formatBytes(job.progress.bytesPerSecond)
   const done = formatBytes(job.progress.bytesDone)
   const total = formatBytes(job.progress.bytesTotal)
-  if (done !== null && total !== null) bits.push(copy.job.bytes(done, total))
-  const speed = formatBytes(job.progress.bytesPerSecond)
-  if (speed !== null) bits.push(copy.job.speed(speed))
-  const eta = formatEta(job.progress.etaSeconds)
-  if (eta !== null) bits.push(copy.job.eta(eta))
-  if (bits.length > 0) card.append(el('p', 'hqpu-status hqpu-job-meta', bits.join(' · ')))
+  const telemetry =
+    speed !== null && done !== null && total !== null
+      ? `${speed}/s (${done} / ${total})`
+      : speed !== null
+        ? `${speed}/s`
+        : done !== null && total !== null
+          ? copy.job.bytes(done, total)
+          : ''
+  if (telemetry.length > 0) meta.append(el('span', '', telemetry))
+  card.append(meta)
 
-  const steps = stepsList(job, copy)
-  if (steps !== null) card.append(steps)
+  // previous → target transition + what happens next (restart / elevation),
+  // and the honest "closing does not cancel" note.
+  const transition = el('div', 'hqpu-active-meta')
+  transition.append(
+    el(
+      'span',
+      '',
+      job.previousVersion !== null && job.previousVersion.length > 0
+        ? `${job.previousVersion} → ${job.targetVersion}`
+        : job.targetVersion,
+    ),
+  )
+  transition.append(
+    el('span', '', job.kind === 'runtime' ? copy.job.willSwapRuntime : copy.job.willRestartDsh),
+  )
+  card.append(transition)
+  card.append(el('p', 'hqpu-job-meta', copy.job.closeNote))
 
-  // What happens next — restart / runtime swap + elevation implications.
-  card.append(el('p', 'hqpu-status', job.kind === 'runtime' ? copy.job.willSwapRuntime : copy.job.willRestartDsh))
-  card.append(el('p', 'hqpu-status', copy.job.closeNote))
+  // 4-step indicator: done=emerald, active=pulsing brand, upcoming=muted.
+  const current = stepIndex(job.phase)
+  const stepsRow = el('div', 'hqpu-job-steps4')
+  copy.ui.jobSteps.forEach((label: string, index: number) => {
+    const cls =
+      current === -1
+        ? 'hqpu-job-step--todo'
+        : index < current
+          ? 'hqpu-job-step--done'
+          : index === current
+            ? 'hqpu-job-step--active'
+            : 'hqpu-job-step--todo'
+    stepsRow.append(el('div', cls, label))
+  })
+  card.append(stepsRow)
+
   section.append(card)
   return section
 }
@@ -785,6 +870,11 @@ function sourceEditor(
   const labels = sourceLabels(copy, kind)
   const block = el('div', `hqpu-source-editor hqpu-source-editor--${kind}`)
   if (!actions.sourceEditing) {
+    // Read mode: show the URL currently in effect (mono, muted), then edit.
+    const urlLine = el('p', 'hqpu-source-current-url', source.url)
+    urlLine.style.cssText =
+      'margin:2px 0 6px;font-size:9px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#a1a1aa;word-break:break-all;'
+    block.append(urlLine)
     block.append(el('p', 'hqpu-status hqpu-source-hint', labels.hint))
     const edit = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', labels.edit)
     edit.type = 'button'
@@ -870,172 +960,164 @@ function pluginSourceGroup(
   return section
 }
 
-/** The independent HQ Edge runtime report, as ruled fact rows. */
-function runtimeGroup(
+/**
+ * The host's own report of the last runtime swap. Rolled-back / failed renders
+ * as an AMBER alert card (title, old→new body, errorCode chip, 忽略 dismiss);
+ * succeeded renders as a subtle green inline line — not a loud banner. The
+ * plugin has NO log-open affordance, so "查看诊断日志" is omitted (never faked).
+ */
+function runtimeResultAlert(
+  report: PluginUpdateReport,
+  copy: UpdateCopy,
+  dismissed: boolean,
+  onDismiss: () => void,
+): HTMLElement | null {
+  const lastResult = report.runtime.lastResult
+  if (lastResult === null || lastResult === undefined) return null
+
+  // Green inline confirmation — quiet by design.
+  if (lastResult.state === 'succeeded') {
+    const line = el('p', 'hqpu-alert-green')
+    line.dataset.role = 'runtime-success'
+    line.textContent = copy.ui.successInline
+    return line
+  }
+  if (dismissed) return null
+
+  const section = el('section', 'hqpu-group')
+  section.dataset.group = 'runtime-alert'
+  const card = el('div', 'hqpu-alert hqpu-alert--amber')
+  card.innerHTML = WARNING_ICON(14)
+
+  const body = el('div')
+  const title = el('div', 'hqpu-alert-title')
+  title.textContent = lastResult.state === 'failed' ? copy.ui.failedTitle : copy.ui.rollbackTitle
+  body.append(title)
+
+  const oldVer = lastResult.installedVersion ?? lastResult.targetVersion ?? '—'
+  const code = typeof lastResult.errorCode === 'string' && lastResult.errorCode.length > 0
+    ? lastResult.errorCode
+    : '—'
+  const text =
+    lastResult.state === 'failed'
+      ? copy.ui.failedBody(oldVer, code)
+      : copy.ui.rollbackBody(oldVer, code)
+  // Build the body as text + an inline <code> chip for the error code.
+  const bodyP = el('p', 'hqpu-alert-body')
+  const textOnly =
+    lastResult.state === 'failed'
+      ? copy.ui.failedBody(oldVer, '')
+      : copy.ui.rollbackBody(oldVer, '')
+  // Strip the trailing "code" placeholder we appended; re-add as a chip.
+  bodyP.append(document.createTextNode(textOnly.replace(/\s*$/, '')))
+  if (typeof lastResult.errorCode === 'string' && lastResult.errorCode.length > 0) {
+    bodyP.append(document.createTextNode(' '))
+    const chip = el('code', '', lastResult.errorCode)
+    bodyP.append(chip)
+  }
+  if (typeof lastResult.message === 'string' && lastResult.message.length > 0) {
+    bodyP.append(el('br'), document.createTextNode(lastResult.message))
+  }
+  body.append(bodyP)
+
+  // Dismiss action (no log button — the plugin has no log-open affordance).
+  const actions = el('div', 'hqpu-alert-actions')
+  const dismiss = el('button', 'hqpu-alert-dismiss', copy.ui.dismiss)
+  dismiss.type = 'button'
+  dismiss.addEventListener('click', onDismiss)
+  actions.append(dismiss)
+  body.append(actions)
+
+  card.append(body)
+  section.append(card)
+  return section
+}
+
+/** The HQ Edge runtime engine card per the mockup: current chip, "新版本 vY
+ *  可用" with a 关键修复 tag when breaking/notes exist, size+summary line, a
+ *  升级核心 button (existing arm→confirm flow), and the amber restart note. */
+function runtimeEngineCard(
   report: PluginUpdateReport,
   copy: UpdateCopy,
   actions: RuntimeActions,
-): HTMLElement {
-  const section = el('section', 'hqpu-group')
-  section.dataset.group = 'runtime'
-  const head = el('div', 'hqpu-group-head')
-  head.append(el('h3', 'hqpu-group-title', copy.runtime.title))
-  section.append(head)
-
-  const facts = el('dl', 'hqpu-facts')
+): HTMLElement | null {
   const runtime = report.runtime
-  // `runtime.latest` is a release ENTRY; only its version is ever displayed or
-  // sent back as `targetVersion`.
   const latestVersion = runtimeLatestVersion(runtime)
+  const card = el('section', 'hqpu-engine')
+  card.dataset.group = 'runtime'
 
-  const row = (label: string, value: string, code = false): void => {
-    const wrap = el('div')
-    wrap.append(el('dt', '', label))
-    const dd = el('dd')
-    if (code) {
-      const node = el('code', '', value)
-      dd.append(node)
-    } else {
-      dd.textContent = value
-    }
-    wrap.append(dd)
-    facts.append(wrap)
+  const head = el('div', 'hqpu-engine-head')
+  const titleWrap = el('div', 'hqpu-engine-title')
+  titleWrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.33333 2L4.66667 8H8L6.66667 14L11.33333 8H8L9.33333 2Z"/></svg>`
+  titleWrap.append(el('span', '', copy.ui.runtimeEngine))
+  head.append(titleWrap)
+  if (typeof runtime.currentVersion === 'string' && runtime.currentVersion.length > 0) {
+    head.append(el('span', 'hqpu-chip', copy.ui.currentChip(runtime.currentVersion)))
   }
+  card.append(head)
 
-  // The source row: which manifest URL is in effect and where it came from.
-  // Absent on an older hq-edge — then only the legacy notConfigured row shows.
-  const source = normalizeSource(runtime.source)
-
-  if (runtime.configured === false) {
-    if (source !== null) {
-      sourceFactRow(facts, source, copy)
-    } else {
-      row(copy.runtime.source, copy.runtime.notConfigured)
-    }
-  } else {
-    row(copy.runtime.current, runtime.currentVersion ?? copy.runtime.unknown)
-    if (runtime.updateAvailable && latestVersion !== null) {
-      row(copy.runtime.latest, latestVersion)
-      // v2 manifest metadata: download size before committing to the update.
-      const latestEntry = runtime.latest
-      const size = typeof latestEntry?.sizeBytes === 'number' ? formatMb(latestEntry.sizeBytes) : ''
-      if (size.length > 0) row(copy.runtime.sizeLabel, size)
-    }
-    if (report.manifestVersion !== null) {
-      row(copy.runtime.set, report.manifestVersion, true)
-    }
-    if (typeof runtime.checkedAt === 'string' && runtime.checkedAt.length > 0) {
-      row(copy.runtime.checkedAt, new Date(runtime.checkedAt).toLocaleString())
-    }
-    if (source !== null) {
-      sourceFactRow(facts, source, copy)
-    }
-  }
-  section.append(facts)
-
-  // The editor: point the runtime at another release channel (a staging
-  // manifest, a local rig) without an env var and a restart. hq-edge persists
-  // the override per host, so it survives restarts of both processes. It is a
-  // developer affordance, so it hides behind an "advanced" disclosure.
-  if (source !== null) {
-    section.append(advancedBlock(copy, [sourceEditor('runtime', source, copy, actions)]))
-  }
-
-  // ── Runtime update action row ──
-  // Only offered when hq-edge reports a newer distribution AND named its
-  // version: the request needs `targetVersion`, so an entry without one has
-  // nothing to send.
+  // Update row (only when a newer distribution is known).
   if (runtime.updateAvailable && latestVersion !== null) {
-    const row = el('div', 'hqpu-actions hqpu-runtime-actions')
+    const row = el('div', 'hqpu-engine-update-row')
+    const left = el('div')
+    const newLine = el('div', 'hqpu-engine-new-line')
+    newLine.append(el('span', '', copy.ui.newVersion(latestVersion)))
+    const latestEntry = runtime.latest
+    const hasCritical =
+      (Array.isArray(latestEntry?.breaking) && (latestEntry?.breaking?.length ?? 0) > 0) ||
+      (Array.isArray(latestEntry?.notes) && (latestEntry?.notes?.length ?? 0) > 0)
+    if (hasCritical) newLine.append(el('span', 'hqpu-tag--brand', copy.ui.breakingTag))
+    left.append(newLine)
+    const size = typeof latestEntry?.sizeBytes === 'number' ? formatMb(latestEntry.sizeBytes) : ''
+    const summary = typeof latestEntry?.summary === 'string' ? latestEntry.summary : ''
+    if (size.length > 0 || summary.length > 0) {
+      left.append(el('p', 'hqpu-engine-size', copy.ui.sizeLine(size, summary)))
+    }
+    row.append(left)
+
+    // Upgrade action: arm → confirm, accepted/busy states preserved.
     if (actions.accepted) {
-      // Terminal state: no button. hq-edge has already exited, so re-offering
-      // "update" here could only produce a transport error.
-      const line = el('span', 'hqpu-status hqpu-status--dot')
-      line.setAttribute('role', 'status')
-      line.append(el('span', 'hqpu-spinner'), el('span', '', copy.runtime.updateAccepted))
-      row.append(line)
+      row.append(el('span', 'hqpu-status', copy.runtime.updateAccepted))
     } else if (actions.busy) {
-      // Downloading + verifying + staging the bundle: tens of seconds to a few
-      // minutes. Say what is happening instead of an open-ended spinner.
-      const line = el('span', 'hqpu-status hqpu-status--dot')
-      line.setAttribute('role', 'status')
-      line.append(el('span', 'hqpu-spinner'), el('span', '', copy.runtime.updating))
-      row.append(line)
+      row.append(el('span', 'hqpu-status', copy.runtime.updating))
     } else if (actions.armed) {
-      row.append(el('p', 'hqpu-status hqpu-runtime-confirm', copy.runtime.updateConfirm(latestVersion)))
-      const yes = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm', copy.confirmInstall)
+      const confirmWrap = el('div')
+      confirmWrap.append(el('p', 'hqpu-status', copy.runtime.updateConfirm(latestVersion)))
+      const yes = el('button', 'hqpu-btn hqpu-btn--engine', copy.confirmInstall)
       yes.type = 'button'
       yes.dataset.runtimeConfirm = ''
       yes.addEventListener('click', actions.onConfirm)
-      const no = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.cancel)
+      const no = el('button', 'hqpu-btn hqpu-btn--engine', copy.cancel)
       no.type = 'button'
       no.addEventListener('click', actions.onCancel)
-      row.append(yes, no)
+      confirmWrap.append(yes, no)
+      row.append(confirmWrap)
     } else {
-      const start = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm')
+      const start = el('button', 'hqpu-btn hqpu-btn--engine', copy.ui.upgradeCore)
       start.type = 'button'
       start.dataset.runtimeUpdate = ''
-      start.innerHTML = `${DOWNLOAD_ICON(13)}<span>${copy.runtime.update}</span>`
       start.addEventListener('click', actions.onArm)
       row.append(start)
     }
-    section.append(row)
-    // Honest duration note: no fixed "one minute" claim.
-    section.append(el('p', 'hqpu-status hqpu-job-meta', copy.runtime.durationNote))
-  } else {
-    section.append(el('p', 'hqpu-status', copy.runtime.note))
+    card.append(row)
+    const note = el('p', 'hqpu-engine-note')
+    note.innerHTML =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5L14 13H2L8 2.5Z"/></svg><span>${copy.ui.runtimeRestartNote}</span>`
+    card.append(note)
+  } else if (typeof runtime.lastError === 'string' && runtime.lastError.length > 0) {
+    card.append(el('p', 'hqpu-status', `${copy.lastError}: ${runtime.lastError}`))
   }
-
-  // The host's own report of the last runtime swap (succeeded / rolled_back /
-  // failed). Before this it was read from disk by hq-edge and never shown — a
-  // rolled-back swap was indistinguishable from "no update ever happened".
-  const lastResult = runtime.lastResult
-  if (lastResult !== null && lastResult !== undefined) {
-    const state = lastResult.state
-    const line = el('p', 'hqpu-status hqpu-status--dot')
-    line.setAttribute('role', 'status')
-    const dot = el('span', 'hqpu-dot')
-    dot.dataset.state = state === 'succeeded' ? 'done' : state === 'failed' ? 'error' : 'warning'
-    const head =
-      state === 'succeeded'
-        ? copy.runtime.lastResult.succeeded
-        : state === 'failed'
-          ? copy.runtime.lastResult.failed
-          : copy.runtime.lastResult.rolledBack
-    const parts = [head]
-    if (lastResult.targetVersion) parts.push(`→ ${lastResult.targetVersion}`)
-    if (lastResult.installedVersion) parts.push(`(${lastResult.installedVersion})`)
-    if (lastResult.at) parts.push(new Date(lastResult.at).toLocaleString())
-    line.append(dot, el('span', '', parts.join(' ')))
-    section.append(line)
-    if (typeof lastResult.message === 'string' && lastResult.message.length > 0) {
-      section.append(el('p', 'hqpu-status', lastResult.message))
-    }
-    if (typeof lastResult.errorCode === 'string' && lastResult.errorCode.length > 0) {
-      section.append(el('p', 'hqpu-status hqpu-job-meta', lastResult.errorCode))
-    }
-    if (state !== 'succeeded') {
-      section.append(el('p', 'hqpu-status hqpu-job-meta', copy.runtime.lastResult.elevation))
-    }
-  }
-
-  if (typeof runtime.lastError === 'string' && runtime.lastError.length > 0) {
-    const line = el('p', 'hqpu-status hqpu-status--dot')
-    line.setAttribute('role', 'status')
-    const dot = el('span', 'hqpu-dot')
-    dot.dataset.state = 'error'
-    line.append(dot, el('span', '', `${copy.lastError}: ${runtime.lastError}`))
-    section.append(line)
-  }
-  return section
+  return card
 }
 
 function renderList(
   section: HTMLElement,
   report: PluginUpdateReport | null,
   copy: UpdateCopy,
-  installing: boolean,
-  store: UpdateStoreLike,
+  changelogOpen: Set<string>,
+  allOpen: boolean,
+  onToggleCard: (name: string) => void,
+  onToggleAll: () => void,
   onRetryCheck: () => void,
 ): void {
   section.textContent = ''
@@ -1071,7 +1153,7 @@ function renderList(
     [copy.group.current, byState('current')],
   ]
   for (const [heading, items] of order) {
-    const node = group(heading, items, copy, installing, store)
+    const node = group(heading, items, copy, changelogOpen, allOpen, onToggleCard, onToggleAll)
     if (node !== null) section.append(node)
   }
 }
@@ -1081,10 +1163,15 @@ function renderRuntime(
   report: PluginUpdateReport | null,
   copy: UpdateCopy,
   actions: RuntimeActions,
+  dismissedAlert: boolean,
+  onDismissAlert: () => void,
 ): void {
   section.textContent = ''
   if (report === null) return
-  section.append(runtimeGroup(report, copy, actions))
+  const alert = runtimeResultAlert(report, copy, dismissedAlert, onDismissAlert)
+  if (alert !== null) section.append(alert)
+  const engine = runtimeEngineCard(report, copy, actions)
+  if (engine !== null) section.append(engine)
 }
 
 /** The plugin-source group, above the plugin groups, hidden behind an advanced
@@ -1157,66 +1244,98 @@ function showToast(message: string, tone: 'success' | 'error'): void {
   }, TOAST_HOLD_MS)
 }
 
-function renderActions(
-  bar: HTMLElement,
+/**
+ * The collapsible "更新源配置 (高级)" panel (gear-toggled). It hosts the
+ * EXISTING plugin-source and runtime-source editors (POST /plugin-source,
+ * POST /runtime-source, save→check→refresh already wired). No new endpoints:
+ * if a manifest source has no data, that field is omitted rather than faked.
+ */
+function renderSettingsPanel(
+  panel: HTMLElement,
   report: PluginUpdateReport | null,
   copy: UpdateCopy,
-  store: UpdateStoreLike,
-  installing: boolean,
+  open: boolean,
+  pluginActions: SourceEditorActions,
+  runtimeActions: SourceEditorActions,
 ): void {
-  bar.textContent = ''
-  if (report === null) return
+  panel.textContent = ''
+  panel.style.display = open ? '' : 'none'
+  if (!open || report === null) return
 
-  if (installing) {
-    const line = el('span', 'hqpu-status hqpu-status--dot')
-    const spinner = el('span', 'hqpu-spinner')
-    line.append(spinner, el('span', '', copy.installing))
-    bar.append(line)
+  const row = el('div', 'hqpu-settings-row')
+  row.append(el('div', 'hqpu-settings-title', copy.ui.settingsTitle))
+  // Origin badge: custom override (amber) vs the default configured source (green).
+  const pluginSource = normalizeSource(report.pluginSource)
+  const runtimeSource = normalizeSource(report.runtime.source)
+  const overridden = (pluginSource?.override ?? false) || (runtimeSource?.override ?? false)
+  const badge = el('span', 'hqpu-origin-badge', overridden ? copy.ui.originCustom : copy.ui.originDefault)
+  badge.dataset.origin = overridden ? 'override' : 'config'
+  row.append(badge)
+  panel.append(row)
+
+  if (pluginSource !== null) {
+    panel.append(el('label', '', copy.ui.pluginUrlLabel))
+    panel.append(sourceEditor('plugin', pluginSource, copy, pluginActions))
+  }
+  if (runtimeSource !== null) {
+    panel.append(el('label', '', copy.ui.runtimeUrlLabel))
+    panel.append(sourceEditor('runtime', runtimeSource, copy, runtimeActions))
+  }
+}
+
+/**
+ * The sticky footer: left meta ("准备安装 N 项兼容插件" / "版本集: vX"), a
+ * full-width primary "一键更新全套插件 (vX)" (install = one durable job),
+ * a secondary 忽略 wired to the existing ignore/unignore affordance, and the
+ * footnote. The count EXCLUDES blocked / ignored / already-current entries.
+ */
+function renderFooter(
+  footer: HTMLElement,
+  installBtn: HTMLButtonElement,
+  ignoreBtn: HTMLButtonElement,
+  countEl: HTMLElement,
+  setEl: HTMLElement,
+  report: PluginUpdateReport | null,
+  copy: UpdateCopy,
+  installing: boolean,
+  store: UpdateStoreLike,
+): void {
+  if (report === null) {
+    countEl.textContent = ''
+    setEl.textContent = ''
+    installBtn.disabled = true
+    ignoreBtn.style.display = 'none'
     return
   }
 
   const actionable = report.items.filter(
     (item) => item.state === 'update' || item.state === 'install',
   ).length
-  // Every write needs an evaluated set; hq-edge reports `null` until it has
-  // read a manifest, and posting `null` would only earn a 400.
   const hasSet = report.manifestVersion !== null
+  const setVersion: string = report.manifestVersion ?? ''
 
-  if (actionable === 0) {
-    // The official page shows no install control when there is nothing to
-    // commit, so mirror that with a muted line rather than a dead button.
-    bar.append(el('span', 'hqpu-status', copy.nothingToInstall))
-  } else {
-    const installBtn = el('button', 'hqpu-btn hqpu-btn--primary')
-    installBtn.type = 'button'
-    installBtn.disabled = !hasSet || report.ignoredSet
-    installBtn.innerHTML = `${DOWNLOAD_ICON(13)}<span>${copy.installAll(actionable)}</span>`
-    installBtn.addEventListener('click', () => {
-      void runInstall(store, copy)
-    })
-    bar.append(installBtn)
+  countEl.textContent = copy.ui.footerCount(actionable)
+  setEl.textContent = hasSet ? copy.ui.footerSet(setVersion) : ''
+
+  // Install-all: honest set-level label; disabled while busy or nothing to do.
+  installBtn.textContent = hasSet
+    ? copy.ui.installAllSet(setVersion)
+    : copy.ui.installAllSet('—')
+  installBtn.disabled = installing || actionable === 0 || !hasSet || report.ignoredSet
+  installBtn.dataset.busy = installing ? 'true' : 'false'
+  installBtn.onclick = () => {
+    void runInstall(store, copy)
   }
 
-  if (!hasSet) return
-
-  if (report.ignoredSet) {
-    const unignore = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.unignore)
-    unignore.type = 'button'
-    unignore.addEventListener('click', () => {
-      void unignoreOffer(report.manifestVersion as string)
-        .then(() => store.refresh())
-        .catch(() => undefined)
-    })
-    bar.append(unignore)
-  } else if (actionable > 0) {
-    const ignore = el('button', 'hqpu-btn hqpu-btn--ghost hqpu-btn--sm', copy.ignore)
-    ignore.type = 'button'
-    ignore.addEventListener('click', () => {
-      void ignoreOffer(report.manifestVersion as string)
-        .then(() => store.refresh())
-        .catch(() => undefined)
-    })
-    bar.append(ignore)
+  // Secondary ignore button: only when there is an evaluated set to ignore.
+  ignoreBtn.style.display = hasSet ? '' : 'none'
+  ignoreBtn.textContent = report.ignoredSet ? copy.unignore : copy.ui.ignoreBtn
+  ignoreBtn.onclick = () => {
+    const version = report.manifestVersion as string
+    const action = report.ignoredSet ? unignoreOffer(version) : ignoreOffer(version)
+    void action
+      .then(() => store.refresh())
+      .catch(() => undefined)
   }
 }
 
@@ -1244,51 +1363,71 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
   panel.setAttribute('aria-label', copy.viewTitle)
   panel.tabIndex = -1
 
-  // ── Head row: title + intro, refresh toolbar ──
+  // ── Sticky header: brand icon + title + relative checked time, refresh +
+  //    gear (advanced source settings) + close ──
   const head = el('div', 'hqpu-head')
   const headMain = el('div', 'hqpu-head-main')
-  headMain.append(el('h1', 'hqpu-title', copy.viewTitle))
-  const intro = el('p', 'hqpu-intro')
-  intro.append(el('span', '', copy.viewIntro))
-  const info = el('button', 'hqpu-info')
-  info.type = 'button'
-  info.setAttribute('aria-label', copy.viewInfo)
-  info.title = copy.viewInfo
-  info.innerHTML = INFO_ICON(11)
-  intro.append(info)
-  headMain.append(intro)
+  const brandIcon = el('span', 'hqpu-brand-icon')
+  brandIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 2.6a6 6 0 015.6 1.6M12.4 13.4a6 6 0 01-5.6-1.6M10.6 2V5.4H7.2M5.4 14V10.6H8.8"/></svg>`
+  const titleBlock = el('div', 'hqpu-title-block')
+  titleBlock.append(el('h1', 'hqpu-title', copy.ui.title))
+  const sub = el('p', 'hqpu-sub')
+  titleBlock.append(sub)
+  headMain.append(brandIcon, titleBlock)
 
   const toolbar = el('div', 'hqpu-toolbar')
   const refreshBtn = iconButton('hqpu-icon-btn', REFRESH_ICON(16), copy.refresh, () => {
-    void store.refresh()
+    void store.check()
   })
   toolbar.append(refreshBtn)
+  const gearBtn = iconButton(
+    'hqpu-icon-btn',
+    `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M13.5 9.2v-2.4l-1.8-.6a4.4 4.4 0 00-.5-1.2l.9-1.7-1.7-1.7-1.7.9a4.4 4.4 0 00-1.2-.5L7.2 2.5H4.8l-.6 1.8a4.4 4.4 0 00-1.2.5l-1.7-.9-1.7 1.7.9 1.7a4.4 4.4 0 00-.5 1.2L2.5 7.2v2.4l1.8.6a4.4 4.4 0 00.5 1.2l-.9 1.7 1.7 1.7 1.7-.9a4.4 4.4 0 001.2.5l.6 1.8h2.4l.6-1.8a4.4 4.4 0 001.2-.5l1.7.9 1.7-1.7-.9-1.7a4.4 4.4 0 00.5-1.2l1.8-.6z"/></svg>`,
+    copy.ui.gearTooltip,
+    () => {
+      settingsOpen = !settingsOpen
+      render()
+    },
+  )
+  toolbar.append(gearBtn)
   const closeBtn = iconButton('hqpu-icon-btn', CLOSE_ICON(16), copy.close, () => {
     onClose()
   })
   toolbar.append(closeBtn)
-
   head.append(headMain, toolbar)
   panel.append(head)
 
-  // ── Scrolling body: the centred column ──
+  // ── Collapsible advanced settings panel (gear-toggled) ──
+  const settingsPanel = el('div', 'hqpu-settings')
+  panel.append(settingsPanel)
+
+  // ── Scrolling body: the narrow column ──
   const scroll = el('div', 'hqpu-scroll')
   const column = el('div', 'hqpu-column')
   // The durable-job view leads: an active install/runtime update is resumed on
   // open BEFORE anything else, and a recent terminal result is shown here too.
   const jobSection = el('div', 'hqpu-stack')
-  const pluginSourceSection = el('div', 'hqpu-stack')
   const listSection = el('div', 'hqpu-stack')
   const runtimeSection = el('div', 'hqpu-stack')
   const toastSection = el('div', 'hqpu-toast-host')
-  column.append(jobSection, pluginSourceSection, listSection, runtimeSection, toastSection)
+  column.append(jobSection, listSection, runtimeSection, toastSection)
   scroll.append(column)
   panel.append(scroll)
 
-  // ── Footer actions (ui-primitives Modal .footer) ──
+  // ── Sticky footer ──
   const footer = el('div', 'hqpu-footer')
-  const actionBar = el('div', 'hqpu-actions')
-  footer.append(actionBar)
+  const footMeta = el('div', 'hqpu-foot-meta')
+  const footCount = el('span', '')
+  const footSet = el('span', 'hqpu-foot-set')
+  footMeta.append(footCount, footSet)
+  const footActions = el('div', 'hqpu-foot-actions')
+  const installAllBtn = el('button', 'hqpu-btn hqpu-btn--block')
+  installAllBtn.type = 'button'
+  const ignoreBtn = el('button', 'hqpu-btn--ignore', copy.ui.ignoreBtn)
+  ignoreBtn.type = 'button'
+  footActions.append(installAllBtn, ignoreBtn)
+  const footnote = el('p', 'hqpu-footnote', copy.ui.footnote)
+  footer.append(footMeta, footActions, footnote)
   panel.append(footer)
 
   overlay.append(scrim, panel)
@@ -1304,6 +1443,12 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
   let runtimeArmed = false
   let runtimeBusy = false
   let runtimeAccepted = false
+
+  // ── Panel-closure UI state (survive store refreshes) ──
+  const changelogOpen = new Set<string>()
+  let allOpen = false
+  let settingsOpen = false
+  let dismissedAlert = false
 
   // Source-editor state, same reasoning: a background refresh must not discard
   // a half-typed URL or silently close either editor.
@@ -1507,18 +1652,46 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
     const installing = store.installing() || jobActive
     const stale = report === null
     refreshBtn.disabled = stale
+    refreshBtn.title = copy.refresh
+
+    // Header sub-line: "上次检查: N 分钟前" (from report.checkedAt).
+    const ago = relativeAgo(report?.checkedAt, copy)
+    sub.textContent = ago !== null ? copy.ui.checkedAgo(ago) : copy.ui.checkedUnknown
+
+    // Collapsible advanced settings panel (gear-toggled): existing source
+    // editors — plugin + runtime manifest URL override, save→check→refresh.
+    renderSettingsPanel(settingsPanel, report, copy, settingsOpen, pluginActions, runtimeSourceActions)
+
     renderJobSection()
     if (stale) {
       listSection.textContent = ''
       listSection.append(skeleton(copy))
     } else {
-      renderList(listSection, report, copy, installing, store, () => {
-        void store.check()
-      })
+      renderList(
+        listSection,
+        report,
+        copy,
+        changelogOpen,
+        allOpen,
+        (name) => {
+          if (changelogOpen.has(name)) changelogOpen.delete(name)
+          else changelogOpen.add(name)
+          render()
+        },
+        () => {
+          allOpen = !allOpen
+          render()
+        },
+        () => {
+          void store.check()
+        },
+      )
     }
-    renderPluginSource(pluginSourceSection, report, copy, pluginActions)
-    renderRuntime(runtimeSection, report, copy, runtimeActions)
-    renderActions(actionBar, report, copy, store, installing)
+    renderRuntime(runtimeSection, report, copy, runtimeActions, dismissedAlert, () => {
+      dismissedAlert = true
+      render()
+    })
+    renderFooter(footer, installAllBtn, ignoreBtn, footCount, footSet, report, copy, installing, store)
   }
 
   const unsubscribe = store.subscribe(render)
