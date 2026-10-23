@@ -162,13 +162,15 @@
       ]
     },
     "@huaqiu/dsh-tool-freerouting": {
-      "version": "0.6.6",
+      "version": "0.6.8",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
+      "minDsh": null
+    },
       "minDsh": null,
       "displayName": "智能布线",
       "description": "Freerouting 自动布线集成",
