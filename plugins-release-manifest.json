@@ -168,8 +168,7 @@
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
-      "maxHqEdge": null,
-      "minDsh": null
+      "maxHqEdge": null
     },
       "minDsh": null,
       "displayName": "智能布线",
