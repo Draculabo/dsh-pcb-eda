@@ -477,10 +477,18 @@ export function quotaReading(quota: SubscriptionQuota | null, t: Translate): Met
 /**
  * AI token reading from `/user-rest/api/ai/usage`.
  *
+ * The headline number is the AVAILABLE (remaining) balance, not the consumed
+ * one — the same convention as the GEN/ERC cards beside it, which display
+ * `currentQuota` (the REMAINING quota: hq-edge exposes it as
+ * `availableQuota`/"Available Quota", hq-eda-ai as `remainingQuota`). Showing
+ * `usedPoints` here made the AI card the only surface in the product that
+ * reported consumption as the balance: an account that burned 77 of its 100
+ * points read "77 / 100 pts" where the user expects "23 / 100 pts".
+ *
  * The balance is reported as `usedPoints` + `availablePoints`, so the total is
  * their sum — there is no separate `totalPoints` field to read. Percent keeps
- * one decimal: a fresh account burns well under 1% of its balance, and rounding
- * 0.6% up to "1%" would overstate consumption fourfold.
+ * one decimal: a fresh account has well over 99% of its balance left, and
+ * rounding 99.6% up to "100%" would read as an exhausted account.
  */
 export function aiUsageReading(usage: AiTokenUsage | null, t: Translate): MetricReading | null {
   if (!usage) return null
@@ -488,10 +496,10 @@ export function aiUsageReading(usage: AiTokenUsage | null, t: Translate): Metric
   const available = Math.max(0, usage.availablePoints)
   const total = used + available
   const percent = total > 0
-    ? Math.min(100, Math.round((used / total) * 1000) / 10)
+    ? Math.min(100, Math.round((available / total) * 1000) / 10)
     : 0
   return {
-    value: t('subscription.aiUsageCount', { used, total }),
+    value: t('subscription.aiUsageCount', { available, total }),
     title: t('subscription.aiUsagePercent', { percent }),
     percent,
     ok: true,

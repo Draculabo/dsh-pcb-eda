@@ -295,7 +295,7 @@ describe('HuaqiuAuthSidebarAction (logged in)', () => {
     expect(menu()).toBeNull()
   })
 
-  it('renders the AI token usage metric (used/total points + percent bar) when the menu opens', async () => {
+  it('renders the AI token usage metric (available/total points + percent bar) when the menu opens', async () => {
     const container = await renderSettled()
     const auth = (await import('../src/client/auth-state.js')).getAuth() as unknown as {
       getSubscriptionQuota: ReturnType<typeof vi.fn>
@@ -329,7 +329,7 @@ describe('HuaqiuAuthSidebarAction (logged in)', () => {
     // GEN also resolved through the same pass (sanity).
     expect(menuEl.textContent).toContain('3 / 10')
 
-    // The AI metric card carries the used/total points and a percent hover.
+    // The AI metric card carries the available/total points and a percent hover.
     // Pick the SHORTEST div containing the label: ancestors (the metrics
     // container, the menu) also contain it, so length disambiguates the leaf.
     const aiCard = [...menuEl.querySelectorAll('div')]
@@ -338,10 +338,11 @@ describe('HuaqiuAuthSidebarAction (logged in)', () => {
     expect(aiCard).toBeTruthy()
     const aiSpans = aiCard!.querySelectorAll('span')
     const aiValue = aiSpans[aiSpans.length - 1]!
-    // used / total points: 1265 / (1265 + 198735) = 1265 / 200000 点
-    expect(aiValue.textContent).toContain('1265 / 200000')
-    // The hover detail reports the fractional percent (0.6%).
-    expect(aiValue.getAttribute('title')).toContain('已使用 0.6%')
+    // available / total points: 198735 / (1265 + 198735) = 198735 / 200000 点 —
+    // the REMAINING balance, the same convention as the GEN/ERC cards.
+    expect(aiValue.textContent).toContain('198735 / 200000')
+    // The hover detail reports the fractional remaining percent (99.4%).
+    expect(aiValue.getAttribute('title')).toContain('剩余 99.4%')
   })
 
   it('renders an empty AI metric (—) when the usage fetch yields nothing', async () => {

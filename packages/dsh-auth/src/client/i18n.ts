@@ -45,12 +45,13 @@ const zh = {
   'subscription.upgrade': '订阅 / 升级套餐',
   'subscription.online': '在线',
   // AI token usage (`/user-rest/api/ai/usage`) — the third metric beside GEN
-  // and ERC. `aiUsageCount` is the used/total point balance;
+  // and ERC. `aiUsageCount` is the available/total point balance (the same
+  // "what is left" convention as the GEN/ERC cards' `currentQuota`);
   // `aiUsagePercent` is the hover detail, because the bar itself only shows
   // the ratio visually.
   'subscription.ai': 'AI 用量',
-  'subscription.aiUsageCount': '{used} / {total} 点',
-  'subscription.aiUsagePercent': '已使用 {percent}%',
+  'subscription.aiUsageCount': '{available} / {total} 点',
+  'subscription.aiUsagePercent': '剩余 {percent}%',
   'subscription.aiUsageUnknown': '暂无数据',
 
   'card.title': '华秋 EDA AI（eda.cn）登录',
@@ -97,12 +98,13 @@ const en: Record<AuthCopyKey, string> = {
   'subscription.upgrade': 'Subscribe / Upgrade plan',
   'subscription.online': 'Online',
   // AI token usage (`/user-rest/api/ai/usage`) — the third metric beside GEN
-  // and ERC. `aiUsageCount` is the used/total point balance;
+  // and ERC. `aiUsageCount` is the available/total point balance (the same
+  // "what is left" convention as the GEN/ERC cards' `currentQuota`);
   // `aiUsagePercent` is the hover detail, because the bar itself only shows
   // the ratio visually.
   'subscription.ai': 'AI usage',
-  'subscription.aiUsageCount': '{used} / {total} pts',
-  'subscription.aiUsagePercent': '{percent}% used',
+  'subscription.aiUsageCount': '{available} / {total} pts',
+  'subscription.aiUsagePercent': '{percent}% remaining',
   'subscription.aiUsageUnknown': 'No data',
 
   'card.title': 'Huaqiu EDA AI (eda.cn) login',
