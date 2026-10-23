@@ -1,176 +1,295 @@
 {
-  "schemaVersion": 1,
-  "pluginSetVersion": "0.6.6",
+  "schemaVersion": 2,
+  "pluginSetVersion": "0.6.7",
+  "release": {
+    "publishedAt": "2026-10-21T09:00:00Z",
+    "channel": "stable",
+    "requiresRestart": true,
+    "summary": "EDA 主机拖拽放置稳定性修复，零件搜索与报价插件体验优化，以及插件更新面板的进度与发布说明展示。",
+    "notesUrl": "https://example.invalid/releases/dsh-plugin-set-0.6.7",
+    "notes": [
+      "修复 EDA 主机在拖拽放置元件时偶发的画布错位问题",
+      "零件搜索支持按封装类型筛选",
+      "报价插件支持新区域税率计算",
+      "插件更新面板新增下载进度、阶段说明与发布说明展示"
+    ],
+    "breaking": []
+  },
   "plugins": {
     "@huaqiu/dsh-analytics": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "统计分析",
+      "description": "采集与展示设计工具使用情况的统计面板",
+      "sizeBytes": 418213,
+      "changes": [
+        "优化统计数据加载速度"
+      ]
     },
     "@huaqiu/dsh-artifacts": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "生产文件",
+      "description": "生成与导出 PCB 生产所需的各类文件",
+      "sizeBytes": 512904,
+      "changes": [
+        "改进 Gerber 导出的图层命名"
+      ]
     },
     "@huaqiu/dsh-auth": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "账号登录",
+      "description": "登录与账号授权",
+      "sizeBytes": 284110,
+      "changes": [
+        "令牌刷新逻辑稳定性修复"
+      ]
     },
     "@huaqiu/dsh-eda-host": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": true,
       "minHqEdge": ">=0.2.0",
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "EDA 主机桥接",
+      "description": "与 EDA 主机画布的双向桥接",
+      "sizeBytes": 1204331,
+      "changes": [
+        "修复拖拽放置元件时的画布错位问题",
+        "提升桥接消息吞吐"
+      ]
     },
     "@huaqiu/dsh-eda-selection": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": true,
       "minHqEdge": ">=0.2.0",
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "元件选中",
+      "description": "画布元件的选中与高亮状态同步",
+      "sizeBytes": 356720,
+      "changes": [
+        "多选状态同步修复"
+      ]
     },
     "@huaqiu/dsh-hqsch": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "hq-eda"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "华秋原理图",
+      "description": "华秋 EDA 原理图工具入口",
+      "sizeBytes": 390221,
+      "changes": [
+        "原理图打开耗时优化"
+      ]
     },
     "@huaqiu/dsh-huaqiu-about": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "关于华秋",
+      "description": "产品信息与版本说明",
+      "sizeBytes": 156220,
+      "changes": [
+        "更新版本说明文案"
+      ]
     },
     "@huaqiu/dsh-kicad": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "kicad"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "KiCad 集成",
+      "description": "KiCad 主机集成与桥接",
+      "sizeBytes": 681204,
+      "changes": [
+        "提升 KiCad 启动期桥接稳定性"
+      ]
     },
     "@huaqiu/dsh-kicad-drc": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "kicad"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "设计规则检查",
+      "description": "KiCad DRC 结果展示与导出",
+      "sizeBytes": 302118,
+      "changes": [
+        "DRC 结果分类展示优化"
+      ]
     },
     "@huaqiu/dsh-tool-freerouting": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
-    },    
+      "minDsh": null,
+      "displayName": "智能布线",
+      "description": "Freerouting 自动布线集成",
+      "sizeBytes": 445210,
+      "changes": [
+        "布线进度回传修复"
+      ]
+    },
     "@huaqiu/dsh-tool-kicad-schematic-gen": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "原理图生成",
+      "description": "由网表自动生成 KiCad 原理图",
+      "sizeBytes": 398740,
+      "changes": [
+        "生成速度提升"
+      ]
     },
     "@huaqiu/dsh-tool-part-search": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "零件搜索",
+      "description": "元件库检索与选型",
+      "sizeBytes": 601433,
+      "changes": [
+        "支持按封装类型筛选",
+        "搜索结果排序优化"
+      ]
     },
     "@huaqiu/dsh-tool-pcb-viewer": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "PCB 预览",
+      "description": "PCB 3D 与布局预览",
+      "sizeBytes": 872115,
+      "changes": [
+        "大文件预览内存占用优化"
+      ]
     },
     "@huaqiu/dsh-tool-plugin-update": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": true,
       "minHqEdge": ">=0.2.0",
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "插件更新",
+      "description": "检查并安装插件与运行时更新",
+      "sizeBytes": 332870,
+      "changes": [
+        "新增下载进度、阶段说明与发布说明展示",
+        "更新可在面板关闭后继续运行并恢复显示"
+      ]
     },
     "@huaqiu/dsh-tool-quote": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": true,
       "minHqEdge": ">=0.2.0",
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "报价",
+      "description": "BOM 报价与下单",
+      "sizeBytes": 566290,
+      "changes": [
+        "支持新区域税率计算"
+      ]
     },
     "@huaqiu/dsh-tool-symbol-footprint": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "符号封装",
+      "description": "元件符号与封装管理",
+      "sizeBytes": 421090,
+      "changes": [
+        "封装校验提示优化"
+      ]
     },
     "@huaqiu/dsh-ui-theme-huaqiu": {
-      "version": "0.6.6",
+      "version": "0.6.7",
       "hosts": [
         "all"
       ],
       "requiresHqEdge": false,
       "minHqEdge": null,
       "maxHqEdge": null,
-      "minDsh": null
+      "minDsh": null,
+      "displayName": "华秋主题",
+      "description": "华秋品牌视觉主题",
+      "sizeBytes": 245110,
+      "changes": [
+        "深色模式对比度微调"
+      ]
     }
   }
 }

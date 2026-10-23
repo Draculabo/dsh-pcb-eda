@@ -26,11 +26,14 @@ import {
   setPluginUpdateSource,
   setRuntimeUpdateSource,
   unignoreOffer,
+  TERMINAL_PHASES,
   type PluginUpdateItem,
   type PluginUpdateReport,
+  type ReleaseInfo,
   type RuntimeUpdateSource,
+  type UpdateJob,
 } from './api.js'
-import type { UpdateCopy } from './copy.js'
+import { formatMb, type UpdateCopy } from './copy.js'
 import {
   CHECK_CIRCLE_ICON,
   CLOSE_ICON,
@@ -44,7 +47,17 @@ import {
 export interface UpdateStoreLike {
   report(): PluginUpdateReport | null
   installing(): boolean
+  /** Mark the installing footer state (set by the panel before the restart). */
+  setInstalling(flag: boolean): void
+  /** The durable job the server currently reports as active (resumed). */
+  activeJob(): UpdateJob | null
+  /** Bounded recent jobs (newest first), for the result/history view. */
+  recentJobs(): UpdateJob[]
   refresh(): Promise<PluginUpdateReport | null>
+  /** Force a fresh update check (used by the failed-check Retry action). */
+  check(): Promise<PluginUpdateReport | null>
+  /** Re-read `/status` (resume an active job immediately after submitting). */
+  fetchStatus(): Promise<void>
   subscribe(listener: () => void): () => void
 }
 
@@ -159,7 +172,7 @@ function packageCard(
   const card = el('li', 'hqpu-card')
   card.dataset.pluginName = item.name
   card.dataset.state = item.state
-  // The full package name is the card's tooltip; the row shows the short name.
+  // The full package name is the card's tooltip; the row shows the display name.
   card.title = `${item.name} · ${versionLine(item)}`
 
   const head = el('div', 'hqpu-card-head')
@@ -170,15 +183,29 @@ function packageCard(
 
   const main = el('div', 'hqpu-card-main')
   const titleRow = el('div', 'hqpu-title-row')
-  const title = el('span', 'hqpu-card-title', shortName(item.name))
+  // Prefer the user-facing display name from a v2 manifest; fall back to the
+  // shortened package id (the shell's own naming rule).
+  const titleText =
+    typeof item.displayName === 'string' && item.displayName.trim().length > 0
+      ? item.displayName.trim()
+      : shortName(item.name)
+  const title = el('span', 'hqpu-card-title', titleText)
   const tag = el('span', 'hqpu-tag')
   tag.dataset.tone = stateTone(item)
   tag.textContent = stateLabel(item, copy)
   titleRow.append(title, tag)
 
-  const desc = el('span', 'hqpu-card-desc', versionLine(item))
-
+  // Version line, with the download size appended when the manifest knows it.
+  const size = formatMb(item.sizeBytes ?? 0)
+  const descText = size.length > 0 ? `${versionLine(item)} · ${size}` : versionLine(item)
+  const desc = el('span', 'hqpu-card-desc', descText)
   main.append(titleRow, desc)
+
+  // Optional one-line description from a v2 manifest.
+  if (typeof item.description === 'string' && item.description.trim().length > 0) {
+    main.append(el('span', 'hqpu-card-desc', item.description.trim()))
+  }
+
   head.append(glyph, main)
 
   const end = el('div', 'hqpu-card-end')
@@ -186,7 +213,9 @@ function packageCard(
     const button = el('button', 'hqpu-btn hqpu-btn--sm hqpu-btn--primary')
     button.type = 'button'
     button.disabled = installing
+    // Honest label: this installs the WHOLE offered set, not just one card.
     button.innerHTML = `${DOWNLOAD_ICON(13)}<span>${copy.installOne}</span>`
+    button.title = copy.installOneTip
     button.addEventListener('click', () => {
       void runInstall(store, copy)
     })
@@ -195,11 +224,37 @@ function packageCard(
   head.append(end)
   card.append(head)
 
-  // A block reason belongs to a blocked offer only.
+  // Per-plugin change list (v2 manifest), behind a small expander.
+  if (Array.isArray(item.changes) && item.changes.length > 0) {
+    const expander = el('div', 'hqpu-changes')
+    const toggle = el('button', 'hqpu-btn hqpu-btn--ghost hqpu-btn--sm', copy.release.changesTitle)
+    toggle.type = 'button'
+    const list = el('ul', 'hqpu-changes-list')
+    list.style.display = 'none'
+    for (const change of item.changes) {
+      if (typeof change === 'string' && change.length > 0) {
+        list.append(el('li', '', change))
+      }
+    }
+    toggle.addEventListener('click', () => {
+      list.style.display = list.style.display === 'none' ? '' : 'none'
+    })
+    expander.append(toggle, list)
+    card.append(expander)
+  }
+
+  // A block reason belongs to a blocked offer only — render BOTH the mapped
+  // code copy and the server's full reasons[]/notes[] (computed but, before
+  // now, never shown).
   if (item.state === 'blocked') {
     const reason = blockedReason(item, copy)
     if (reason !== undefined) {
       card.append(el('p', 'hqpu-card-reason', reason))
+    }
+    for (const entry of [...(item.reasons ?? []), ...(item.notes ?? [])]) {
+      if (typeof entry === 'string' && entry.length > 0) {
+        card.append(el('p', 'hqpu-card-reason', entry))
+      }
     }
   }
   return card
@@ -265,6 +320,305 @@ function skeleton(copy: UpdateCopy): HTMLElement {
   // The skeleton replaces the whole column, so label it for screen readers.
   section.setAttribute('aria-label', copy.loading)
   return section
+}
+
+// ── Durable job views (active / result / recent) ───────────────────────────
+
+/** Format a byte count for the progress line, or null when unknown. */
+function formatBytes(n: number | undefined): string | null {
+  if (n === undefined || !Number.isFinite(n) || n < 0) return null
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`
+  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`
+  if (n >= 1024) return `${(n / 1024).toFixed(0)} KB`
+  return `${n} B`
+}
+
+/** Format an ETA in seconds to a short human string, or null when unknown. */
+function formatEta(seconds: number | undefined): string | null {
+  if (seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) return null
+  if (seconds < 60) return `${Math.round(seconds)} s`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+}
+
+function jobKindLabel(job: UpdateJob, copy: UpdateCopy): string {
+  return job.kind === 'runtime' ? copy.job.kindRuntime : copy.job.kindPluginSet
+}
+
+/** The phase in human words, falling back to the raw code. */
+function phaseLabel(job: UpdateJob, copy: UpdateCopy): string {
+  return copy.job.phase[job.phase] ?? job.phase
+}
+
+/** One per-step line for plugin-set installs (and any job that reports steps). */
+function stepsList(job: UpdateJob, copy: UpdateCopy): HTMLElement | null {
+  if (!Array.isArray(job.steps) || job.steps.length === 0) return null
+  const wrap = el('div', 'hqpu-job-steps')
+  wrap.append(el('p', 'hqpu-group-count', copy.job.stepsTitle))
+  const ol = el('ol', 'hqpu-steps')
+  for (const step of job.steps) {
+    const li = el('li', `hqpu-step hqpu-step--${step.state}`)
+    const dot = el('span', 'hqpu-dot')
+    dot.dataset.state =
+      step.state === 'installed'
+        ? 'done'
+        : step.state === 'failed'
+          ? 'error'
+          : step.state === 'running'
+            ? 'warning'
+            : 'idle'
+    li.append(dot)
+    const text = step.message && step.message.length > 0 ? `${step.name} — ${step.message}` : step.name
+    li.append(el('span', '', text))
+    ol.append(li)
+  }
+  wrap.append(ol)
+  return wrap
+}
+
+/**
+ * The ACTIVE-JOB view: type + target, previous→target, current phase, a
+ * determinate bar only when a real percentage exists, bytes/speed/ETA when the
+ * server publishes them, and what happens next. Closing the panel never
+ * cancels the job — say so.
+ */
+function activeJobView(job: UpdateJob, copy: UpdateCopy): HTMLElement {
+  const section = el('section', 'hqpu-group')
+  section.dataset.group = 'active-job'
+
+  const head = el('div', 'hqpu-group-head')
+  const tag = el('span', 'hqpu-tag')
+  tag.dataset.tone = 'info'
+  tag.textContent = jobKindLabel(job, copy)
+  head.append(el('h3', 'hqpu-group-title', `${jobKindLabel(job, copy)} → ${job.targetVersion}`), tag)
+  section.append(head)
+
+  const card = el('div', 'hqpu-job')
+
+  const phaseLine = el('p', 'hqpu-status hqpu-status--dot')
+  phaseLine.append(el('span', 'hqpu-spinner'))
+  const transition =
+    job.previousVersion !== null && job.previousVersion.length > 0
+      ? `${job.previousVersion} → ${job.targetVersion} · ${phaseLabel(job, copy)}`
+      : `${job.targetVersion} · ${phaseLabel(job, copy)}`
+  phaseLine.append(el('span', '', transition))
+  card.append(phaseLine)
+
+  if (typeof job.message === 'string' && job.message.length > 0) {
+    card.append(el('p', 'hqpu-status', job.message))
+  }
+
+  // Determinate bar only when the server gives a real percentage — never show
+  // 100% before the job is terminal.
+  const pct = job.progress.percent
+  if (pct !== null) {
+    const bar = el('div', 'hqpu-progress')
+    const fill = el('div', 'hqpu-progress-fill')
+    fill.style.width = `${Math.min(100, Math.max(0, pct))}%`
+    bar.append(fill)
+    card.append(bar)
+  }
+
+  const bits: string[] = []
+  if (pct !== null) bits.push(`${Math.round(pct)}%`)
+  const done = formatBytes(job.progress.bytesDone)
+  const total = formatBytes(job.progress.bytesTotal)
+  if (done !== null && total !== null) bits.push(copy.job.bytes(done, total))
+  const speed = formatBytes(job.progress.bytesPerSecond)
+  if (speed !== null) bits.push(copy.job.speed(speed))
+  const eta = formatEta(job.progress.etaSeconds)
+  if (eta !== null) bits.push(copy.job.eta(eta))
+  if (bits.length > 0) card.append(el('p', 'hqpu-status hqpu-job-meta', bits.join(' · ')))
+
+  const steps = stepsList(job, copy)
+  if (steps !== null) card.append(steps)
+
+  // What happens next — restart / runtime swap + elevation implications.
+  card.append(el('p', 'hqpu-status', job.kind === 'runtime' ? copy.job.willSwapRuntime : copy.job.willRestartDsh))
+  card.append(el('p', 'hqpu-status', copy.job.closeNote))
+  section.append(card)
+  return section
+}
+
+/**
+ * The RESULT view for a terminal job: success / failed / rolled-back /
+ * abandoned, previous→installed, per-package steps, errorCode + message, a log
+ * correlation hint, and retry guidance (a retry starts a NEW job).
+ */
+function resultView(job: UpdateJob, copy: UpdateCopy, onRetry: () => void): HTMLElement {
+  const section = el('section', 'hqpu-group')
+  section.dataset.group = 'job-result'
+
+  const tone =
+    job.phase === 'done' ? 'success' : job.phase === 'failed' ? 'danger' : 'warning'
+  const titleText =
+    job.phase === 'done'
+      ? copy.job.resultDone
+      : job.phase === 'failed'
+        ? copy.job.resultFailed
+        : job.phase === 'rolled-back'
+          ? copy.job.resultRolledBack
+          : copy.job.resultAbandoned
+
+  const head = el('div', 'hqpu-group-head')
+  const tag = el('span', 'hqpu-tag')
+  tag.dataset.tone = tone
+  tag.textContent = titleText
+  head.append(el('h3', 'hqpu-group-title', `${jobKindLabel(job, copy)} ${job.targetVersion}`), tag)
+  section.append(head)
+
+  const card = el('div', 'hqpu-job')
+  const res = job.result
+  const from = job.previousVersion ?? res?.installedVersion ?? '—'
+  const to = res?.installedVersion ?? job.targetVersion
+  const finished =
+    res !== undefined && res.finishedAt.length > 0
+      ? ` · ${new Date(res.finishedAt).toLocaleString()}`
+      : ''
+  card.append(el('p', 'hqpu-status', `${from} → ${to}${finished}`))
+  if (res !== undefined && res.message !== undefined && res.message.length > 0) {
+    card.append(el('p', 'hqpu-status', res.message))
+  }
+  if (res !== undefined && res.errorCode !== undefined && res.errorCode.length > 0) {
+    card.append(el('p', 'hqpu-status', res.errorCode))
+  }
+  if (typeof job.logHint === 'string' && job.logHint.length > 0) {
+    card.append(el('p', 'hqpu-status hqpu-job-meta', copy.job.logHint(job.logHint)))
+  }
+
+  const steps = stepsList(job, copy)
+  if (steps !== null) card.append(steps)
+
+  // Retry starts a NEW update job — never re-click the settled job id.
+  if (job.phase === 'failed' || job.phase === 'abandoned') {
+    const retry = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', copy.job.retry)
+    retry.type = 'button'
+    retry.addEventListener('click', onRetry)
+    card.append(retry)
+  }
+  section.append(card)
+  return section
+}
+
+/** A one-line row for older recent jobs (newest already shown as the card). */
+function recentJobsList(jobs: UpdateJob[], copy: UpdateCopy): HTMLElement | null {
+  const older = jobs.slice(1, 5)
+  if (older.length === 0) return null
+  const wrap = el('div', 'hqpu-group')
+  wrap.dataset.group = 'recent-jobs'
+  wrap.append(el('h3', 'hqpu-group-count', copy.job.recentTitle))
+  const ul = el('ul', 'hqpu-cards')
+  for (const job of older) {
+    const li = el('li', 'hqpu-status')
+    const when = job.updatedAt.length > 0 ? ` · ${new Date(job.updatedAt).toLocaleString()}` : ''
+    li.textContent = `${jobKindLabel(job, copy)} ${job.targetVersion} · ${phaseLabel(job, copy)}${when}`
+    ul.append(li)
+  }
+  wrap.append(ul)
+  return wrap
+}
+
+/**
+ * Check-status banner: a FAILED check shows a clear error row + Retry (never
+ * the silent "no updates" empty state); a successful check shows the time;
+ * when a check failed but a prior report exists it is labelled stale.
+ */
+function checkBanner(
+  report: PluginUpdateReport,
+  copy: UpdateCopy,
+  onRetry: () => void,
+): HTMLElement | null {
+  const failed = typeof report.lastError === 'string' && report.lastError.length > 0
+  const checked = typeof report.checkedAt === 'string' && report.checkedAt.length > 0
+  if (!failed && !checked) return null
+
+  const wrap = el('section', 'hqpu-group')
+  wrap.dataset.group = 'check-status'
+  if (failed) {
+    const banner = el('div', 'hqpu-banner')
+    banner.dataset.tone = 'danger'
+    banner.innerHTML = WARNING_ICON(14)
+    banner.append(el('span', '', copy.checkFailedBanner(report.lastError as string)))
+    wrap.append(banner)
+    if (report.items.length > 0) {
+      wrap.append(el('p', 'hqpu-status', copy.staleNote))
+    }
+    const row = el('div', 'hqpu-actions')
+    const retry = el('button', 'hqpu-btn hqpu-btn--primary hqpu-btn--sm', copy.retry)
+    retry.type = 'button'
+    retry.addEventListener('click', onRetry)
+    row.append(retry)
+    wrap.append(row)
+    return wrap
+  }
+  wrap.append(
+    el('p', 'hqpu-status', copy.checkedAt(new Date(report.checkedAt as string).toLocaleString())),
+  )
+  return wrap
+}
+
+/** Set-level release metadata (v2 manifest): summary, notes, breaking, link. */
+function releaseHeader(release: ReleaseInfo | null | undefined, copy: UpdateCopy): HTMLElement | null {
+  if (release === null || release === undefined) return null
+  const notes = Array.isArray(release.notes) ? release.notes.filter((n) => typeof n === 'string' && n.length > 0) : []
+  const breaking = Array.isArray(release.breaking)
+    ? release.breaking.filter((n) => typeof n === 'string' && n.length > 0)
+    : []
+  const hasContent =
+    (typeof release.summary === 'string' && release.summary.length > 0) ||
+    notes.length > 0 ||
+    breaking.length > 0 ||
+    typeof release.notesUrl === 'string' ||
+    typeof release.publishedAt === 'string'
+  if (!hasContent) return null
+
+  const section = el('section', 'hqpu-group')
+  section.dataset.group = 'release'
+  section.append(el('h3', 'hqpu-group-title', copy.release.summaryTitle))
+  if (typeof release.summary === 'string' && release.summary.length > 0) {
+    section.append(el('p', 'hqpu-status', release.summary))
+  }
+  if (typeof release.publishedAt === 'string' && release.publishedAt.length > 0) {
+    section.append(el('p', 'hqpu-status', copy.release.publishedAt(new Date(release.publishedAt).toLocaleString())))
+  }
+  if (release.requiresRestart === true) {
+    section.append(el('p', 'hqpu-status', copy.job.willRestartDsh))
+  }
+  if (notes.length > 0) {
+    const ul = el('ul', 'hqpu-release-notes')
+    for (const note of notes) ul.append(el('li', '', note as string))
+    section.append(ul)
+  }
+  if (breaking.length > 0) {
+    const banner = el('div', 'hqpu-banner')
+    banner.dataset.tone = 'danger'
+    banner.innerHTML = WARNING_ICON(14)
+    const inner = el('span')
+    inner.append(el('strong', '', `${copy.release.breakingTitle}: `))
+    inner.append(document.createTextNode(breaking.join(' · ')))
+    banner.append(inner)
+    section.append(banner)
+  }
+  if (typeof release.notesUrl === 'string' && release.notesUrl.length > 0) {
+    const link = el('a', 'hqpu-status hqpu-release-link', copy.release.notesLink)
+    link.href = release.notesUrl
+    link.target = '_blank'
+    link.rel = 'noreferrer'
+    section.append(link)
+  }
+  return section
+}
+
+/** Native disclosure that hides the developer-facing source editors by
+ *  default (end users should never need to type a manifest URL). */
+function advancedBlock(copy: UpdateCopy, nodes: Array<HTMLElement | null>): HTMLElement {
+  const details = el('details', 'hqpu-advanced')
+  details.append(el('summary', '', copy.release.advanced))
+  for (const node of nodes) {
+    if (node !== null) details.append(node)
+  }
+  return details
 }
 
 /** Mutable editor state for one manifest source (lives in the panel closure). */
@@ -562,6 +916,10 @@ function runtimeGroup(
     row(copy.runtime.current, runtime.currentVersion ?? copy.runtime.unknown)
     if (runtime.updateAvailable && latestVersion !== null) {
       row(copy.runtime.latest, latestVersion)
+      // v2 manifest metadata: download size before committing to the update.
+      const latestEntry = runtime.latest
+      const size = typeof latestEntry?.sizeBytes === 'number' ? formatMb(latestEntry.sizeBytes) : ''
+      if (size.length > 0) row(copy.runtime.sizeLabel, size)
     }
     if (report.manifestVersion !== null) {
       row(copy.runtime.set, report.manifestVersion, true)
@@ -577,9 +935,10 @@ function runtimeGroup(
 
   // The editor: point the runtime at another release channel (a staging
   // manifest, a local rig) without an env var and a restart. hq-edge persists
-  // the override per host, so it survives restarts of both processes.
+  // the override per host, so it survives restarts of both processes. It is a
+  // developer affordance, so it hides behind an "advanced" disclosure.
   if (source !== null) {
-    section.append(sourceEditor('runtime', source, copy, actions))
+    section.append(advancedBlock(copy, [sourceEditor('runtime', source, copy, actions)]))
   }
 
   // ── Runtime update action row ──
@@ -621,8 +980,43 @@ function runtimeGroup(
       row.append(start)
     }
     section.append(row)
+    // Honest duration note: no fixed "one minute" claim.
+    section.append(el('p', 'hqpu-status hqpu-job-meta', copy.runtime.durationNote))
   } else {
     section.append(el('p', 'hqpu-status', copy.runtime.note))
+  }
+
+  // The host's own report of the last runtime swap (succeeded / rolled_back /
+  // failed). Before this it was read from disk by hq-edge and never shown — a
+  // rolled-back swap was indistinguishable from "no update ever happened".
+  const lastResult = runtime.lastResult
+  if (lastResult !== null && lastResult !== undefined) {
+    const state = lastResult.state
+    const line = el('p', 'hqpu-status hqpu-status--dot')
+    line.setAttribute('role', 'status')
+    const dot = el('span', 'hqpu-dot')
+    dot.dataset.state = state === 'succeeded' ? 'done' : state === 'failed' ? 'error' : 'warning'
+    const head =
+      state === 'succeeded'
+        ? copy.runtime.lastResult.succeeded
+        : state === 'failed'
+          ? copy.runtime.lastResult.failed
+          : copy.runtime.lastResult.rolledBack
+    const parts = [head]
+    if (lastResult.targetVersion) parts.push(`→ ${lastResult.targetVersion}`)
+    if (lastResult.installedVersion) parts.push(`(${lastResult.installedVersion})`)
+    if (lastResult.at) parts.push(new Date(lastResult.at).toLocaleString())
+    line.append(dot, el('span', '', parts.join(' ')))
+    section.append(line)
+    if (typeof lastResult.message === 'string' && lastResult.message.length > 0) {
+      section.append(el('p', 'hqpu-status', lastResult.message))
+    }
+    if (typeof lastResult.errorCode === 'string' && lastResult.errorCode.length > 0) {
+      section.append(el('p', 'hqpu-status hqpu-job-meta', lastResult.errorCode))
+    }
+    if (state !== 'succeeded') {
+      section.append(el('p', 'hqpu-status hqpu-job-meta', copy.runtime.lastResult.elevation))
+    }
   }
 
   if (typeof runtime.lastError === 'string' && runtime.lastError.length > 0) {
@@ -642,14 +1036,26 @@ function renderList(
   copy: UpdateCopy,
   installing: boolean,
   store: UpdateStoreLike,
+  onRetryCheck: () => void,
 ): void {
   section.textContent = ''
   if (report === null) {
     section.append(skeleton(copy))
     return
   }
+  // Check-status banner: a failed check shows an error row + Retry (never the
+  // silent "no updates" empty state); a successful check shows the time.
+  const banner = checkBanner(report, copy, onRetryCheck)
+  if (banner !== null) section.append(banner)
+  // Set-level release metadata (v2 manifest): summary, notes, breaking.
+  const release = releaseHeader(report.release, copy)
+  if (release !== null) section.append(release)
   if (report.items.length === 0) {
-    section.append(el('div', 'hqpu-empty', copy.empty))
+    // A successful check with zero updates — distinct from a failed check,
+    // which already rendered its error row above.
+    if (typeof report.lastError !== 'string' || report.lastError.length === 0) {
+      section.append(el('div', 'hqpu-empty', copy.empty))
+    }
     return
   }
 
@@ -681,7 +1087,9 @@ function renderRuntime(
   section.append(runtimeGroup(report, copy, actions))
 }
 
-/** The plugin-source group, above the plugin groups. No-op without the field. */
+/** The plugin-source group, above the plugin groups, hidden behind an advanced
+ *  disclosure (manifest-URL editing is a developer affordance). No-op without
+ *  the field. */
 function renderPluginSource(
   section: HTMLElement,
   report: PluginUpdateReport | null,
@@ -691,10 +1099,10 @@ function renderPluginSource(
   section.textContent = ''
   if (report === null) return
   const node = pluginSourceGroup(report, copy, actions)
-  if (node !== null) section.append(node)
+  if (node !== null) section.append(advancedBlock(copy, [node]))
 }
 
-/** Run the install transaction, then keep polling until the state settles. */
+/** Run the install transaction (a new durable job), then let the store poll it. */
 async function runInstall(store: UpdateStoreLike, copy: UpdateCopy): Promise<void> {
   const report = store.report()
   if (report === null) return
@@ -704,17 +1112,23 @@ async function runInstall(store: UpdateStoreLike, copy: UpdateCopy): Promise<voi
     showToast(copy.checkFailed, 'error')
     return
   }
+  // Flip the installing flag BEFORE the request: this is what disables the
+  // action buttons and shows the "DSH will restart" footer state (previously
+  // dead code — runInstall never called it).
+  store.setInstalling(true)
   try {
     const result = await installSet(report.manifestVersion)
     if (result.error !== undefined) {
+      store.setInstalling(false)
       showToast(`${copy.installError}: ${result.error}`, 'error')
       return
     }
-    // The set activates atomically and DSH restarts. Keep polling the backend
-    // state rather than trusting the response alone (spec §7.1).
+    // 202 accepted: a durable job now owns the lifecycle. The store's /status
+    // poller renders progress and clears the flag when the job settles.
     showToast(copy.installSuccess, 'success')
-    void pollUntilSettled(store)
+    void store.fetchStatus()
   } catch (err: unknown) {
+    store.setInstalling(false)
     showToast(
       `${copy.installError}: ${err instanceof Error ? err.message : String(err)}`,
       'error',
@@ -806,29 +1220,6 @@ function renderActions(
   }
 }
 
-/** After an install, poll the backend until the update report settles
- *  (installing flag clears or DSH restarts under us — the next load re-reads
- *  the fresh state). */
-function pollUntilSettled(store: UpdateStoreLike): void {
-  let attempts = 0
-  const tick = (): void => {
-    void store
-      .refresh()
-      .then((report) => {
-        if (store.installing()) return
-        if (report !== null && report.ignoredSet === false && attempts >= 2) return
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        attempts += 1
-        if (attempts < 10) {
-          window.setTimeout(tick, 2000)
-        }
-      })
-  }
-  tick()
-}
-
 /**
  * Open (or focus) the update panel. Re-renders from the store; when the store
  * is stale the panel first refreshes the report.
@@ -883,11 +1274,14 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
   // ── Scrolling body: the centred column ──
   const scroll = el('div', 'hqpu-scroll')
   const column = el('div', 'hqpu-column')
+  // The durable-job view leads: an active install/runtime update is resumed on
+  // open BEFORE anything else, and a recent terminal result is shown here too.
+  const jobSection = el('div', 'hqpu-stack')
   const pluginSourceSection = el('div', 'hqpu-stack')
   const listSection = el('div', 'hqpu-stack')
   const runtimeSection = el('div', 'hqpu-stack')
   const toastSection = el('div', 'hqpu-toast-host')
-  column.append(pluginSourceSection, listSection, runtimeSection, toastSection)
+  column.append(jobSection, pluginSourceSection, listSection, runtimeSection, toastSection)
   scroll.append(column)
   panel.append(scroll)
 
@@ -1061,6 +1455,9 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
       // server that is already gone.
       runtimeAccepted = true
       showToast(copy.runtime.updateAccepted, 'success')
+      // Adopt the new durable job immediately so the active-job view renders
+      // (it polls from here; this process is about to be swapped away anyway).
+      void store.fetchStatus()
     } catch (err: unknown) {
       showToast(
         `${copy.installError}: ${err instanceof Error ? err.message : String(err)}`,
@@ -1072,16 +1469,52 @@ export function openUpdateView(store: UpdateStoreLike, copy: UpdateCopy): void {
     }
   }
 
+  /** Retry a failed/abandoned job: plugin-set → a fresh install; runtime →
+   *  re-arm the runtime confirm flow. Always a NEW job, never re-clicking the
+   *  settled job id. */
+  const retryJob = (kind: 'plugin-set' | 'runtime'): void => {
+    if (kind === 'runtime') {
+      runtimeArmed = true
+      render()
+    } else {
+      void runInstall(store, copy)
+    }
+  }
+
+  const renderJobSection = (): void => {
+    jobSection.textContent = ''
+    const active = store.activeJob()
+    if (active !== null && !TERMINAL_PHASES.has(active.phase)) {
+      // An active job leads the panel — resumed on open, polled to its end.
+      jobSection.append(activeJobView(active, copy))
+      return
+    }
+    const recent = store.recentJobs()
+    const latest = recent[0]
+    if (latest !== undefined && TERMINAL_PHASES.has(latest.phase)) {
+      jobSection.append(resultView(latest, copy, () => retryJob(latest.kind)))
+      const older = recentJobsList(recent, copy)
+      if (older !== null) jobSection.append(older)
+    }
+  }
+
   const render = (): void => {
     const report = store.report()
-    const installing = store.installing()
+    // The footer "installing" state is owned by the store flag OR any active
+    // durable job — buttons stay disabled while either is true.
+    const jobActive =
+      store.activeJob() !== null && !TERMINAL_PHASES.has(store.activeJob()!.phase)
+    const installing = store.installing() || jobActive
     const stale = report === null
     refreshBtn.disabled = stale
+    renderJobSection()
     if (stale) {
       listSection.textContent = ''
       listSection.append(skeleton(copy))
     } else {
-      renderList(listSection, report, copy, installing, store)
+      renderList(listSection, report, copy, installing, store, () => {
+        void store.check()
+      })
     }
     renderPluginSource(pluginSourceSection, report, copy, pluginActions)
     renderRuntime(runtimeSection, report, copy, runtimeActions)

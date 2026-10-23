@@ -21,7 +21,15 @@ import {
   observeHostLocale,
   type HostLocale,
 } from '@huaqiu/dsh-sidebar-entry'
-import { checkUpdates, fetchReport, type PluginUpdateReport } from './api.js'
+import {
+  checkUpdates,
+  fetchJobStatus,
+  fetchReport,
+  TERMINAL_PHASES,
+  type PluginUpdateReport,
+  type UpdateJob,
+  type UpdateJobStatus,
+} from './api.js'
 import { COPY } from './copy.js'
 import { PLUGIN_ICON } from './icons.js'
 import { openUpdateView, type UpdateStoreLike } from './update-view.js'
@@ -767,6 +775,97 @@ const VIEW_CSS_TEXT = `
   padding: 0 24px 20px;
 }
 
+/* ── Durable job (active / result) ────────────────────────────────────── */
+.hqpu-job {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-3);
+}
+.hqpu-job-meta {
+  font-variant-numeric: tabular-nums;
+}
+.hqpu-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-module-platform);
+  overflow: hidden;
+}
+.hqpu-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-business-primary);
+  transition: width var(--ds-transition-duration, 0.2s) ease;
+}
+.hqpu-job-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hqpu-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hqpu-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-step--skipped,
+.hqpu-step--pending { opacity: 0.6; }
+
+/* ── Per-plugin change list + release notes ────────────────────────────── */
+.hqpu-changes {
+  padding: 0 8px 8px 70px;
+}
+.hqpu-changes-list,
+.hqpu-release-notes {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 19px;
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-release-link {
+  align-self: flex-start;
+}
+
+/* ── Advanced disclosure (source editors) ───────────────────────────────── */
+.hqpu-advanced > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  list-style: none;
+  padding: 2px 0;
+}
+.hqpu-advanced > summary::-webkit-details-marker { display: none; }
+.hqpu-advanced > summary::before {
+  content: '▸ ';
+}
+.hqpu-advanced[open] > summary::before {
+  content: '▾ ';
+}
+
+/* Danger-toned banner (check failure, breaking changes) */
+.hqpu-banner[data-tone='danger'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+  color: var(--dsw-alias-label-secondary);
+}
+.hqpu-banner[data-tone='danger'] > svg {
+  color: var(--dsw-alias-state-error-primary);
+}
+
 .hqpu-visually-hidden {
   position: absolute;
   width: 1px;
@@ -929,8 +1028,15 @@ export interface ClientContext {
 class UpdateStore implements UpdateStoreLike {
   private current: PluginUpdateReport | null = null
   private installingFlag = false
+  /** The durable job the server currently reports as active (resumed across
+   *  panel close and DSH restart); null when idle. */
+  private active: UpdateJob | null = null
+  private recent: UpdateJob[] = []
   private readonly listeners = new Set<() => void>()
   private refreshTimer: number | null = null
+  private pollTimer: number | null = null
+  private pollBackoffMs = 1_000
+  private pollInFlight = false
 
   report(): PluginUpdateReport | null {
     return this.current
@@ -940,6 +1046,14 @@ class UpdateStore implements UpdateStoreLike {
     return this.installingFlag
   }
 
+  activeJob(): UpdateJob | null {
+    return this.active
+  }
+
+  recentJobs(): UpdateJob[] {
+    return [...this.recent]
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener)
     return () => {
@@ -947,15 +1061,28 @@ class UpdateStore implements UpdateStoreLike {
     }
   }
 
-  /** Badge count per spec §6.3: actionable `update` + `install`, excluding the
-   *  ignored offer (the server already folds ignore into item states; keep the
-   *  client-side filter as a defensive second pass). */
+  /**
+   * Badge: counts actionable plugin updates AND an available runtime update AND
+   * (while a job runs) an attention pill. A recent failed/rolled-back job with
+   * nothing actionable left also keeps a dot, so the outcome is never silently
+   * forgotten after the panel closes.
+   */
   badgeCount(): number {
+    const job = this.active
+    if (job !== null && !TERMINAL_PHASES.has(job.phase)) return 1
     const report = this.current
     if (report === null) return 0
-    return report.items.filter(
+    let count = report.items.filter(
       (item) => item.state === 'update' || item.state === 'install',
     ).length
+    if (report.runtime?.updateAvailable) count += 1
+    if (count === 0) {
+      const latest = this.recent[0]
+      if (latest !== undefined && (latest.phase === 'failed' || latest.phase === 'rolled-back')) {
+        count = 1
+      }
+    }
+    return count
   }
 
   private emit(): void {
@@ -965,6 +1092,71 @@ class UpdateStore implements UpdateStoreLike {
       } catch {
         /* one bad listener must not strand the rest */
       }
+    }
+  }
+
+  /** Adopt a fresh `/status` snapshot and (re)arm the poll loop. */
+  private applyStatus(status: UpdateJobStatus): void {
+    const wasActive = this.active !== null
+    this.active = status.activeJob
+    this.recent = status.recentJobs
+    if (wasActive && this.active === null) {
+      // The active job settled (moved to recent/terminal) — the installing
+      // footer state must clear on its own, without the panel's closure.
+      this.installingFlag = false
+    }
+    this.emit()
+    this.schedulePoll()
+  }
+
+  /**
+   * Fetch the durable job status. Called on mount, on panel open (BEFORE
+   * discovery) and by the poll loop. A failure (older hq-edge with no
+   * `/status`, or a transient HTTP error) is swallowed: the last known job is
+   * kept and the poller backs off and retries.
+   */
+  async fetchStatus(): Promise<void> {
+    try {
+      const status = await fetchJobStatus()
+      this.pollBackoffMs = 1_000
+      this.applyStatus(status)
+    } catch {
+      this.schedulePoll()
+    }
+  }
+
+  /** ~1 s poll while a job is active; stop on terminal; back off on error
+   *  without discarding the last known job; never overlap requests. */
+  private schedulePoll(): void {
+    if (this.pollTimer !== null) {
+      window.clearTimeout(this.pollTimer)
+      this.pollTimer = null
+    }
+    const job = this.active
+    if (job === null || TERMINAL_PHASES.has(job.phase)) {
+      this.pollBackoffMs = 1_000
+      return
+    }
+    this.pollTimer = window.setTimeout(() => {
+      void this.pollTick()
+    }, this.pollBackoffMs)
+  }
+
+  private async pollTick(): Promise<void> {
+    if (this.pollInFlight) {
+      this.schedulePoll()
+      return
+    }
+    this.pollInFlight = true
+    try {
+      const status = await fetchJobStatus()
+      this.pollBackoffMs = 1_000
+      this.applyStatus(status)
+    } catch {
+      this.pollBackoffMs = Math.min(5_000, Math.max(1_000, this.pollBackoffMs * 2))
+      this.schedulePoll()
+    } finally {
+      this.pollInFlight = false
     }
   }
 
@@ -1008,6 +1200,10 @@ class UpdateStore implements UpdateStoreLike {
     if (this.refreshTimer !== null) {
       window.clearInterval(this.refreshTimer)
       this.refreshTimer = null
+    }
+    if (this.pollTimer !== null) {
+      window.clearTimeout(this.pollTimer)
+      this.pollTimer = null
     }
     this.listeners.clear()
   }
@@ -1060,10 +1256,31 @@ export function apply(ctx: ClientContext): () => void {
     // publishes them after this plugin mounted must win, and one that never
     // does must keep the canonical fallbacks.
     ensureDesignTokens()
-    // Always re-check on open so the review screen never shows stale data.
-    void store.check().then((report) => {
-      if (report !== null) openUpdateView(store, copyFor())
-    })
+    // Resume-before-discovery: read the durable job status FIRST so an in-flight
+    // install/runtime update is resumed (and its view rendered) even while the
+    // update check round trip is still running. The panel itself opens from
+    // whatever the store already holds; check() refreshes the list behind it.
+    void store.fetchStatus()
+    openUpdateView(store, copyFor())
+    void store.check()
+  }
+
+  // While a job runs the row label shows its progress ("更新中 42%"), and the
+  // tooltip names the phase. Store changes re-apply the label (the badge
+  // subscription already re-renders the count pill).
+  const statusLabel = (): { label: string; tooltip: string } => {
+    const base = entryCopy(locale)
+    const job = store.activeJob()
+    if (job !== null) {
+      const cc = copyFor()
+      const pct = job.progress.percent
+      const phase = cc.job.phase[job.phase] ?? job.phase
+      return {
+        label: pct !== null ? `${base.label} · ${Math.round(pct)}%` : `${base.label} · ${phase}`,
+        tooltip: `${base.tooltip} · ${phase}`,
+      }
+    }
+    return base
   }
 
   const disposeEntry = mountSidebarEntry({
@@ -1076,8 +1293,8 @@ export function apply(ctx: ClientContext): () => void {
     // `refresh.subscribe`'s listener, which re-applies these) so the row
     // re-localizes when the host UI language changes — matching the sibling
     // family rows, which read a live `currentLang` variable the same way.
-    label: () => entryCopy(locale).label,
-    tooltip: () => entryCopy(locale).tooltip,
+    label: () => statusLabel().label,
+    tooltip: () => statusLabel().tooltip,
     refresh: { subscribe: refreshSubscribe },
     badge: {
       subscribe: (listener) => store.subscribe(listener),
@@ -1088,8 +1305,21 @@ export function apply(ctx: ClientContext): () => void {
     familySelectors: HUAQIU_SIDEBAR_ENTRY_FAMILY,
   })
 
+  // Store changes (active-job percentage, result dot) also re-apply the row
+  // label, not just the badge count.
+  store.subscribe(() => {
+    for (const fn of [...localeSubscribers]) {
+      try {
+        fn()
+      } catch {
+        /* one bad subscriber must not strand the rest */
+      }
+    }
+  })
+
   store.startIdleRefresh()
   void store.refresh()
+  void store.fetchStatus()
 
   const dispose = (): void => {
     try {

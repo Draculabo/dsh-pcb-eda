@@ -27,6 +27,14 @@
  *                                → GET  /api/v1/plugin-updates/source
  *   POST /plugin-update/plugin-source
  *                                → POST /api/v1/plugin-updates/source {url}
+ *   GET  /plugin-update/status   → GET  /api/v1/plugin-updates/status
+ *   GET  /plugin-update/status/<id>
+ *                                → GET  /api/v1/plugin-updates/status/<id>
+ *
+ * The status routes expose the durable update-job lifecycle (active job +
+ * recent jobs). They are read-only passthroughs: an unknown job id upstream
+ * answers `404 { error: 'unknown job' }`, which this forwarder passes through
+ * verbatim rather than turning into a plugin-side 500.
  *
  * The runtime-update request is user-confirmed in this plugin's review panel:
  * hq-edge validates the version against a fresh manifest, downloads and
@@ -110,6 +118,20 @@ function readBody(req: IncomingMessage): Promise<string> {
  * forwarder answers 405 rather than forwarding a GET to a POST-only upstream
  * and surfacing hq-edge's 404 as a plugin bug.
  */
+/**
+ * Match a dynamic `/status/<jobId>` sub-path. Returns the job id for a single
+ * non-empty segment (no nested slashes), else null. The id is opaque — this
+ * route forwards it verbatim; hq-edge owns validation and the 404 for unknown
+ * ids.
+ */
+function matchJobStatusPath(sub: string): string | null {
+  const prefix = '/status/'
+  if (!sub.startsWith(prefix)) return null
+  const id = sub.slice(prefix.length)
+  if (id.length === 0 || id.includes('/') || id.includes('?')) return null
+  return id
+}
+
 function routeFor(
   sub: string,
   method: string,
@@ -126,6 +148,17 @@ function routeFor(
   }
   if (sub === '/report' || sub === '') {
     return method === 'GET' ? { method: 'GET', path: '/api/v1/plugin-updates' } : null
+  }
+  if (sub === '/status') {
+    return method === 'GET'
+      ? { method: 'GET', path: '/api/v1/plugin-updates/status' }
+      : null
+  }
+  const jobId = matchJobStatusPath(sub)
+  if (jobId !== null) {
+    return method === 'GET'
+      ? { method: 'GET', path: `/api/v1/plugin-updates/status/${encodeURIComponent(jobId)}` }
+      : null
   }
   if (sub === '/runtime') {
     return method === 'GET' ? { method: 'GET', path: '/api/v1/runtime-update' } : null
@@ -154,8 +187,9 @@ function routeFor(
   return null
 }
 
-/** Every sub-path this forwarder serves — used to tell a 404 from a 405. */
-const ROUTE_SUB_PATHS = new Set([
+/** Every static sub-path this forwarder serves — used to tell a 404 from a
+ *  405. The dynamic `/status/<id>` path is matched separately. */
+const STATIC_SUB_PATHS = new Set([
   '',
   '/report',
   '/check',
@@ -166,7 +200,17 @@ const ROUTE_SUB_PATHS = new Set([
   '/runtime-request',
   '/runtime-source',
   '/plugin-source',
+  '/status',
 ])
+
+/**
+ * Whether a sub-path names a route this forwarder recognizes at all. A
+ * recognized sub-path hit with an unsupported method is a 405; an unrecognized
+ * one is a 404. `/status/<id>` is recognized for any single-segment id.
+ */
+function isKnownSubPath(sub: string): boolean {
+  return STATIC_SUB_PATHS.has(sub) || matchJobStatusPath(sub) !== null
+}
 
 /** Create the prefix-route handler forwarding to hq-edge. */
 export function createUpdateForwarder(
@@ -186,11 +230,9 @@ export function createUpdateForwarder(
     if (target === null) {
       // Either an unknown sub-path (404) or a known one under a method it does
       // not serve (405). Both are client errors caught here, not upstream.
-      sendJson(res, sub === '' || ROUTE_SUB_PATHS.has(sub) ? 405 : 404, {
-        error:
-          sub === '' || ROUTE_SUB_PATHS.has(sub)
-            ? `method ${req.method} not allowed on ${sub || '/'}`
-            : 'not found',
+      const known = isKnownSubPath(sub)
+      sendJson(res, known ? 405 : 404, {
+        error: known ? `method ${req.method} not allowed on ${sub || '/'}` : 'not found',
       })
       return
     }

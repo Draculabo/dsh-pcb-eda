@@ -20,9 +20,16 @@ const zh = {
   loading: '正在读取插件更新…',
   empty: '没有可用的插件更新',
   checkFailed: '检查更新失败，请重试',
-  installAll: (count: number) => `安装 ${count} 项更新`,
-  installOne: '安装',
+  // The button installs the ENTIRE offered set at once (not one card) — label
+  // it honestly rather than per-plugin.
+  installAll: (count: number) => `安装整套更新（${count} 项）`,
+  installOne: '安装整套',
+  installOneTip: '将安装整套 N 项更新并自动重启 DSH，而不仅是此插件',
   installing: '正在安装…（DSH 将自动重启）',
+  retry: '重试',
+  checkedAt: (when: string) => `上次检查：${when}`,
+  checkFailedBanner: (message: string) => `检查更新失败：${message}`,
+  staleNote: '以下为上次成功检查的结果，可能已过期',
   nothingToInstall: '暂无可安装的更新',
   ignore: '忽略此版本',
   unignore: '恢复提醒',
@@ -56,11 +63,23 @@ const zh = {
     unknown: '版本未知',
     notConfigured: '未配置更新源',
     note: '运行时更新由 EDA 安装器处理',
+    sizeLabel: '包大小',
     update: '安装运行时更新',
     updateConfirm: (version: string) =>
       `安装 HQ Edge 运行时 ${version}？HQ Edge 会先关闭并完成替换，然后重新启动。`,
-    updating: '正在下载并校验运行时包，可能需要一分钟…',
+    // No fixed "takes one minute" claim: duration depends on download speed
+    // and package size (the bundle is hundreds of MB).
+    updating: '正在下载并校验运行时包…',
+    durationNote: '耗时取决于下载速度与包体大小；运行时包较大，替换后 HQ Edge 会自动重启。',
     updateAccepted: '运行时更新已受理，HQ Edge 正在重启…',
+    size: (bytes: number) => `约 ${formatMb(bytes)}`,
+    lastResult: {
+      title: '上次运行时更新结果',
+      succeeded: '运行时更新成功',
+      failed: '运行时更新失败',
+      rolledBack: '运行时更新已回滚（已恢复旧版本）',
+      elevation: '系统级安装可能弹出 UAC 提权窗口；拒绝提权会导致替换失败并自动回滚到旧版本。',
+    },
     // ── Update-source editor ──
     sourceHint: '运行时更新清单的下载地址，保存后立即生效',
     sourceEdit: '修改',
@@ -92,6 +111,59 @@ const zh = {
   installSuccess: '更新已安装，正在重启 DSH…',
   confirmInstall: '确认安装',
   cancel: '取消',
+  // ── Durable update job (active / result / recent) ──
+  job: {
+    kindPluginSet: '插件集更新',
+    kindRuntime: 'HQ Edge 运行时更新',
+    phase: {
+      queued: '排队中',
+      resolving: '解析版本',
+      downloading: '下载中',
+      verifying: '校验完整性',
+      staging: '暂存文件',
+      activating: '启用插件集',
+      'awaiting-host': '等待主机替换运行时',
+      restarting: '正在重启',
+      'verifying-after-restart': '重启后校验',
+      done: '已完成',
+      failed: '失败',
+      'rolled-back': '已回滚',
+      abandoned: '已中断',
+    } as Record<string, string>,
+    willRestartDsh: '完成后 DSH 将自动重启，更新本身会在后台继续。',
+    willSwapRuntime: 'HQ Edge 会下载完整运行时包并退出，由 EDA 主机替换后重启；系统级安装可能弹出 UAC 提权窗口。',
+    closeNote: '关闭此面板不会取消更新。',
+    bytes: (done: string, total: string) => `${done} / ${total}`,
+    speed: (v: string) => `${v}/s`,
+    eta: (s: string) => `剩余约 ${s}`,
+    nextDone: '正在完成，请稍候…',
+    // Terminal result view
+    resultDone: '更新已完成',
+    resultFailed: '更新失败',
+    resultRolledBack: '更新已回滚',
+    resultAbandoned: '更新未完成',
+    retry: '重新尝试（发起新的更新）',
+    recentTitle: '最近更新',
+    stepsTitle: '各组件进度',
+    logHint: (hint: string) => `日志标识：${hint}`,
+  },
+  // ── Release metadata ──
+  release: {
+    summaryTitle: '版本说明',
+    notesLink: '查看发布说明',
+    breakingTitle: '破坏性变更',
+    changesTitle: '更新内容',
+    advanced: '高级：更新源',
+    publishedAt: (when: string) => `发布于 ${when}`,
+  },
+}
+
+/** Compact a byte count for display: "约 12.3 MB" / "约 480 MB". */
+export function formatMb(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return ''
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 100) return `${Math.round(mb)} MB`
+  return `${mb.toFixed(1)} MB`
 }
 
 export type UpdateCopy = typeof zh
@@ -107,9 +179,14 @@ const en: UpdateCopy = {
   loading: 'Reading plugin updates…',
   empty: 'No plugin updates available',
   checkFailed: 'Failed to check for updates — please retry',
-  installAll: (count: number) => `Install ${count} update${count === 1 ? '' : 's'}`,
-  installOne: 'Install',
+  installAll: (count: number) => `Install whole set (${count})`,
+  installOne: 'Install set',
+  installOneTip: 'Installs the whole set of N updates and restarts DSH — not just this plugin',
   installing: 'Installing… (DSH will restart)',
+  retry: 'Retry',
+  checkedAt: (when: string) => `Last checked: ${when}`,
+  checkFailedBanner: (message: string) => `Update check failed: ${message}`,
+  staleNote: 'Showing the last successful check — it may be stale',
   nothingToInstall: 'Nothing to install right now',
   ignore: 'Ignore this release',
   unignore: 'Show again',
@@ -143,11 +220,21 @@ const en: UpdateCopy = {
     unknown: 'Version unknown',
     notConfigured: 'No update source configured',
     note: 'Runtime updates are handled by the EDA installer',
+    sizeLabel: 'Package size',
     update: 'Install runtime update',
     updateConfirm: (version: string) =>
       `Install HQ Edge runtime ${version}? HQ Edge shuts down to swap the runtime, then restarts.`,
-    updating: 'Downloading and verifying the runtime bundle — this can take a minute…',
+    updating: 'Downloading and verifying the runtime bundle…',
+    durationNote: 'Duration depends on download speed and package size; the runtime bundle is large, and HQ Edge restarts after the swap.',
     updateAccepted: 'Runtime update accepted — HQ Edge is restarting…',
+    size: (bytes: number) => `~ ${formatMb(bytes)}`,
+    lastResult: {
+      title: 'Last runtime update result',
+      succeeded: 'Runtime update succeeded',
+      failed: 'Runtime update failed',
+      rolledBack: 'Runtime update rolled back (previous version restored)',
+      elevation: 'A system-wide install may show a UAC elevation prompt; declining it fails the swap and rolls back to the previous version.',
+    },
     // ── Update-source editor ──
     sourceHint: 'Where the runtime update manifest is fetched from; saved changes take effect immediately',
     sourceEdit: 'Edit',
@@ -180,6 +267,50 @@ const en: UpdateCopy = {
   installSuccess: 'Update installed — restarting DSH…',
   confirmInstall: 'Confirm install',
   cancel: 'Cancel',
+  // ── Durable update job (active / result / recent) ──
+  job: {
+    kindPluginSet: 'Plugin-set update',
+    kindRuntime: 'HQ Edge runtime update',
+    phase: {
+      queued: 'Queued',
+      resolving: 'Resolving version',
+      downloading: 'Downloading',
+      verifying: 'Verifying integrity',
+      staging: 'Staging files',
+      activating: 'Activating plugin set',
+      'awaiting-host': 'Waiting for host to swap runtime',
+      restarting: 'Restarting',
+      'verifying-after-restart': 'Verifying after restart',
+      done: 'Done',
+      failed: 'Failed',
+      'rolled-back': 'Rolled back',
+      abandoned: 'Abandoned',
+    } as Record<string, string>,
+    willRestartDsh: 'DSH restarts automatically once this finishes; the update continues in the background.',
+    willSwapRuntime: 'HQ Edge downloads the full runtime bundle and exits; the EDA host swaps and relaunches it. A system-wide install may show a UAC prompt.',
+    closeNote: 'Closing this panel does not cancel the update.',
+    bytes: (done: string, total: string) => `${done} / ${total}`,
+    speed: (v: string) => `${v}/s`,
+    eta: (s: string) => `~${s} left`,
+    nextDone: 'Finishing — please wait…',
+    resultDone: 'Update completed',
+    resultFailed: 'Update failed',
+    resultRolledBack: 'Update rolled back',
+    resultAbandoned: 'Update did not complete',
+    retry: 'Retry (start a new update)',
+    recentTitle: 'Recent updates',
+    stepsTitle: 'Per-component progress',
+    logHint: (hint: string) => `Log id: ${hint}`,
+  },
+  // ── Release metadata ──
+  release: {
+    summaryTitle: 'Release notes',
+    notesLink: 'View release notes',
+    breakingTitle: 'Breaking changes',
+    changesTitle: 'What changed',
+    advanced: 'Advanced: update sources',
+    publishedAt: (when: string) => `Published ${when}`,
+  },
 }
 
 export const COPY = { zh, en } as const

@@ -82,21 +82,30 @@ function reportWith(
   }
 }
 
-function fakeStore(report: PluginUpdateReport): UpdateStoreLike {
+function fakeStore(
+  report: PluginUpdateReport,
+  overrides: Partial<UpdateStoreLike> = {},
+): UpdateStoreLike {
   const listeners = new Set<() => void>()
   return {
     report: () => report,
     installing: () => false,
+    setInstalling: () => undefined,
+    activeJob: () => null,
+    recentJobs: () => [],
     refresh: async () => {
       for (const listener of [...listeners]) listener()
       return report
     },
+    check: async () => report,
+    fetchStatus: async () => undefined,
     subscribe: (listener) => {
       listeners.add(listener)
       return () => {
         listeners.delete(listener)
       }
     },
+    ...overrides,
   }
 }
 

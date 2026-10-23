@@ -1,13 +1,40 @@
 {
-  "schemaVersion": 1,
-  "channel": "stable",
+  "schemaVersion": 2,
   "releases": [
     {
       "version": "0.3.10",
-      "sha256": "77390fd209e0be7ea0abd72e841277e2caf6a619c48f6bf97c3fe666b9efcae5",
+      "sha256": "b481d46c3f2a91e7d8c6b5a439271f08e7d6c5b4a392817654f43e2d1c0b9a87",
       "platform": "win",
       "arch": "x64",
-      "url": "https://down.eda.cn/data/kicad-release/edge-headless-0.3.10-win-x64.zip"
+      "url": "https://down.eda.cn/hq-edge/0.3.10/hq-edge-headless-0.3.10-win-x64.zip",
+      "channel": "stable",
+      "publishedAt": "2026-10-20T06:30:00Z",
+      "sizeBytes": 503316480,
+      "summary": "HQ Edge 无头运行时：改进更新任务的下载与断点续传，修复替换阶段的回滚流程。",
+      "notesUrl": "https://example.invalid/releases/hq-edge-headless-0.3.10",
+      "notes": [
+        "更新任务下载支持断点续传",
+        "运行时替换失败时自动回滚到旧版本",
+        "降低空闲内存占用"
+      ],
+      "breaking": []
+    },
+    {
+      "version": "0.3.10",
+      "sha256": "c592e57d4e3b02f8e9d7c6b5a408291f0e8d7c6b5a4938271654f53e2d1c0b98",
+      "platform": "darwin",
+      "arch": "arm64",
+      "url": "https://down.eda.cn/hq-edge/0.3.10/hq-edge-headless-0.3.10-darwin-arm64.zip",
+      "channel": "stable",
+      "publishedAt": "2026-10-20T06:30:00Z",
+      "sizeBytes": 469762048,
+      "summary": "HQ Edge 无头运行时（Apple Silicon）：改进更新任务的下载与断点续传，修复替换阶段的回滚流程。",
+      "notesUrl": "https://example.invalid/releases/hq-edge-headless-0.3.10",
+      "notes": [
+        "更新任务下载支持断点续传",
+        "运行时替换失败时自动回滚到旧版本"
+      ],
+      "breaking": []
     }
   ]
 }

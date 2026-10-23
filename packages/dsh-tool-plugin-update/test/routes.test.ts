@@ -20,7 +20,8 @@ let baseUrl = ''
 const seen: Array<{ method: string; url: string; body: string }> = []
 
 /** hq-edge stub: echoes the request as JSON (status 200) unless the path
- *  starts with /fail (→ 500) or the body carries `"busy":true` (→ 409). */
+ *  starts with /fail (→ 500), the body carries `"busy":true` (→ 409), or the
+ *  unknown job id `unknown-job` is requested (→ 404 `unknown job`). */
 function startUpstream(): Promise<string> {
   return new Promise((resolve) => {
     upstream = createServer((req, res) => {
@@ -29,6 +30,11 @@ function startUpstream(): Promise<string> {
       req.on('end', () => {
         seen.push({ method: req.method ?? '', url: req.url ?? '', body })
         const path = req.url ?? ''
+        if (path === '/api/v1/plugin-updates/status/unknown-job') {
+          res.writeHead(404, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ error: 'unknown job' }))
+          return
+        }
         if (path.startsWith('/fail')) {
           res.writeHead(500, { 'content-type': 'application/json' })
           res.end(JSON.stringify({ error: 'boom' }))
@@ -294,5 +300,59 @@ describe('plugin-update forwarding routes', () => {
     const { status, json } = await driveRequest('GET', `${UPDATE_ROUTE_PREFIX}/report`)
     expect(status).toBe(502)
     expect(json).toMatchObject({ error: expect.stringContaining('failed') as unknown })
+  })
+
+  it('forwards GET /status → GET /api/v1/plugin-updates/status', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest('GET', `${UPDATE_ROUTE_PREFIX}/status`)
+    expect(status).toBe(200)
+    expect(json).toMatchObject({
+      echoed: true,
+      method: 'GET',
+      url: '/api/v1/plugin-updates/status',
+    })
+  })
+
+  it('forwards GET /status/<id> with the id passed through verbatim', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest(
+      'GET',
+      `${UPDATE_ROUTE_PREFIX}/status/job-8f3a`,
+    )
+    expect(status).toBe(200)
+    expect(json).toMatchObject({
+      echoed: true,
+      method: 'GET',
+      url: '/api/v1/plugin-updates/status/job-8f3a',
+    })
+  })
+
+  it('passes an upstream 404 unknown-job through verbatim (not a plugin 500)', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const { status, json } = await driveRequest(
+      'GET',
+      `${UPDATE_ROUTE_PREFIX}/status/unknown-job`,
+    )
+    expect(status).toBe(404)
+    expect(json).toMatchObject({ error: 'unknown job' })
+  })
+
+  it('answers 405 (not 404) for POST /status — a known route under a bad method', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    const bad = await driveRequest('POST', `${UPDATE_ROUTE_PREFIX}/status`)
+    expect(bad.status).toBe(405)
+    expect(seen).toHaveLength(0)
+  })
+
+  it('does not treat /status nested paths as job ids', async () => {
+    const forwarder = createUpdateForwarder(() => baseUrl)
+    await startDshSide(forwarder)
+    // A nested segment is an unknown sub-path → 404, never a forwarded GET.
+    const { status } = await driveRequest('GET', `${UPDATE_ROUTE_PREFIX}/status/a/b`)
+    expect(status).toBe(404)
   })
 })
