@@ -196,7 +196,7 @@ describe('mountSidebarEntry', () => {
     const root = mountShell()
     const family = HUAQIU_SIDEBAR_ENTRY_FAMILY
     // Mount in REVERSE array order to prove placement does not follow mount
-    // order: the Plugin Updates row (family[0]) must still lead the block.
+    // order: the Plugin Updates row (family last) must still close the block.
     const disposers: Array<() => void> = []
     for (const selector of [...family].reverse()) {
       const attribute = selector.slice(1, -1)
@@ -212,8 +212,8 @@ describe('mountSidebarEntry', () => {
     for (let i = 1; i < placed.length; i += 1) {
       expect(follows(placed[i - 1]!, placed[i]!)).toBe(true)
     }
-    // The leading row is the Plugin Updates entry.
-    expect(placed[0]!.hasAttribute('data-hq-plugin-update-entry')).toBe(true)
+    // The closing row of the family block is the Plugin Updates entry.
+    expect(placed[placed.length - 1]!.hasAttribute('data-hq-plugin-update-entry')).toBe(true)
 
     disposers.forEach((dispose) => dispose())
   })

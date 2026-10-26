@@ -310,13 +310,13 @@ export function mountSidebarEntry(options: SidebarEntryOptions): () => void {
  * family row means adding its selector here (and to no plugin-local list).
  */
 export const HUAQIU_SIDEBAR_ENTRY_FAMILY: readonly string[] = [
-  // Plugin Updates leads the family block: it is the most frequently used
-  // toolbutton and carries the actionable-update badge, so it sits first.
-  '[data-hq-plugin-update-entry]',
   '[data-hqcg-footprint-entry]',
   '[data-hqcg-symbol-entry]',
   '[data-hqcg-schematic-entry]',
   '[data-hq-dummy-entry]',
+  // Plugin Updates closes the family block: it carries the actionable-update
+  // badge, so it sits at the horizontal end of the toolbutton set.
+  '[data-hq-plugin-update-entry]',
 ]
 
 // ---- host locale detection (shared by every family sidebar row) ----
