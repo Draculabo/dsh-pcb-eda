@@ -127,8 +127,12 @@ const ENTRY_CSS_TEXT = `
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-/* Collapsed rail: icon-only, centered — same 36px square the shell uses. */
+/* Collapsed rail: icon-only, centered — same 36px square the shell uses.
+   The update-count badge moves to the button's bottom-right corner. The
+   sidebar-entry helper only renders the badge element while count > 0, so a
+   zero count shows a bare icon with no dot. */
 [data-sidebar-collapsed] .hqpu-sidebar-entry {
+  position: relative;
   justify-content: center;
   width: 36px;
   height: 36px;
@@ -139,9 +143,24 @@ const ENTRY_CSS_TEXT = `
   width: 18px;
   height: 18px;
 }
-[data-sidebar-collapsed] .hqpu-sidebar-entry__label,
-[data-sidebar-collapsed] .hqpu-sidebar-entry__badge {
+[data-sidebar-collapsed] .hqpu-sidebar-entry__label {
   display: none;
+}
+[data-sidebar-collapsed] .hqpu-sidebar-entry__badge {
+  /* Corner count badge: overlaps the icon's bottom-right like a notification
+     dot. The ring uses the rail's own fill (HuaQiu override when the theme is
+     mounted, shell layer-1 otherwise) so it reads on any sidebar surface. */
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  font-size: 9px;
+  line-height: 14px;
+  box-shadow: 0 0 0 1.5px var(--dsw-specific-sidebar-fill, var(--dsw-alias-bg-layer-1));
+  transform: translate(12%, 12%);
 }
 `
 
