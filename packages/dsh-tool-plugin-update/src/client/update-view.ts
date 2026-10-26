@@ -873,7 +873,7 @@ function sourceEditor(
     // Read mode: show the URL currently in effect (mono, muted), then edit.
     const urlLine = el('p', 'hqpu-source-current-url', source.url)
     urlLine.style.cssText =
-      'margin:2px 0 6px;font-size:9px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#a1a1aa;word-break:break-all;'
+      'margin:2px 0 6px;font-size:9px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dsw-alias-label-tertiary);word-break:break-all;'
     block.append(urlLine)
     block.append(el('p', 'hqpu-status hqpu-source-hint', labels.hint))
     const edit = el('button', 'hqpu-btn hqpu-btn--outline hqpu-btn--sm', labels.edit)
