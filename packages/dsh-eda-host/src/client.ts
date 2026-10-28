@@ -10,7 +10,7 @@
  * @module
  */
 
-import { DEFAULT_REQUEST_TIMEOUT_MS, hostUrlOf, netlistUrlOf, pcbBoardUrlOf, pcbSelectionUrlOf, type EdaHostConfig, type NetlistScope } from './config.js'
+import { DEFAULT_REQUEST_TIMEOUT_MS, hostUrlOf, netlistUrlOf, pcbBoardUrlOf, pcbSelectionUrlOf, syncSchematicToPcbUrlOf, type EdaHostConfig, type NetlistScope } from './config.js'
 import {
   NetlistError,
   type EdaHostCapability,
@@ -64,6 +64,14 @@ export interface EdaHostClient {
    * resolves to an all-empty `PcbSnapshot` — never an error.
    */
   getPcbBoard(options?: EdaHostRequestOptions): Promise<PcbSnapshot>
+  /**
+   * Request the connected EDA host to synchronize the current schematic with
+   * the PCB (the existing `hq.runtime.v1.Command.sync_sch_to_pcb`, field 42).
+   * Resolves when hq-edge reports the host executed the command successfully;
+   * throws a `NetlistError` on any failure (transport, timeout, host-reported,
+   * or unsupported). It performs no synchronization itself.
+   */
+  syncSchematicToPcb(options?: EdaHostRequestOptions): Promise<void>
 }
 
 /** HTTP status → semantic error kind (see routes/edaHostStatus.ts on hq-edge). */
@@ -264,6 +272,52 @@ export function createEdaHostClient(
     return response.json()
   }
 
+  /** Perform one POST and map failures, resolving only on a 2xx response. */
+  async function postSync(
+    url: string,
+    options: EdaHostRequestOptions | undefined,
+    what: string,
+  ): Promise<void> {
+    const signal = resolveSignal(config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, options?.signal)
+
+    let response: Response
+    try {
+      response = await fetchImpl(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Accept: 'application/json' },
+        body: '{}',
+        ...(signal ? { signal } : {}),
+      })
+    } catch (err) {
+      // An aborted request is a timeout, never an empty result.
+      if (isAbortError(err)) {
+        throw new NetlistError(
+          'DEADLINE_EXCEEDED',
+          `eda-host: ${what} request exceeded its time budget at ${url}`,
+        )
+      }
+      // Connection-level failure: host not running / unreachable.
+      throw new NetlistError(
+        'UNAVAILABLE',
+        `eda-host: cannot reach hq-edge at ${url}: ${String((err as Error)?.message ?? err)}`,
+      )
+    }
+
+    if (!response.ok) {
+      let detail = ''
+      try {
+        const body = (await response.json()) as { detail?: unknown }
+        if (typeof body.detail === 'string') detail = body.detail
+      } catch {
+        // non-JSON error body — fall through with empty detail
+      }
+      throw new NetlistError(
+        statusToKind(response.status),
+        `eda-host: ${what} request failed (${response.status}${detail ? `: ${detail}` : ''})`,
+      )
+    }
+  }
+
   async function fetchScope(
     scope: NetlistScope,
     options?: EdaHostRequestOptions,
@@ -345,6 +399,12 @@ export function createEdaHostClient(
       const url = pcbBoardUrlOf(resolved)
       const body = (await getJson(url, options, 'pcb board')) as unknown
       return parsePcbSnapshot(body, 'PCB board')
+    },
+
+    syncSchematicToPcb: async (options) => {
+      const resolved = resolveConfig()
+      const url = syncSchematicToPcbUrlOf(resolved)
+      await postSync(url, options, 'schematic-to-pcb sync')
     },
   }
 }

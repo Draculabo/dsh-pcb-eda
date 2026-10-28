@@ -22,6 +22,13 @@ export interface EdaHostConfig {
   /** Path prefix for host discovery; default "/api/v1/host". */
   hostPathPrefix?: string
   /**
+   * Path prefix for the schematic→PCB sync command; default
+   * "/api/v1/sync-schematic-to-pcb". The plugin POSTs the existing
+   * `sync_sch_to_pcb` command (hq.runtime.v1.Command field 42) to this route;
+   * hq-edge forwards it to the EDA host's native handler.
+   */
+  syncSchematicToPcbPathPrefix?: string
+  /**
    * End-to-end budget for one EDA-host request, in milliseconds.
    *
    * This is the SINGLE request budget for the whole chain — the plugin does
@@ -39,6 +46,8 @@ export const DEFAULT_PCB_SELECTION_PATH_PREFIX = '/api/v1/pcb-selection'
 export const DEFAULT_PCB_BOARD_PATH_PREFIX = '/api/v1/pcb-board'
 
 export const DEFAULT_HOST_PATH_PREFIX = '/api/v1/host'
+
+export const DEFAULT_SYNC_SCHEMATIC_TO_PCB_PATH_PREFIX = '/api/v1/sync-schematic-to-pcb'
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
@@ -68,6 +77,10 @@ export function resolveEdaHostConfig(
     DEFAULT_PCB_BOARD_PATH_PREFIX
   const hostPrefix =
     config?.hostPathPrefix ?? env.HQ_EDGE_HOST_PATH ?? DEFAULT_HOST_PATH_PREFIX
+  const syncSchematicToPcbPrefix =
+    config?.syncSchematicToPcbPathPrefix ??
+    env.HQ_EDGE_SYNC_SCHEMATIC_TO_PCB_PATH ??
+    DEFAULT_SYNC_SCHEMATIC_TO_PCB_PATH_PREFIX
   const timeoutRaw = config?.requestTimeoutMs ?? env.HQ_EDGE_REQUEST_TIMEOUT_MS
   const timeout = Number.parseInt(String(timeoutRaw ?? ''), 10)
   return {
@@ -76,6 +89,7 @@ export function resolveEdaHostConfig(
     pcbSelectionPathPrefix: pcbSelectionPrefix,
     pcbBoardPathPrefix: pcbBoardPrefix,
     hostPathPrefix: hostPrefix,
+    syncSchematicToPcbPathPrefix: syncSchematicToPcbPrefix,
     requestTimeoutMs:
       Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_REQUEST_TIMEOUT_MS,
   }
@@ -126,4 +140,14 @@ export function hostUrlOf(config: EdaHostConfig, route: HostRoute): string {
   const base = (config.hqEdgeBaseUrl ?? '').replace(/\/+$/, '')
   const prefix = (config.hostPathPrefix ?? DEFAULT_HOST_PATH_PREFIX).replace(/^\/+|\/+$/g, '')
   return `${base}/${prefix}${HOST_ROUTE[route]}`
+}
+
+/** Build the absolute URL for the schematic→PCB sync command route. */
+export function syncSchematicToPcbUrlOf(config: EdaHostConfig): string {
+  const base = (config.hqEdgeBaseUrl ?? '').replace(/\/+$/, '')
+  const prefix = (config.syncSchematicToPcbPathPrefix ?? DEFAULT_SYNC_SCHEMATIC_TO_PCB_PATH_PREFIX).replace(
+    /^\/+|\/+$/g,
+    '',
+  )
+  return `${base}/${prefix}`
 }

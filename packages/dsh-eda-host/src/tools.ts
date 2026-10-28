@@ -12,6 +12,10 @@
  *   get_eda_host_info          which host, which version, where it is installed
  *   get_eda_host_capabilities  what the current host can actually do
  *
+ * One EDA host command (reuses the existing hq.runtime.v1 sync_sch_to_pcb):
+ *
+ *   sync_schematic_to_pcb      ask the host to synchronize schematic → PCB
+ *
  * The netlist tools are pure pass-throughs: they call the hq-edge netlist
  * router and return the semantic `SchematicNetlist` as lossless JSON. Errors
  * are propagated with a semantic `kind` (FAILED_PRECONDITION / UNIMPLEMENTED /
@@ -68,6 +72,10 @@ type PcbSelectionResult =
 
 type PcbBoardResult =
   | { ok: true; snapshot: PcbSnapshot }
+  | { ok: false; error: { kind: string; message: string } }
+
+type SyncSchematicToPcbResult =
+  | { ok: true }
   | { ok: false; error: { kind: string; message: string } }
 
 /**
@@ -278,17 +286,47 @@ export function createNetListTools(env: NetlistToolEnv) {
          ERROR_SEMANTICS,
        parameters: {},
        output: { schema: { type: 'json' }, render: renderJson },
-       async execute(_args: unknown, exec: ToolExecLike): Promise<Json> {
-         try {
-           const options: EdaHostRequestOptions = exec?.signal
-             ? { signal: exec.signal }
-             : {}
-           const capabilities = await env.client.getEdaHostCapabilities(options)
-           return asJson<HostCapabilitiesResult>({ ok: true, capabilities })
-         } catch (err) {
-           return asJson<HostCapabilitiesResult>({ ok: false, error: failureOf(err) })
-         }
-       },
-     }),
+        async execute(_args: unknown, exec: ToolExecLike): Promise<Json> {
+          try {
+            const options: EdaHostRequestOptions = exec?.signal
+              ? { signal: exec.signal }
+              : {}
+            const capabilities = await env.client.getEdaHostCapabilities(options)
+            return asJson<HostCapabilitiesResult>({ ok: true, capabilities })
+          } catch (err) {
+            return asJson<HostCapabilitiesResult>({ ok: false, error: failureOf(err) })
+          }
+        },
+      }),
+
+      defineTool({
+        name: 'sync_schematic_to_pcb',
+        description:
+          `Request that the connected EDA host synchronize the current schematic ` +
+          `with the PCB through hq-edge (DSH → dsh-eda-host → hq-edge → EDA host). ` +
+          `This invokes the host's NATIVE schematic-to-PCB synchronization — the same ` +
+          `operation as the host's "Update PCB from Schematic" action — by dispatching the ` +
+          `existing hq.runtime.v1.Command.sync_sch_to_pcb command. It does NOT reimplement ` +
+          `synchronization in TypeScript and requires no parameters. ` +
+          `Returns { ok: true } when the host accepted and executed the synchronization ` +
+          `command. A successful result confirms the host ran the command; it does NOT ` +
+          `independently verify that every net and footprint is now identical — re-read the ` +
+          `netlist (get_project_netlist) or board (get_pcb_board) afterward if you need to ` +
+          `confirm the outcome. ` +
+          ERROR_SEMANTICS,
+        parameters: {},
+        output: { schema: { type: 'json' }, render: renderJson },
+        async execute(_args: unknown, exec: ToolExecLike): Promise<Json> {
+          try {
+            const options: EdaHostRequestOptions = exec?.signal
+              ? { signal: exec.signal }
+              : {}
+            await env.client.syncSchematicToPcb(options)
+            return asJson<SyncSchematicToPcbResult>({ ok: true })
+          } catch (err) {
+            return asJson<SyncSchematicToPcbResult>({ ok: false, error: failureOf(err) })
+          }
+        },
+      }),
    ]
  }

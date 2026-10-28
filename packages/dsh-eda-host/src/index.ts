@@ -2,14 +2,16 @@
  * `@huaqiu/dsh-eda-host` — node plugin entry.
  *
  * Provides the `edaHost` service (semantic EDA-host capability) and registers
- * six agent tools:
+ * eight agent tools:
  *
  *   get_project_netlist      complete project netlist
  *   get_selection_netlist    currently selected components netlist
  *   get_active_page_netlist  active schematic page netlist
  *   get_pcb_selection        semantic PCB selection of the current PCB editor
+ *   get_pcb_board            complete semantic PCB board snapshot
  *   get_eda_host_info        which EDA host, version, installation
  *   get_eda_host_capabilities  what the current host can actually do
+ *   sync_schematic_to_pcb    ask the host to synchronize schematic → PCB
  *
  * ── Architectural boundary (task: add-dsh-eda-host) ─────────────────────────
  * The ONLY production request path is DSH → dsh-eda-host → hq-edge → EDA host.
