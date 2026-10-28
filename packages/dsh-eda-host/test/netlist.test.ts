@@ -358,14 +358,17 @@ describe('createNetListTools', () => {
       getEdaHostCapabilities: async () => {
         throw new Error('not used')
       },
-      getPcbSelection: async () => {
-        throw new Error('not used')
-      },
-      getPcbBoard: async () => {
-        throw new Error('not used')
-      },
-    }
+    getPcbSelection: async () => {
+      throw new Error('not used')
+    },
+    getPcbBoard: async () => {
+      throw new Error('not used')
+    },
+    syncSchematicToPcb: async () => {
+      throw new Error('not used')
+    },
   }
+}
 
   it('registers exactly three semantic netlist tools', () => {
     const tools = createNetListTools({ client: toolEnvOf({ components: [], nets: [] }) })
@@ -441,16 +444,20 @@ describe('createEdaHostTools', () => {
       getPcbSelection: (async () =>
         handlers.pcbSelection?.()) as EdaHostClient['getPcbSelection'],
       getPcbBoard: (async () => handlers.pcbBoard?.()) as EdaHostClient['getPcbBoard'],
+      syncSchematicToPcb: async () => {
+        throw new Error('not used')
+      },
     }
   }
 
-  it('registers exactly the four host discovery/query tools', () => {
+  it('registers exactly the five host discovery/query/sync tools', () => {
     const tools = createEdaHostTools({ client: hostEnvOf({}) })
     expect(tools.map((t) => t.name).sort()).toEqual([
       'get_eda_host_capabilities',
       'get_eda_host_info',
       'get_pcb_board',
       'get_pcb_selection',
+      'sync_schematic_to_pcb',
     ])
   })
 
